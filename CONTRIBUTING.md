@@ -25,7 +25,8 @@ export DEEPSEEK_API_KEY=sk-xxx        # 可选，不配则 AI 功能禁用
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-首次启动会自动执行 `db/schema.sql` 建表并写入默认数据（含演示账号 `demo-key-001`）。
+首次启动会自动执行 `db/schema.sql` 建表并写入作息时间种子数据。`api_key` 表为空时会自动
+创建首个账号并把 Key **只打印一次**到日志（也可用 `TANGENT_BOOTSTRAP_KEY` 指定自己的 Key）。
 
 ### 前端
 

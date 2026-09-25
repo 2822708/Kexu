@@ -21,12 +21,12 @@
 
 ```
 iPad / Android 桌面小组件（WebView 组件）
-  │  加载  https://<站点>/widget?key=<APIKEY>&scheduleId=<ID>
+  │  加载  https://<站点>/widget#key=<APIKEY>&scheduleId=<ID>
   ▼
 前端展示页  /widget  (WidgetPreviewPage.tsx，公开只读，无需登录)
-  │  fetch 每 60 秒轮询 + 页面可见时刷新
+  │  fetch 每 60 秒轮询 + 页面可见时刷新（Key 走 X-API-Key 请求头）
   ▼
-后端接口  GET /api/widget/overview/{key}?scheduleId=<ID>
+后端接口  GET /api/widget/overview?scheduleId=<ID>
   │  实时聚合
   ▼
 紧凑 JSON（今日课程 / 考试 / 待办 / 周次）
@@ -34,12 +34,13 @@ iPad / Android 桌面小组件（WebView 组件）
 
 ### 1.2 展示页 `/widget`
 
-- 路由：`/widget`，在 `App.tsx` 中注册，**早于登录判断**，公开访问、不依赖登录态。
-- 参数（URL Query）：
+- 路由：`/widget`，在 `App.tsx` 中以早于登录判断的提前返回实现（不是 `<Route>`），公开访问、不依赖登录态。
+- 参数（URL **fragment** 优先，query 形式继续兼容）：
   | 参数 | 必填 | 说明 |
   |------|------|------|
-  | `key` | 是 | API Key，用于鉴权；缺省时回退到本地已存 Key 或演示 Key |
+  | `key` | 是 | API Key，用于鉴权；缺省时回退到本地已存 Key，**没有内置演示 Key** |
   | `scheduleId` | 否 | 指定课表；不传则默认该账号第一个课表 |
+- **为什么用 `#` 而不是 `?`**：fragment 不会随请求发往服务端，也不会进入 `Referer`；query 形式会留在访问日志与浏览器历史里。
 - 行为：每 60 秒轮询一次；`visibilitychange` / 窗口 `focus` 时立即刷新。
 - 样式：暗色只读双栏布局（左：课程与考试；右：待办与 DDL 倒计时），样式在 `index.css` 的 `.widget-*`。
 - 设置页「小组件 / WebView 网页地址」卡片可一键复制带 `key` 与当前课表的完整地址。
@@ -47,11 +48,13 @@ iPad / Android 桌面小组件（WebView 组件）
 ### 1.3 后端接口
 
 ```
-GET /api/widget/overview/{key}?scheduleId={id}
+GET /api/widget/overview?scheduleId={id}
+X-API-Key: <APIKEY>
 ```
 
-- 鉴权：Key 通过 **URL 路径** 传入，`WidgetController` 内手动校验
-  （`apiKeyMapper.selectById`）；该路径已在 `WebMvcConfig` 加入拦截器白名单。
+- 鉴权：与其它接口一致，走 `X-API-Key` 请求头，由 `ApiKeyInterceptor` 统一校验
+  （`/api/widget/**` **不再**是拦截器白名单）。此前 Key 放在 URL 路径里，会让凭据落入
+  nginx 访问日志、浏览器历史与 `Referer`，已移除该形式。
 - 响应头：`Cache-Control: no-store`；`Content-Type: application/json;charset=utf-8`。
 - 响应结构（`ApiResponse`）：
 
@@ -115,16 +118,21 @@ GET /api/widget/overview/{key}?scheduleId={id}
 
 ## 3. 安全注意事项（小组件）
 
-- **Key 出现在 URL 中**：会进入浏览器/代理访问日志与历史记录，属于已知风险。
-  建议仅在个人设备使用；后续可考虑改用短期 token。
+- **Key 仍会出现在展示页地址里**：为保证 WebView 无登录态也能取数，`/widget#key=...`
+  必须携带凭据。已把 Key 从 API 请求 URL 移到请求头，并优先使用 fragment（不进访问日志与
+  `Referer`），但展示页地址本身仍会留在设备本地的浏览历史中。建议仅在个人设备使用，
+  后续可考虑改用短期只读 token。
 - 接口只返回展示所需的汇总字段，不返回敏感明细。
-- `/api/widget/**` 位于鉴权拦截器白名单，鉴权由 Controller 手动完成。
+- `/api/widget/**` **不再**位于鉴权白名单：与其它接口一样由 `ApiKeyInterceptor` 校验
+  `X-API-Key`，Controller 内不再手工查 Key。
 
 ---
 
 ## 4. 验收清单
 
-- [ ] `curl '<站点>/api/widget/overview/<key>'` 能直接拿到 JSON（不依赖 JS）。
+- [ ] `curl -H 'X-API-Key: <key>' '<站点>/api/widget/overview'` 能直接拿到 JSON（不依赖 JS）。
+- [ ] 不带 `X-API-Key` 时返回 401。
+- [ ] 旧的 `/api/widget/overview/<key>` 路径形式已不可用（不再接受 URL 里的 Key）。
 - [ ] 返回 `charset=utf-8`，中文正常。
 - [ ] 响应体精简，字段简短，适合小组件展示。
 - [ ] 无效 Key 返回 401；空数据不报错。

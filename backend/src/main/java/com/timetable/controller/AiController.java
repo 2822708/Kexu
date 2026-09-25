@@ -14,6 +14,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -27,6 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @RestController
@@ -39,19 +41,32 @@ public class AiController {
 
     private final AiService aiService;
 
-    // 有界线程池：限制并发流式任务，队列满时由调用线程执行以形成背压，避免无限创建线程
-    private final ExecutorService streamExecutor = new ThreadPoolExecutor(
-            4, 16, 60L, TimeUnit.SECONDS,
-            new ArrayBlockingQueue<>(64),
-            r -> {
-                Thread t = new Thread(r, "ai-stream-" + STREAM_THREAD_SEQ.incrementAndGet());
-                t.setDaemon(true);
-                return t;
-            },
-            new ThreadPoolExecutor.AbortPolicy());
+    /**
+     * 流式任务执行器。
+     *
+     * 线程数等于最大并发：ThreadPoolExecutor 只在核心线程忙、且队列也满时才创建更多线程，
+     * 所以「core=4 / max=16」实际并发上限就是 4，第 5 个请求会静默排队而不发任何事件。
+     * 这里把 core 与 max 都设为配置值，队列只作为短时缓冲，队列满即按 AbortPolicy 拒绝并回
+     * 503，客户端能立刻得到明确反馈。
+     */
+    private final ExecutorService streamExecutor;
 
-    public AiController(AiService aiService) {
+    public AiController(AiService aiService,
+                        @Value("${app.ai.stream.max-concurrency:16}") int maxConcurrency,
+                        @Value("${app.ai.stream.queue-capacity:64}") int queueCapacity) {
         this.aiService = aiService;
+        int concurrency = Math.max(1, maxConcurrency);
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                concurrency, concurrency, 60L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(Math.max(1, queueCapacity)),
+                r -> {
+                    Thread t = new Thread(r, "ai-stream-" + STREAM_THREAD_SEQ.incrementAndGet());
+                    t.setDaemon(true);
+                    return t;
+                },
+                new ThreadPoolExecutor.AbortPolicy());
+        executor.allowCoreThreadTimeOut(true);
+        this.streamExecutor = executor;
     }
 
     @PreDestroy
@@ -108,6 +123,12 @@ public class AiController {
                                         @Valid @RequestBody AiMessageRequest request) {
         String apiKey = RequestContext.getApiKey();
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
+        // 客户端断开（完成/超时/出错）后置位，用于中断上游调用：
+        // 否则工作线程会一直读到上游结束，白占并发额度，并把用户看不到的回复落库
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        emitter.onCompletion(() -> cancelled.set(true));
+        emitter.onTimeout(() -> cancelled.set(true));
+        emitter.onError(e -> cancelled.set(true));
 
         try {
             streamExecutor.execute(() -> {
@@ -116,44 +137,57 @@ public class AiController {
                         new AiService.StreamCallback() {
                             @Override
                             public void onThinking(String delta) {
-                                emit(emitter, "thinking", Map.of("delta", delta));
+                                emit(emitter, "thinking", Map.of("delta", delta), cancelled);
                             }
 
                             @Override
                             public void onText(String delta) {
-                                emit(emitter, "text", Map.of("delta", delta));
+                                emit(emitter, "text", Map.of("delta", delta), cancelled);
                             }
 
                             @Override
                             public void onPlanning() {
-                                emit(emitter, "planning", Map.of());
+                                emit(emitter, "planning", Map.of(), cancelled);
+                            }
+
+                            @Override
+                            public boolean isCancelled() {
+                                return cancelled.get();
                             }
                         });
-                emit(emitter, "done", result);
+                emit(emitter, "done", result, cancelled);
                 emitter.complete();
             } catch (BusinessException e) {
-                emit(emitter, "error", Map.of("code", e.getCode(), "message", e.getMessage()));
+                emit(emitter, "error", Map.of("code", e.getCode(), "message", e.getMessage()), cancelled);
                 emitter.complete();
             } catch (Exception e) {
                 log.error("AI stream failed", e);
-                emit(emitter, "error", Map.of("code", 500, "message", "AI 服务异常"));
+                emit(emitter, "error", Map.of("code", 500, "message", "AI 服务异常"), cancelled);
                 emitter.complete();
             }
             });
         } catch (RejectedExecutionException e) {
             log.warn("AI stream rejected: executor saturated");
-            emit(emitter, "error", Map.of("code", 503, "message", "当前 AI 请求过多，请稍后重试"));
+            emit(emitter, "error", Map.of("code", 503, "message", "当前 AI 请求过多，请稍后重试"), cancelled);
             emitter.complete();
         }
 
         return emitter;
     }
 
-    private void emit(SseEmitter emitter, String event, Object data) {
+    /**
+     * 推送一个 SSE 事件。客户端已断开时不可能送达，此时置位 cancelled 并放弃，
+     * 让上游读取循环尽快退出。
+     */
+    private void emit(SseEmitter emitter, String event, Object data, AtomicBoolean cancelled) {
+        if (cancelled.get()) {
+            return;
+        }
         try {
             emitter.send(SseEmitter.event().name(event).data(data, MediaType.APPLICATION_JSON));
         } catch (IOException | IllegalStateException e) {
-            // 客户端已断开，忽略
+            // 客户端已断开：标记取消，由上游据此中断请求
+            cancelled.set(true);
         }
     }
 

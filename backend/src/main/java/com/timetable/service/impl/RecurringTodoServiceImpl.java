@@ -1,6 +1,7 @@
 package com.timetable.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.timetable.dto.RecurringTodoRequest;
 import com.timetable.entity.RecurringTodo;
 import com.timetable.entity.Todo;
@@ -10,6 +11,7 @@ import com.timetable.mapper.TodoMapper;
 import com.timetable.service.RecurringTodoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -86,6 +88,10 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
         if (RecurringScheduleCalculator.CUSTOM.equals(rule.getFrequency())) {
             RecurringScriptEvaluator.ScriptResult probe =
                     scriptEvaluator.test(rule.getScript(), LocalDateTime.now(), null);
+            if (probe.unavailable()) {
+                // 沙箱自身繁忙/已饱和，不是脚本的问题，如实告知并让用户稍后重试
+                throw new BusinessException(503, "脚本沙箱暂时不可用：" + probe.error());
+            }
             if (!probe.ok()) {
                 throw new BusinessException(400, "脚本校验失败：" + probe.error());
             }
@@ -120,17 +126,13 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
     @Transactional
     public void delete(Long id, String apiKey) {
         getById(id, apiKey);
-        // 已生成的待办保留，仅解除关联，避免用户丢失历史记录
-        LambdaQueryWrapper<Todo> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Todo::getRecurringId, id);
-        for (Todo todo : todoMapper.selectList(wrapper)) {
-            todo.setRecurringId(null);
-            // updateById 会忽略 null，这里用 UpdateWrapper 显式置空
-            todoMapper.update(null,
-                    com.baomidou.mybatisplus.core.toolkit.Wrappers.<Todo>lambdaUpdate()
-                            .eq(Todo::getId, todo.getId())
-                            .set(Todo::getRecurringId, null));
-        }
+        // 已生成的待办保留，仅解除关联，避免用户丢失历史记录。
+        // 必须显式带 apiKey 条件：recurring_id 是全局自增，缺了它这条更新会跨租户命中。
+        // updateById 会忽略 null，所以用 lambdaUpdate 显式置空；一次批量更新代替逐行循环。
+        todoMapper.update(null, Wrappers.<Todo>lambdaUpdate()
+                .eq(Todo::getRecurringId, id)
+                .eq(Todo::getApiKey, apiKey)
+                .set(Todo::getRecurringId, null));
         recurringMapper.deleteById(id);
     }
 
@@ -138,13 +140,18 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
     public RecurringTodo toggleEnabled(Long id, String apiKey) {
         RecurringTodo rule = getById(id, apiKey);
         boolean next = !Boolean.TRUE.equals(rule.getEnabled());
-        rule.setEnabled(next);
+        LocalDateTime newNext = rule.getNextTriggerAt();
         if (next) {
             // 重新启用时从当前时间往后排，不补历史
-            rule.setNextTriggerAt(
-                    RecurringScheduleCalculator.nextTriggerAfter(rule, LocalDateTime.now()));
+            newNext = RecurringScheduleCalculator.nextTriggerAfter(rule, LocalDateTime.now());
         }
-        recurringMapper.updateById(rule);
+        // 只更新目标列：整行 updateById 会用扫描前的快照覆盖并发的用户修改
+        recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
+                .eq(RecurringTodo::getId, id)
+                .set(RecurringTodo::getEnabled, next)
+                .set(RecurringTodo::getNextTriggerAt, newNext));
+        rule.setEnabled(next);
+        rule.setNextTriggerAt(newNext);
         return rule;
     }
 
@@ -153,11 +160,15 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
     public RecurringTodo triggerNow(Long id, String apiKey) {
         RecurringTodo rule = getById(id, apiKey);
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime next = RecurringScheduleCalculator.nextTriggerAfter(rule, now);
         spawnTodo(rule, now);
+        // 只更新目标列；CUSTOM 的 next 为 null，用 .set() 才能真的清空（updateById 会忽略 null）
+        recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
+                .eq(RecurringTodo::getId, id)
+                .set(RecurringTodo::getLastTriggeredAt, now)
+                .set(RecurringTodo::getNextTriggerAt, next));
         rule.setLastTriggeredAt(now);
-        // CUSTOM 无固定下次触发时间（返回 null），由脚本每分钟判断
-        rule.setNextTriggerAt(RecurringScheduleCalculator.nextTriggerAfter(rule, now));
-        recurringMapper.updateById(rule);
+        rule.setNextTriggerAt(next);
         return rule;
     }
 
@@ -174,7 +185,14 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
         todo.setDdl(RecurringScheduleCalculator.ddlOf(rule, triggeredAt));
         todo.setCompleted(false);
         todo.setRecurringId(rule.getId());
-        todoMapper.insert(todo);
+        try {
+            todoMapper.insert(todo);
+        } catch (DuplicateKeyException e) {
+            // uk_todo_recurring_ddl 兜底：同一期已存在（多实例并发或异常重放），忽略即可。
+            // MySQL 下失败的 INSERT 不会污染当前事务，因此这里可以安全地继续。
+            log.warn("Duplicate recurring occurrence ignored: rule={} ddl={}",
+                    rule.getId(), todo.getDdl());
+        }
     }
 
     @Override
@@ -199,8 +217,8 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
                 .eq(RecurringTodo::getFrequency, RecurringScheduleCalculator.CUSTOM);
 
         int generated = 0;
+        LocalDateTime minute = now.truncatedTo(ChronoUnit.MINUTES);
         for (RecurringTodo rule : recurringMapper.selectList(wrapper)) {
-            LocalDateTime minute = now.truncatedTo(ChronoUnit.MINUTES);
             if (rule.getLastTriggeredAt() != null
                     && !rule.getLastTriggeredAt().truncatedTo(ChronoUnit.MINUTES).isBefore(minute)) {
                 continue;
@@ -208,17 +226,30 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
             RecurringScriptEvaluator.ScriptResult r =
                     scriptEvaluator.test(rule.getScript(), now, rule.getLastTriggeredAt());
             if (!r.ok()) {
-                // 脚本出错则自动停用，避免每分钟反复报错
+                if (r.unavailable()) {
+                    // 沙箱自身不可用（并发饱和 / 已有脚本无法终止），这不是规则的问题，
+                    // 不能因此把用户的规则停掉
+                    log.warn("Custom recurring rule {} skipped, sandbox unavailable: {}",
+                            rule.getId(), r.error());
+                    continue;
+                }
+                // 脚本出错则自动停用，避免每分钟反复报错。
+                // 只改 enabled：整行 updateById 会把扫描开始时读到的快照写回，
+                // 从而覆盖用户在这期间的修改（例如刚把规则改回启用）。
                 log.warn("Custom recurring rule {} disabled due to script error: {}",
                         rule.getId(), r.error());
-                rule.setEnabled(false);
-                recurringMapper.updateById(rule);
+                recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
+                        .eq(RecurringTodo::getId, rule.getId())
+                        .set(RecurringTodo::getEnabled, false));
                 continue;
             }
             if (r.triggered()) {
+                // 原子占位：以「last_triggered_at 仍早于本分钟」为条件推进，
+                // 同一分钟只会有一个扫描能成功，避免重复生成
+                if (!claimCustomOccurrence(rule.getId(), minute)) {
+                    continue;
+                }
                 spawnTodo(rule, minute);
-                rule.setLastTriggeredAt(minute);
-                recurringMapper.updateById(rule);
                 generated++;
             }
         }
@@ -234,24 +265,56 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
 
         int generated = 0;
         for (RecurringTodo rule : recurringMapper.selectList(wrapper)) {
-            LocalDateTime due = rule.getNextTriggerAt();
+            LocalDateTime cursor = rule.getNextTriggerAt();
             int rounds = 0;
-            // 补齐停机期间错过的触发点，但设上限防止刷屏
-            while (due != null && !due.isAfter(now) && rounds < MAX_CATCH_UP) {
-                spawnTodo(rule, due);
-                rule.setLastTriggeredAt(due);
-                due = RecurringScheduleCalculator.nextTriggerAfter(rule, due);
+            // 补齐停机期间错过的触发点，但设上限防止刷屏。
+            // 每一期都「先原子占位（把 next_trigger_at 从本期推进到下一期），再生成待办」，
+            // 因此并发的两次扫描（启动补扫与首轮定时任务重叠）或多实例部署都不会重复生成。
+            while (cursor != null && !cursor.isAfter(now) && rounds < MAX_CATCH_UP) {
+                LocalDateTime next = RecurringScheduleCalculator.nextTriggerAfter(rule, cursor);
+                if (!claimFixedOccurrence(rule.getId(), cursor, next)) {
+                    break;   // 已被其它扫描/实例抢先占位
+                }
+                spawnTodo(rule, cursor);
+                cursor = next;
                 rounds++;
                 generated++;
             }
-            // 若仍落后于当前时间（错过太多期），直接跳到下一个未来触发点
-            if (due != null && !due.isAfter(now)) {
-                due = RecurringScheduleCalculator.nextTriggerAfter(rule, now);
+            // 若仍落后于当前时间（错过太多期），带条件地跳到下一个未来触发点
+            if (cursor != null && !cursor.isAfter(now)) {
+                advanceNextTrigger(rule.getId(), cursor,
+                        RecurringScheduleCalculator.nextTriggerAfter(rule, now));
             }
-            rule.setNextTriggerAt(due);
-            recurringMapper.updateById(rule);
         }
         return generated;
+    }
+
+    /** 原子占位一期（固定频率）：仅当 next_trigger_at 仍是扫描时读到的预期值时才推进 */
+    private boolean claimFixedOccurrence(Long ruleId, LocalDateTime expectedNext, LocalDateTime newNext) {
+        int rows = recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
+                .eq(RecurringTodo::getId, ruleId)
+                .eq(RecurringTodo::getNextTriggerAt, expectedNext)
+                .set(RecurringTodo::getNextTriggerAt, newNext)
+                .set(RecurringTodo::getLastTriggeredAt, expectedNext));
+        return rows == 1;
+    }
+
+    /** 原子占位一次（自定义频率）：仅当 last_triggered_at 仍早于本分钟时才推进 */
+    private boolean claimCustomOccurrence(Long ruleId, LocalDateTime minute) {
+        int rows = recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
+                .eq(RecurringTodo::getId, ruleId)
+                .and(w -> w.isNull(RecurringTodo::getLastTriggeredAt)
+                        .or().lt(RecurringTodo::getLastTriggeredAt, minute))
+                .set(RecurringTodo::getLastTriggeredAt, minute));
+        return rows == 1;
+    }
+
+    /** 带条件地推进 next_trigger_at，避免覆盖并发的修改 */
+    private void advanceNextTrigger(Long ruleId, LocalDateTime expectedNext, LocalDateTime newNext) {
+        recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
+                .eq(RecurringTodo::getId, ruleId)
+                .eq(RecurringTodo::getNextTriggerAt, expectedNext)
+                .set(RecurringTodo::getNextTriggerAt, newNext));
     }
 
     @Override
@@ -269,8 +332,11 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
         LocalDateTime base = rule.getNextTriggerAt() != null
                 ? rule.getNextTriggerAt() : LocalDateTime.now();
         spawnTodo(rule, base);
-        rule.setLastTriggeredAt(LocalDateTime.now());
-        rule.setNextTriggerAt(RecurringScheduleCalculator.nextTriggerAfter(rule, base));
-        recurringMapper.updateById(rule);
+        // 只更新目标列，避免整行写回覆盖用户并发的修改
+        recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
+                .eq(RecurringTodo::getId, recurringId)
+                .set(RecurringTodo::getLastTriggeredAt, LocalDateTime.now())
+                .set(RecurringTodo::getNextTriggerAt,
+                        RecurringScheduleCalculator.nextTriggerAfter(rule, base)));
     }
 }

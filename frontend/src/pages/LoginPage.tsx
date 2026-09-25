@@ -51,7 +51,7 @@ export default function LoginPage() {
             >
               <Input
                 prefix={<KeyOutlined />}
-                placeholder="例如 demo-key-001"
+                placeholder="请输入你的 API Key"
                 autoFocus
                 allowClear
               />

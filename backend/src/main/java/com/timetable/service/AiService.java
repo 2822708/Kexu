@@ -37,6 +37,14 @@ public interface AiService {
 
         /** 正文结束，开始解析操作提案 */
         void onPlanning();
+
+        /**
+         * 客户端是否已断开。实现方在推送事件失败时置为 true；
+         * 服务端据此中断上游调用，避免继续为一个已被遗弃的请求消耗资源与落库。
+         */
+        default boolean isCancelled() {
+            return false;
+        }
     }
 
     AiMessageResponse executeAction(Long conversationId, Long actionId, String apiKey);

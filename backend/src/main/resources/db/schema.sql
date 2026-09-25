@@ -69,7 +69,10 @@ CREATE TABLE IF NOT EXISTS todo (
     INDEX idx_ddl (ddl),
     INDEX idx_completed (completed),
     INDEX idx_todo_recurring (recurring_id),
-    INDEX idx_todo_exam (exam_id)
+    INDEX idx_todo_exam (exam_id),
+    -- 同一循环规则同一次触发只能有一条待办。应用层已用条件更新原子占位，
+    -- 这条唯一键是多实例/异常路径下的兜底（recurring_id 为 NULL 的手工待办不受影响）。
+    UNIQUE KEY uk_todo_recurring_ddl (recurring_id, ddl)
 );
 
 CREATE TABLE IF NOT EXISTS ai_conversation (

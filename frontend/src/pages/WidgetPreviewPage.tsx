@@ -58,8 +58,11 @@ const REFRESH_MS = 60 * 1000
 
 function parseQuery(): { key?: string; scheduleId?: number } {
   const params = new URLSearchParams(window.location.search)
-  const key = params.get('key')?.trim() || undefined
-  const sidRaw = params.get('scheduleId')
+  // Key 优先从 URL fragment（#key=...）读取：fragment 不会随请求发往服务端，
+  // 也不进 Referer，比 query 更安全；query 形式继续兼容旧的小组件地址。
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  const key = (hash.get('key') ?? params.get('key'))?.trim() || undefined
+  const sidRaw = hash.get('scheduleId') ?? params.get('scheduleId')
   const scheduleId = sidRaw ? Number(sidRaw) : undefined
   return { key, scheduleId: Number.isFinite(scheduleId) ? scheduleId : undefined }
 }
@@ -72,7 +75,9 @@ export default function WidgetPreviewPage() {
   const [error, setError] = useState('')
   const timer = useRef<number>()
 
-  const apiKey = key || getApiKey() || 'demo-key-001'
+  // 不再回落到任何内置 Key：固定 Key 一旦写进前端产物就等于公开凭据。
+  // 没有 Key 时明确报错，而不是拿一个演示账号去试探。
+  const apiKey = key || getApiKey() || ''
 
   // 拉取该 key 下的课表列表，供选择
   const loadSchedules = useCallback(async (k: string) => {
@@ -88,11 +93,17 @@ export default function WidgetPreviewPage() {
   }, [])
 
   const load = useCallback(async (k: string, sid?: number) => {
+    if (!k) {
+      setError('缺少 API Key：请在小组件地址里带上 #key=<你的 Key>')
+      return
+    }
     setLoading(true)
     setError('')
     try {
-      const path = `/widget/overview/${encodeURIComponent(k)}${sid ? `?scheduleId=${sid}` : ''}`
-      const res = await fetch(`${BASE_URL}${path}`)
+      // Key 走请求头，不再放进 URL 路径
+      const res = await fetch(`${BASE_URL}/widget/overview${sid ? `?scheduleId=${sid}` : ''}`, {
+        headers: { 'X-API-Key': k },
+      })
       const payload = await res.json()
       if (payload.code !== 200) throw new Error(payload.message || '请求失败')
       setData(payload.data)

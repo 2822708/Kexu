@@ -217,8 +217,9 @@ npm run build        # tsc -b && vite build → dist/
 
 ### 默认数据
 
-- API Key: `demo-key-001` (label: 默认用户)
 - 12 节作息时间 (08:00–21:05, MORNING/AFTERNOON/EVENING)
+- **不再内置演示 API Key**：`api_key` 表为空时，`ApiKeyBootstrap` 在启动后创建首个账号
+  （label `管理员`）；Key 取 `TANGENT_BOOTSTRAP_KEY`，未配置则随机生成并**只在创建那一次**打印到日志
 
 ---
 
@@ -273,7 +274,7 @@ npm run build        # tsc -b && vite build → dist/
 | POST | `/api/ai/conversations/{id}/actions/{actionId}/execute` | 确认执行单个提案 |
 | POST | `/api/ai/conversations/{id}/actions/{actionId}/reject` | 取消单个提案 |
 | POST | `/api/ai/parse-html?scheduleId=` | 解析教务 HTML → `{courses, note}` |
-| GET | `/api/widget/overview/{key}?scheduleId=` | 桌面小组件只读聚合（WebView，免鉴权，key 路径传入） |
+| GET | `/api/widget/overview?scheduleId=` | 桌面小组件只读聚合（WebView；与其它接口一致走 `X-API-Key` 请求头） |
 
 ### 统一响应格式
 
@@ -513,21 +514,33 @@ Rhino 提供 `ClassShutter` + 指令计数 + 栈深限制，可在进程内安�
 | `daysSinceLastTrigger` | 距上次触发天数（从未触发为 -1） |
 | `neverTriggered` | 是否从未触发 |
 
-**沙箱五层防护**（`RecurringScriptEvaluator`，均已逐项攻击验证）
+**沙箱防护分层**（`RecurringScriptEvaluator`）
 
 | 防护 | 拦截目标 |
 |------|---------|
 | `ClassShutter` 全量拒绝 | `java.lang.Runtime` / `Packages` / `java.io.File` → ReferenceError |
-| 指令计数（每 200 条观察） | 死循环、大数组分配；用 `Error` 抛出，脚本无法 try/catch 吞掉 |
+| `initSafeStandardObjects`（**不密封**） | 作用域内不含 `Packages`/`java`/`getClass`/`JavaAdapter`/`importClass` 等 LiveConnect 桥接；不密封是为了能覆写下一条的原型方法（密封时 `String.prototype` 无法修改） |
+| 源码层拒绝正则字面量 + 运行时顶替 `RegExp`/`eval`/`Function` 与 `RegExp.prototype.test/exec`、`String.prototype.match/search` | 正则回溯与动态代码 —— 它们是仅有的、能绕过指令计数的**无界原生**执行入口 |
+| 指令计数（每 200 条观察）+ 1.5s 墙钟检查 | 死循环；用 `Error` 抛出，脚本无法 try/catch 吞掉 |
 | `setMaximumInterpreterStackDepth(256)` | 无限递归 |
 | 堆增长哨兵 64MB + 工作线程内捕获 OOM/StackOverflow | 内存耗尽拖垮服务 |
-| `initSafeStandardObjects(sealed)` + 4000 字符上限 | 桥接逃逸、超大脚本 |
+| 并发许可（默认 2） | 被遗弃（无法终止）的线程**不归还许可**，因此失控脚本数量有硬上限；用满后求值失败关闭 |
+| 脚本长度上限 4000 字符 | 超大脚本 |
 
-> **踩坑记录**：最初只做了前两层，测试发现无限递归
+> **已知限制（不要在文档里宣称已完全解决）**：JVM 无法安全抢占一次正在执行的原生调用，
+> 因此进程内手段**不能**保证「超时即终止」。本项目通过关掉全部已证实的无界原生入口，
+> 并把失控线程数量限制在并发许可数以内，把「无界资源耗尽」降级为「有界且可告警」。
+> 彻底方案是把求值移到可强杀的独立进程（待办事项见文末 TODO）。
+
+> **踩坑记录（两轮）**：第一轮只做了 ClassShutter + 指令计数，测试发现无限递归
 > （`function f(){return f();}`）会让 Rhino 解释器堆帧耗尽内存，
-> 抛出的 `OutOfMemoryError` 从工作线程传播到主线程，**整个 JVM 崩溃**。
+> 抛出的 `OutOfMemoryError` 从工作线程传播到主线程，**整个 JVM 崩溃**；
 > 修复方式是栈深限制 + 在工作线程内捕获 `OutOfMemoryError`。
-> 结论：执行不可信代码时，光靠指令计数不够，必须同时限制内存与栈深。
+> 第二轮发现：正则回溯发生在原生代码里，指令计数器**根本不会被调用** ——
+> `/(a+)+$/` 这类脚本会让 `test()` 正常超时返回，而工作线程永远占满一个 CPU 核心，
+> 每次请求泄漏一个线程。修复方式是源码层拒绝正则字面量、运行时顶替 RegExp/eval/Function
+> 与相关原型方法，并用并发许可给失控线程数设硬上限。
+> 结论：执行不可信代码时，光靠指令计数不够，还要限制内存、栈深，并关掉所有无界原生入口。
 
 **运行机制**
 - CUSTOM 不预算 `next_trigger_at`（`nextTriggerAfter` 返回 null），

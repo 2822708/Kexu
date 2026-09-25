@@ -81,10 +81,10 @@ Controller → Service(接口) → ServiceImpl → Mapper (MyBatis-Plus) → MyS
 
 ## 4. 认证与安全
 
-- 除 `/api/auth/verify` 与只读的 `/api/widget/**` 外，所有接口需 `X-API-Key`。
+- 除 `/api/auth/verify` 外，所有接口（含只读的 `/api/widget/**`）需 `X-API-Key` 请求头。
 - 统一响应：`{ code, message, data }`。
 - AI 执行层复用各业务 Service，所有权校验自动生效。
-- 自定义循环脚本运行于 Rhino 沙箱，具备 ClassShutter、指令计数、栈深限制、堆哨兵与脚本长度上限五层防护。
+- 自定义循环脚本运行于 Rhino 沙箱：ClassShutter 全量拒绝 Java 类、源码拒绝正则字面量、运行时顶替 `RegExp`/`eval`/`Function` 及相关原型方法，另有指令计数、栈深限制、堆哨兵、并发许可与脚本长度上限。注意进程内无法抢占正在执行的原生调用，因此该防护是「有界 + 失败关闭」，不是绝对的执行超时（详见 `AGENTS.md` §10.1）。
 
 ---
 

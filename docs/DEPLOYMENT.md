@@ -58,6 +58,17 @@ server:
 
 ### 2.3 systemd 服务
 
+先创建环境文件。`application-prod.yml` 里的 `${TANGENT_COMMON_PASSWORD}` 就是从这里读的；
+systemd 的 `EnvironmentFile` 只认 `KEY=value` 行，**不能写 `export`**：
+
+```bash
+sudo tee <APP_DIR>/.env >/dev/null <<'EOF'
+TANGENT_COMMON_PASSWORD=你的数据库密码
+DEEPSEEK_API_KEY=sk-xxx
+EOF
+sudo chmod 600 <APP_DIR>/.env
+```
+
 `/etc/systemd/system/timetable-backend.service`：
 
 ```ini
@@ -163,11 +174,17 @@ INSERT IGNORE INTO api_key (api_key, label, avatar_url)
 VALUES ('tt_xxx', '用户名', '头像URL');
 ```
 
+> 首次部署时 `api_key` 表为空，应用启动后会**自动创建首个账号**并把 Key 打印到日志
+> （也可用环境变量 `TANGENT_BOOTSTRAP_KEY` 预先指定）。建议用 ≥128 位随机串作为 Key，
+> 不要沿用任何文档里的示例值。仓库不再内置演示 Key。
+
 > **schema 变更需手动 ALTER**：`CREATE TABLE IF NOT EXISTS` 只会创建不存在的表，
 > **不会给已存在的表补列**。因此每次修改 `schema.sql` 后，已有数据库需手动执行 `ALTER`。
 > 改前先 `SHOW CREATE TABLE <表名>` 确认外键/索引名。示例：
 > ```sql
 > ALTER TABLE todo ADD COLUMN exam_id BIGINT NULL, ADD INDEX idx_todo_exam (exam_id);
+> -- 同一循环规则同一次触发只能有一条待办（应用层已用条件更新原子占位，此为多实例兜底）
+> ALTER TABLE todo ADD UNIQUE KEY uk_todo_recurring_ddl (recurring_id, ddl);
 > ```
 
 ---

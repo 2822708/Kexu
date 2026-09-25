@@ -12,7 +12,7 @@
 - **课表管理**：多课表、周次与单双周、跨节课程、可视化 7×12 网格、冲突提示。
 - **待办事项**：秒级 DDL 倒计时、完成状态标记；考试关联待办在考试结束后自动完成。
 - **循环待办**：每日 / 每周 / 每月规则自动生成；支持用 JavaScript 编写
-  `shouldTrigger(ctx)` 自定义规则（Rhino 沙箱隔离，五层安全防护）。
+  `shouldTrigger(ctx)` 自定义规则（Rhino 沙箱隔离：ClassShutter + 关闭正则与动态代码 + 指令计数 / 栈深 / 内存 / 并发上限）。
 - **考试记录**：直接输入日期与起止时间，课表内以红色块展示，自动生成关联待办，
   考试结束后自动完成。
 - **AI 助手**：粘贴教务 HTML 自动解析导入；用自然语言增删改课表、待办、考试、循环规则；
@@ -82,7 +82,18 @@ export DEEPSEEK_API_KEY=sk-xxx
 ```
 
 默认连接 `jdbc:mysql://localhost:3306/timetable`（不存在会自动建库），
-首次启动自动执行 `db/schema.sql` 与 `db/data.sql`，写入演示账号 `demo-key-001`。
+首次启动自动执行 `db/schema.sql` 与 `db/data.sql` 建表并写入作息时间种子数据。
+
+**账号**：应用没有注册页，账号就是 `api_key` 表里的一行。仓库不再内置演示 Key
+（公开仓库里的固定 Key 等于公开凭据）：`api_key` 表为空时，启动过程会自动创建首个账号，
+并把生成的 Key **只打印一次**到日志；也可以用下面的变量指定。
+
+```bash
+# 想让首个账号用你指定的 Key，就在启动前设置（不设则随机生成并打印到日志）
+export TANGENT_BOOTSTRAP_KEY=your-custom-key
+```
+
+后续新增账号见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)（`INSERT INTO api_key ...`）。
 
 ### 2. 启动前端
 
@@ -92,7 +103,7 @@ npm install
 npm run dev        # http://localhost:5173，/api 已代理到 :8080
 ```
 
-浏览器打开后，在登录页输入 API Key（默认演示账号 `demo-key-001`）即可进入。
+浏览器打开后，在登录页输入上面那个 API Key 即可进入。
 
 > 更多开发命令、代码约定与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
@@ -106,6 +117,7 @@ npm run dev        # http://localhost:5173，/api 已代理到 :8080
 | `DEEPSEEK_MODEL` | 模型名（`deepseek-flash` = DeepSeek-V4.1-Flash） | `deepseek-flash` |
 | `CORS_ALLOWED_ORIGINS` | 允许跨域的来源（逗号分隔） | `*` |
 | `ADMIN_LABELS` | 可编辑全局作息表的账号 label（逗号分隔） | `Tangent0712` |
+| `TANGENT_BOOTSTRAP_KEY` | 首次启动且 `api_key` 表为空时，用它创建首个账号 | 空（随机生成并打印） |
 | `VITE_API_BASE`（前端） | 前端 API 基地址 | `/api` |
 | `VITE_ADMIN_LABELS`（前端） | 前端 UI 管理员判断（仅 UI，后端以 `ADMIN_LABELS` 为准） | `Tangent0712` |
 
@@ -130,7 +142,7 @@ npm run dev        # http://localhost:5173，/api 已代理到 :8080
 | 考试 | `GET/POST /api/schedules/{id}/exams`、`PUT/DELETE /api/exams/{id}` |
 | 作息 | `GET/PUT /api/period-config`（PUT 仅管理员） |
 | AI | `POST /api/ai/conversations/{id}/messages/stream`、`POST /api/ai/parse-html` |
-| 小组件 | `GET /api/widget/overview/{key}?scheduleId=` |
+| 小组件 | `GET /api/widget/overview?scheduleId=`（需 `X-API-Key` 请求头） |
 
 完整接口清单与实现细节见 `AGENTS.md`，整体架构见 `docs/ARCHITECTURE.md`。
 

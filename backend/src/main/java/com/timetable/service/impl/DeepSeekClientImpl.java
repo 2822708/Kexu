@@ -46,12 +46,18 @@ public class DeepSeekClientImpl implements DeepSeekClient {
 
     @Override
     public String chatJson(List<Message> messages) {
-        return execute(messages, null);
+        return execute(messages, null, () -> false);
     }
 
     @Override
     public String chatJsonStream(List<Message> messages, StreamListener listener) {
-        return execute(messages, listener);
+        return execute(messages, listener, () -> false);
+    }
+
+    @Override
+    public String chatJsonStream(List<Message> messages, StreamListener listener,
+                                 java.util.function.BooleanSupplier cancelled) {
+        return execute(messages, listener, cancelled);
     }
 
     private ObjectNode buildBody(List<Message> messages, boolean stream) {
@@ -75,7 +81,8 @@ public class DeepSeekClientImpl implements DeepSeekClient {
         return body;
     }
 
-    private String execute(List<Message> messages, StreamListener listener) {
+    private String execute(List<Message> messages, StreamListener listener,
+                           java.util.function.BooleanSupplier cancelled) {
         if (!isConfigured()) {
             throw new BusinessException(503, "未配置 DeepSeek API Key，AI 功能不可用");
         }
@@ -83,6 +90,9 @@ public class DeepSeekClientImpl implements DeepSeekClient {
         ObjectNode body = buildBody(messages, stream);
 
         try {
+            if (cancelled.getAsBoolean()) {
+                throw new BusinessException(499, "客户端已断开，未发起 AI 请求");
+            }
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(properties.getBaseUrl() + "/chat/completions"))
                     .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
@@ -117,6 +127,11 @@ public class DeepSeekClientImpl implements DeepSeekClient {
                     new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
+                    // 每个数据块前检查一次：客户端断开后立即退出循环，
+                    // try-with-resources 会关闭响应流，从而中断上游请求并释放连接
+                    if (cancelled.getAsBoolean()) {
+                        throw new BusinessException(499, "客户端已断开，已停止本次流式请求");
+                    }
                     if (!line.startsWith("data:")) {
                         continue;
                     }

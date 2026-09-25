@@ -27,6 +27,8 @@ app:
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:*}
   # 可编辑全局作息时间表的账号 label（逗号分隔）
   admin-labels: ${ADMIN_LABELS:Tangent0712}
+  # 首次启动且 api_key 表为空时，用它创建首个管理员账号；留空则随机生成并打印到日志
+  bootstrap-key: ${TANGENT_BOOTSTRAP_KEY:}
 
 deepseek:
   api:

@@ -36,7 +36,24 @@ public interface DeepSeekClient {
     /**
      * 流式调用，边接收边回调，最终返回拼接完成的完整原始输出。
      */
-    String chatJsonStream(List<Message> messages, StreamListener listener);
+    default String chatJsonStream(List<Message> messages, StreamListener listener) {
+        return chatJsonStream(messages, listener, () -> false);
+    }
+
+    /**
+     * 可取消的流式调用。{@code cancelled} 返回 true 时立刻中断读取并抛出异常。
+     *
+     * 客户端断开后必须停止上游调用：否则工作线程会一直读到上游自然结束（最长
+     * timeout-seconds），期间白占线程池额度，而且结束之后还会把用户永远看不到的
+     * 回复与提案写进库。
+     *
+     * @param messages 完整对话上下文
+     * @param listener 增量回调
+     * @param cancelled 取消判定，每个数据块前检查一次
+     * @return 拼接完成的完整原始输出
+     */
+    String chatJsonStream(List<Message> messages, StreamListener listener,
+                          java.util.function.BooleanSupplier cancelled);
 
     boolean isConfigured();
 }

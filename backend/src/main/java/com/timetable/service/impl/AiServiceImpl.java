@@ -248,40 +248,74 @@ public class AiServiceImpl implements AiService {
      * 因此改一个待办不会让课表相关的提案失效，反之亦然。
      */
     private String fingerprintOf(String scope, Long scheduleId, String apiKey) {
-        StringBuilder sb = new StringBuilder();
         if (SCOPE_COURSE.equals(scope)) {
-            sb.append("S").append(scheduleId).append('|');
-            if (scheduleId != null) {
-                for (Course c : courseService.listByScheduleId(scheduleId, apiKey)) {
-                    sb.append(c.getId()).append(':').append(c.getName()).append(':')
-                            .append(c.getDayOfWeek()).append(':').append(c.getStartPeriod()).append('-')
-                            .append(c.getEndPeriod()).append(':').append(c.getWeeks()).append(':')
-                            .append(c.getLocation()).append(':').append(c.getTeacher()).append(';');
-                }
-                sb.append("|E|");
-                for (Exam e : examService.listByScheduleId(scheduleId, apiKey)) {
-                    sb.append(e.getId()).append(':')
-                            .append(e.getName()).append(':').append(e.getExamDate()).append(':')
-                            .append(e.getStartTime()).append(':').append(e.getEndTime()).append(':')
-                            .append(e.getLocation()).append(';');
-                }
+            List<Course> courses = scheduleId == null
+                    ? Collections.emptyList() : courseService.listByScheduleId(scheduleId, apiKey);
+            List<Exam> exams = scheduleId == null
+                    ? Collections.emptyList() : examService.listByScheduleId(scheduleId, apiKey);
+            return sha256(courseFingerprintInput(scheduleId, courses, exams));
+        }
+        return sha256(todoFingerprintInput(todoService.list(apiKey), recurringTodoService.list(apiKey)));
+    }
+
+    /**
+     * 课表作用域的指纹输入（纯函数，不查库）。
+     * 与 {@link #fingerprintOf} 共用，保证「查库现算」与「用快照算」得到同一结果。
+     */
+    private String courseFingerprintInput(Long scheduleId, List<Course> courses, List<Exam> exams) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("S").append(scheduleId).append('|');
+        if (scheduleId != null) {
+            for (Course c : courses) {
+                sb.append(c.getId()).append(':').append(c.getName()).append(':')
+                        .append(c.getDayOfWeek()).append(':').append(c.getStartPeriod()).append('-')
+                        .append(c.getEndPeriod()).append(':').append(c.getWeeks()).append(':')
+                        .append(c.getLocation()).append(':').append(c.getTeacher()).append(';');
             }
-        } else {
-            for (Todo t : todoService.list(apiKey)) {
-                sb.append(t.getId()).append(':').append(t.getTitle()).append(':')
-                        .append(t.getDdl()).append(':').append(t.getCompleted()).append(';');
-            }
-            sb.append("|R|");
-            for (RecurringTodo r : recurringTodoService.list(apiKey)) {
-                sb.append(r.getId()).append(':').append(r.getTitle()).append(':')
-                        .append(r.getFrequency()).append(':').append(r.getDayOfWeek()).append(':')
-                        .append(r.getDayOfMonth()).append(':').append(r.getTriggerTime()).append(':')
-                        .append(r.getScript()).append(':')
-                        .append(r.getDdlOffsetMinutes()).append(':').append(r.getEnabled()).append(':')
-                        .append(r.getChainAfterComplete()).append(';');
+            sb.append("|E|");
+            for (Exam e : exams) {
+                sb.append(e.getId()).append(':')
+                        .append(e.getName()).append(':').append(e.getExamDate()).append(':')
+                        .append(e.getStartTime()).append(':').append(e.getEndTime()).append(':')
+                        .append(e.getLocation()).append(';');
             }
         }
-        return sha256(sb.toString());
+        return sb.toString();
+    }
+
+    /** 待办作用域的指纹输入（纯函数，不查库），与 {@link #fingerprintOf} 共用 */
+    private String todoFingerprintInput(List<Todo> todos, List<RecurringTodo> rules) {
+        StringBuilder sb = new StringBuilder();
+        for (Todo t : todos) {
+            sb.append(t.getId()).append(':').append(t.getTitle()).append(':')
+                    .append(t.getDdl()).append(':').append(t.getCompleted()).append(';');
+        }
+        sb.append("|R|");
+        for (RecurringTodo r : rules) {
+            sb.append(r.getId()).append(':').append(r.getTitle()).append(':')
+                    .append(r.getFrequency()).append(':').append(r.getDayOfWeek()).append(':')
+                    .append(r.getDayOfMonth()).append(':').append(r.getTriggerTime()).append(':')
+                    .append(r.getScript()).append(':')
+                    .append(r.getDdlOffsetMinutes()).append(':').append(r.getEnabled()).append(':')
+                    .append(r.getChainAfterComplete()).append(';');
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 在**调用模型之前**、用已经加载好（并即将写进 Prompt 与 _before）的数据算出的指纹。
+     *
+     * 关键：不能等到落库时再查库现算 —— 模型思考期间（数十秒）发生的数据变化会被算入基线，
+     * 于是 executeAction 的复查会通过，一个基于旧数据推理的提案被施加到新数据之上，
+     * 而 _before 展示给用户的又是旧值，两者自相矛盾。
+     */
+    private Map<String, String> fingerprintSnapshot(Long scheduleId, List<Course> courses,
+                                                    List<Exam> exams, List<Todo> todos,
+                                                    List<RecurringTodo> rules) {
+        Map<String, String> snapshot = new HashMap<>();
+        snapshot.put(SCOPE_COURSE, sha256(courseFingerprintInput(scheduleId, courses, exams)));
+        snapshot.put(SCOPE_TODO, sha256(todoFingerprintInput(todos, rules)));
+        return snapshot;
     }
 
     private String sha256(String input) {
@@ -407,6 +441,11 @@ public class AiServiceImpl implements AiService {
         List<RecurringTodo> recurringTodos = recurringTodoService.list(apiKey);
         List<PeriodConfig> periods = periodConfigService.list();
 
+        // 指纹必须与即将写进 Prompt / _before 的数据取自同一时刻，且必须在调用模型之前算好。
+        // 若等到落库时再查库现算，模型思考期间的数据变化就会进入基线，使过期提案通过复查。
+        Map<String, String> fingerprintSnapshot =
+                fingerprintSnapshot(scheduleId, courses, exams, todos, recurringTodos);
+
         AiMessage userMessage = new AiMessage();
         userMessage.setConversationId(conversationId);
         userMessage.setRole("user");
@@ -489,7 +528,9 @@ public class AiServiceImpl implements AiService {
                         callback.onPlanning();
                     }
                 }
-            });
+                // 客户端断开（推送事件失败）时中断上游读取，避免为一个已被遗弃的请求
+                // 持续占用线程与连接；中断后向上抛出，回复不会落库
+            }, callback::isCancelled);
             if (!planningNotified[0]) {
                 callback.onPlanning();
             }
@@ -508,14 +549,15 @@ public class AiServiceImpl implements AiService {
         final List<Exam> finalExams = exams;
         return transactionTemplate.execute(status -> persistAssistantResult(
                 conversationId, apiKey, scheduleId, conversation, root, finalText,
-                finalCourses, todos, recurringTodos, finalExams));
+                finalCourses, todos, recurringTodos, finalExams, fingerprintSnapshot));
     }
 
     /** 在事务内落库 AI 回复与提案，并让同作用域旧提案失效 */
     private AiMessageResponse persistAssistantResult(Long conversationId, String apiKey, Long scheduleId,
                                                      AiConversation conversation, JsonNode root, String text,
                                                      List<Course> courses, List<Todo> todos,
-                                                     List<RecurringTodo> recurringTodos, List<Exam> exams) {
+                                                     List<RecurringTodo> recurringTodos, List<Exam> exams,
+                                                     Map<String, String> fingerprintSnapshot) {
         AiMessage assistantMessage = new AiMessage();
         assistantMessage.setConversationId(conversationId);
         assistantMessage.setRole("assistant");
@@ -535,8 +577,6 @@ public class AiServiceImpl implements AiService {
 
         // 本次提案涉及的作用域，仅让这些作用域内的旧提案失效
         int order = 0;
-        // 指纹按作用域计算一次即可，避免在循环里反复全量扫描
-        Map<String, String> fingerprintCache = new HashMap<>();
         List<AiAction> created = new ArrayList<>();
         for (JsonNode node : actionNodes) {
             String type = node.path("type").asText("");
@@ -565,8 +605,8 @@ public class AiServiceImpl implements AiService {
                 } catch (Exception e) {
                     throw new BusinessException(502, "AI 返回的操作数据无法序列化");
                 }
-                action.setDataFingerprint(
-                        fingerprintCache.computeIfAbsent(scope, sc -> fingerprintOf(sc, scheduleId, apiKey)));
+                action.setDataFingerprint(fingerprintSnapshot.getOrDefault(scope,
+                        fingerprintOf(scope, scheduleId, apiKey)));
                 action.setSortOrder(order++);
                 created.add(action);
             }

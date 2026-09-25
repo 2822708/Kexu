@@ -53,8 +53,9 @@ export default function SettingsPage() {
   const [rows, setRows] = useState<PeriodConfig[]>([])
   const [widgetKey] = useState(() => getApiKey() ?? '')
 
-  // 桌面小组件只读展示页地址（含 key 与当前课表）
-  const widgetPageUrl = `${WIDGET_API_BASE}/widget?key=${encodeURIComponent(widgetKey)}${
+  // 桌面小组件只读展示页地址（含 key 与当前课表）。
+  // Key 放在 fragment（#）而不是 query（?）：fragment 不会随请求发往服务端，也不进 Referer。
+  const widgetPageUrl = `${WIDGET_API_BASE}/widget#key=${encodeURIComponent(widgetKey)}${
     activeScheduleId ? `&scheduleId=${activeScheduleId}` : ''
   }`
 
