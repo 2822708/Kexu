@@ -120,6 +120,7 @@ Copy-Item (Join-Path $extract 'runtimes\win-x64\native\WebView2Loader.dll') $dis
 # ---------- 5. 外壳 ----------
 Write-Step '5/7 编译桌面外壳（WinForms + WebView2，用 .NET Framework 自带 csc）'
 $icon = Join-Path $shellDir 'app.ico'
+$manifest = Join-Path $shellDir 'app.manifest'
 $cscArgs = @(
     '/nologo', '/target:winexe', '/platform:x64', '/optimize+',
     "/out:$dist\TangentTimetable.exe",
@@ -129,9 +130,15 @@ $cscArgs = @(
     "/reference:$dist\Microsoft.Web.WebView2.WinForms.dll"
 )
 if (Test-Path $icon) { $cscArgs += "/win32icon:$icon" }
+# DPI 感知清单：缺失时在高 DPI 屏幕上整个界面会被系统位图放大而发虚
+if (Test-Path $manifest) { $cscArgs += "/win32manifest:$manifest" }
 $cscArgs += (Join-Path $shellDir 'Program.cs')
 & $csc @cscArgs
 if ($LASTEXITCODE -ne 0) { throw '外壳编译失败' }
+
+# WinForms 的 PerMonitorV2 需要这份配置才生效（必须与 exe 同名 + .config）
+$exeConfig = Join-Path $shellDir 'TangentTimetable.exe.config'
+if (Test-Path $exeConfig) { Copy-Item $exeConfig "$dist\TangentTimetable.exe.config" -Force }
 
 # ---------- 6. 汇总 ----------
 Write-Step '6/7 体积汇总'

@@ -34,9 +34,47 @@ namespace TangentTimetable
         internal const int Port = 17817;
         private const string MutexName = "TangentTimetable.SingleInstance.v1";
 
+        private static readonly IntPtr DpiAwarenessPerMonitorV2 = new IntPtr(-4);
+        private static readonly IntPtr DpiAwarenessPerMonitor = new IntPtr(-3);
+        private static readonly IntPtr DpiAwarenessSystem = new IntPtr(-2);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
+        /// <summary>窗口所在显示器的 DPI（Win10 1607+）</summary>
+        [DllImport("user32.dll")]
+        internal static extern uint GetDpiForWindow(IntPtr hwnd);
+
+        /// <summary>直接设置窗口的物理像素位置与尺寸</summary>
+        [DllImport("user32.dll")]
+        internal static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter,
+            int x, int y, int width, int height, uint flags);
+
+        /// <summary>
+        /// 声明 DPI 感知。app.manifest 已经声明过一次，这里再调用一次是为了在清单被忽略或
+        /// 被环境覆盖时仍然生效（若已声明，该调用会失败并返回 false，属正常情况）。
+        ///
+        /// 不声明时进程是 DPI-UNAWARE：在 200% 缩放的屏幕上 Windows 会把整个窗口位图放大，
+        /// 界面与 WebView 内容都会发虚。
+        /// </summary>
+        private static void EnableDpiAwareness()
+        {
+            try
+            {
+                if (SetProcessDpiAwarenessContext(DpiAwarenessPerMonitorV2)) return;
+                if (SetProcessDpiAwarenessContext(DpiAwarenessPerMonitor)) return;
+                SetProcessDpiAwarenessContext(DpiAwarenessSystem);
+            }
+            catch (Exception)
+            {
+                // 旧版 Windows 没有该 API：由清单里的 true/pm 兜底
+            }
+        }
+
         [STAThread]
         private static void Main()
         {
+            EnableDpiAwareness();
             bool createdNew;
             using (Mutex mutex = new Mutex(true, MutexName, out createdNew))
             {
@@ -68,16 +106,53 @@ namespace TangentTimetable
         internal MainForm()
         {
             this.Text = "大切课程表";
-            this.Width = 1180;
-            this.Height = 820;
-            this.MinimumSize = new Size(760, 560);
+
+            // 窗口内容只有一个 Dock 填充的 WebView2，不需要 WinForms 自动缩放布局；
+            // 尺寸在 OnLoad 里按窗口实际 DPI 换算，避免与 AutoScaleMode 重复缩放。
+            this.AutoScaleMode = AutoScaleMode.None;
             this.StartPosition = FormStartPosition.CenterScreen;
+
             this.webView.Dock = DockStyle.Fill;
             this.Controls.Add(this.webView);
 
             this.dataDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "TangentTimetable");
+        }
+
+        /// <summary>
+        /// 按窗口所在显示器的 DPI 设置窗口的物理尺寸，并在工作区内居中。
+        ///
+        /// 为什么用 Win32 而不是 Form.Width/Height：WinForms 在首次显示时会再按 DPI 缩放一次
+        /// 窗口尺寸（实测把 2360x1640 缩成 1180x820，正好 0.5 倍），所以在 OnShown 里直接落
+        /// 最终物理尺寸最可靠。DPI 用 GetDpiForWindow 取，它报告的是窗口所在显示器。
+        /// </summary>
+        private void ApplyPhysicalWindowSize()
+        {
+            int dpi = 96;
+            try
+            {
+                int measured = (int)Program.GetDpiForWindow(this.Handle);
+                if (measured > 0)
+                {
+                    dpi = measured;
+                }
+            }
+            catch (Exception)
+            {
+                // 取不到就按 100% 处理
+            }
+
+            float scale = dpi / 96f;
+            Rectangle work = Screen.FromControl(this).WorkingArea;   // DPI 感知进程下即为物理像素
+            int width = Math.Min((int)(1180 * scale), work.Width - 40);
+            int height = Math.Min((int)(820 * scale), work.Height - 40);
+            int x = work.Left + (work.Width - width) / 2;
+            int y = work.Top + (work.Height - height) / 2;
+
+            const uint swpNoZOrder = 0x0004;
+            const uint swpNoActivate = 0x0010;
+            Program.SetWindowPos(this.Handle, IntPtr.Zero, x, y, width, height, swpNoZOrder | swpNoActivate);
         }
 
         protected override void OnLoad(EventArgs e)
@@ -256,6 +331,8 @@ namespace TangentTimetable
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            // 放在 OnShown 而不是 OnLoad：WinForms 首次显示时会再缩放一次窗口尺寸
+            ApplyPhysicalWindowSize();
             if (!freshAccount)
             {
                 return;
