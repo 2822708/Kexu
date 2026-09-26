@@ -16,6 +16,7 @@ Tangent-Timetable/
 │   ├── DEVELOPMENT.md              # 当前目录的开发和 Git 操作
 │   ├── WORKSPACE_SETUP.md          # 来源、迁移范围和验证结果
 │   ├── desktop/                   # 桌面版结构、运行与打包说明
+│   ├── android/                   # Android 离线单机版实施方案
 │   ├── project/                    # 产品、架构、部署、手册等原项目文档
 │   ├── reviews/                    # 项目理解与当前问题清单
 │   ├── releases/                   # 成品文件校验清单（纳入 Git）
@@ -35,6 +36,7 @@ Tangent-Timetable/
 - [当前问题清单](docs/reviews/CURRENT_ISSUES.md)
 - [项目建立记录](docs/WORKSPACE_SETUP.md)
 - [桌面版说明](docs/desktop/README.md)
+- [Android 移动端实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)
 
 ## Git 基线
 
@@ -47,6 +49,10 @@ Tangent-Timetable/
 原版和修复版可直接用标签比较，无需在日常目录内保存两套源码。历史提交仍使用原目录名 `backend/`、`frontend/`；工作区建立提交将它们迁入 `src/`。
 
 新仓库仅建立本地版本管理，没有配置远程，也没有推送或部署。原交付目录保持原状。
+
+## Android 移动端规划
+
+首版方案按离线单机、本地 Room 数据、手动导入导出、联网 AI 和后续同步设计。具体实现边界、数据表、提醒限制、提案执行和阶段验收见 [Android 实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)；该方案是设计文档，尚不表示 Android 工程或 APK 已建立。
 
 ## 本轮范围
 
