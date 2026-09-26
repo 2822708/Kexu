@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -54,6 +55,18 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return ApiResponse.error(400, "参数格式有误：" + e.getName());
+    }
+
+    /**
+     * 没有匹配到任何接口或静态资源。
+     *
+     * 必须单独处理：未匹配的路径默认抛 NoResourceFoundException，若交给下面的兜底处理器
+     * 会变成 500，让「路径写错」看起来像服务端故障。
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleNotFound(NoResourceFoundException e) {
+        return ApiResponse.error(404, "请求的资源不存在");
     }
 
     @ExceptionHandler(Exception.class)

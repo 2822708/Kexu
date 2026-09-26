@@ -44,3 +44,10 @@ work/
 *.pfx
 *.dump
 *.sql.gz
+# Desktop packages and local data (source remains tracked)
+src/desktop/app-image/
+releases/
+*.mv.db
+*.trace.db
+settings.properties
+account.key

@@ -4,7 +4,7 @@
 
 项目根目录：`E:\codex work\projects\Tangent-Timetable`。
 
-这是独立文件夹和独立 Git 仓库，未创建或修改磁盘分区。根目录同时管理 docs 和 src，二者没有嵌套 Git 仓库。
+这是独立文件夹和独立 Git 仓库，未创建或修改磁盘分区。根目录同时管理 docs 和 src，二者没有嵌套 Git 仓库。Windows 桌面源码也在 `src/desktop`，与前后端共享同一版本线。
 
 ## 环境
 
@@ -12,6 +12,7 @@
 - 前端锁定 ESLint 的 Node 要求为 `^20.19.0 || ^22.13.0 || >=24`。原文档中的 Node 18+ 不满足完整检查链。
 - 数据库：原项目目标 MySQL 8；历史交付记录另有 MariaDB 实测。本轮没有启动数据库。
 - AI 功能需要 `DEEPSEEK_API_KEY`；普通业务可在未配置 AI 时使用。
+- 桌面版使用 standalone/H2 文件数据库，AI Key 也可在界面设置。见 [桌面版说明](desktop/README.md)。
 
 本轮未复制真实 `.env` 或 application-local/prod 配置，未安装依赖。项目根的 `.env.example` 和前端 `.env.example` 是模板；Spring 不会仅因为根目录存在 `.env` 就自动读取它，运行时应由环境变量或本地 profile 注入配置。
 
@@ -54,6 +55,9 @@ git log --oneline --decorate -10
 # 查看前次修复相对原版的变更
 git diff baseline/upstream-57313b1 baseline/fixed-32de25c
 
+# 查看桌面版相对 Web 修复版的变更
+git diff baseline/fixed-32de25c baseline/desktop-8f4f686
+
 # 从已建立的项目上开展一个具体修改，分支名按实际任务选择
 git switch -c fix/issue-name
 
@@ -71,5 +75,7 @@ git commit -m 'docs: update current issue status'
 ## Git 忽略范围
 
 忽略依赖与构建目录、日志、真实 `.env.*`、application-local/prod 配置、work 临时文件和常见数据库转储/密钥文件。示例 `.env.example` 继续跟踪。
+
+桌面包位于 `releases/windows/TangentTimetable`，不纳入 Git；对应校验清单在 `docs/releases`。H2 数据文件和本地 settings/account 文件也被忽略。
 
 Windows Maven 包装器在原 Git 对象中存储 CRLF；新仓库对该文件使用 `-text` 保留原字节，避免原 `.gitattributes` 设置引起的永久脏状态。其他文件沿用原规则。

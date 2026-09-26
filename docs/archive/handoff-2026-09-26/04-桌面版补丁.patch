@@ -1,0 +1,1699 @@
+From fb93164e3610dbe9b0086f6242094f45d8e9b5aa Mon Sep 17 00:00:00 2001
+From: Code Review Bot <review@localhost>
+Date: Sat, 26 Sep 2026 17:56:58 +0800
+Subject: [PATCH 1/2] =?UTF-8?q?feat(desktop):=20=E6=89=93=E5=8C=85?=
+ =?UTF-8?q?=E4=B8=BA=20Windows=20=E5=85=8D=E5=AE=89=E8=A3=85=E6=A1=8C?=
+ =?UTF-8?q?=E9=9D=A2=E5=BA=94=E7=94=A8?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+一条命令（desktop/build-desktop.ps1）产出可直接拷走运行的目录，零外部依赖：
+不需要用户安装 Java / Node / MySQL。
+
+- standalone profile：H2 文件库（数据在 %LOCALAPPDATA%\TangentTimetable）+
+  前端构建产物并入 jar，由后端直接提供
+- SPA 回退：React Router 的前端路由（/todos、/manual、/widget）直接访问不再 404，
+  未知的 /api 路径仍返回 404（顺带修掉「未匹配路径被兜底成 500」的既有问题）
+- schema-h2.sql：H2 与 MySQL 的三处语义差异（索引名全库唯一、JSON 列按字符串存、
+  UNIQUE KEY 语法），与 schema.sql 分离，不影响 MySQL 部署
+- AI Key 可在界面配置：DeepSeekKeyStore 优先取本机设置再回退环境变量，新增
+  GET/PUT/DELETE /api/ai/config（只返回掩码），设置页新增 AI 配置卡片
+- 桌面外壳（desktop/shell/Program.cs）：.NET Framework 4.8 + WebView2，用系统自带
+  csc 编译；单实例、自动生成本机账号并注入 localStorage 实现免登录、关窗结束内置后端、
+  Job Object 兜底回收子进程
+- jlink 裁剪运行时（49 MB）+ fat jar（31 MB），合计约 81 MB
+---
+ .gitignore                                    |   4 +
+ backend/pom.xml                               |  43 ++
+ .../com/timetable/config/LocalSettings.java   |  90 ++++
+ .../com/timetable/config/SpaWebConfig.java    |  46 ++
+ .../timetable/controller/AiController.java    |  47 +-
+ .../exception/GlobalExceptionHandler.java     |  13 +
+ .../service/impl/DeepSeekClientImpl.java      |  10 +-
+ .../service/impl/DeepSeekKeyStore.java        |  75 ++++
+ .../main/resources/application-standalone.yml |  33 ++
+ backend/src/main/resources/db/schema-h2.sql   | 142 ++++++
+ desktop/build-desktop.ps1                     | 171 ++++++++
+ desktop/shell/Program.cs                      | 403 ++++++++++++++++++
+ desktop/shell/app.ico                         | Bin 0 -> 10366 bytes
+ frontend/src/api/index.ts                     |   8 +
+ frontend/src/pages/SettingsPage.tsx           |  89 +++-
+ frontend/src/types/index.ts                   |   8 +
+ 16 files changed, 1175 insertions(+), 7 deletions(-)
+ create mode 100644 backend/src/main/java/com/timetable/config/LocalSettings.java
+ create mode 100644 backend/src/main/java/com/timetable/config/SpaWebConfig.java
+ create mode 100644 backend/src/main/java/com/timetable/service/impl/DeepSeekKeyStore.java
+ create mode 100644 backend/src/main/resources/application-standalone.yml
+ create mode 100644 backend/src/main/resources/db/schema-h2.sql
+ create mode 100644 desktop/build-desktop.ps1
+ create mode 100644 desktop/shell/Program.cs
+ create mode 100644 desktop/shell/app.ico
+
+diff --git a/.gitignore b/.gitignore
+index ba36c57..add505f 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -29,3 +29,7 @@ docs/CREDENTIALS.md
+ 
+ # 内部整改文档（不对外发布）
+ docs/OPEN_SOURCE_PREP.md
++
++# 桌面版构建产物（由 desktop/build-desktop.ps1 生成，体积大且可再生）
++desktop/app-image/
++
+diff --git a/backend/pom.xml b/backend/pom.xml
+index c3eba33..ed738aa 100644
+--- a/backend/pom.xml
++++ b/backend/pom.xml
+@@ -100,4 +100,47 @@
+             </plugin>
+         </plugins>
+     </build>
++
++    <profiles>
++        <!--
++          桌面/单机版：把前端构建产物打进 jar，并把 H2 提升为运行时依赖。
++          用法：先 `cd frontend && npm run build`，再 `./mvnw package -Pstandalone`。
++        -->
++        <profile>
++            <id>standalone</id>
++            <dependencies>
++                <dependency>
++                    <groupId>com.h2database</groupId>
++                    <artifactId>h2</artifactId>
++                    <scope>runtime</scope>
++                </dependency>
++            </dependencies>
++            <build>
++                <plugins>
++                    <plugin>
++                        <groupId>org.apache.maven.plugins</groupId>
++                        <artifactId>maven-resources-plugin</artifactId>
++                        <executions>
++                            <execution>
++                                <id>copy-frontend-dist</id>
++                                <phase>prepare-package</phase>
++                                <goals>
++                                    <goal>copy-resources</goal>
++                                </goals>
++                                <configuration>
++                                    <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
++                                    <resources>
++                                        <resource>
++                                            <directory>${project.basedir}/../frontend/dist</directory>
++                                            <filtering>false</filtering>
++                                        </resource>
++                                    </resources>
++                                </configuration>
++                            </execution>
++                        </executions>
++                    </plugin>
++                </plugins>
++            </build>
++        </profile>
++    </profiles>
+ </project>
+diff --git a/backend/src/main/java/com/timetable/config/LocalSettings.java b/backend/src/main/java/com/timetable/config/LocalSettings.java
+new file mode 100644
+index 0000000..0ce7724
+--- /dev/null
++++ b/backend/src/main/java/com/timetable/config/LocalSettings.java
+@@ -0,0 +1,90 @@
++package com.timetable.config;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Value;
++import org.springframework.stereotype.Component;
++
++import java.io.IOException;
++import java.io.InputStream;
++import java.io.OutputStream;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.nio.file.Paths;
++import java.util.Properties;
++
++/**
++ * 桌面版本地设置：存放在数据目录下的 {@code settings.properties}。
++ *
++ * <p>桌面版没有运维去设环境变量，因此像 DeepSeek Key 这类「部署期配置」必须能在界面里填、
++ * 落盘到本机。这里只负责最小的键值读写，不做任何业务判断。
++ *
++ * <p>{@code app.data-dir} 支持 {@code ~} 前缀（展开为 user.home），与 H2 的连接串保持一致。
++ */
++@Component
++public class LocalSettings {
++
++    private static final Logger log = LoggerFactory.getLogger(LocalSettings.class);
++    private static final String FILE_NAME = "settings.properties";
++
++    private final Path dataDir;
++    private final Path file;
++    private final Properties properties = new Properties();
++
++    public LocalSettings(@Value("${app.data-dir:~/.tangent-timetable}") String dataDir) {
++        this.dataDir = resolve(dataDir);
++        this.file = this.dataDir.resolve(FILE_NAME);
++        load();
++    }
++
++    /** 把 {@code ~} 展开为 user.home，并创建数据目录 */
++    public static Path resolve(String dir) {
++        String value = dir == null || dir.isBlank() ? "~/.tangent-timetable" : dir.trim();
++        if (value.startsWith("~")) {
++            value = System.getProperty("user.home") + value.substring(1);
++        }
++        return Paths.get(value).toAbsolutePath().normalize();
++    }
++
++    public Path getDataDir() {
++        return dataDir;
++    }
++
++    /** 读取一个设置项；不存在时返回 null */
++    public synchronized String get(String key) {
++        return properties.getProperty(key);
++    }
++
++    /** 写入设置项；值为 null 或空白时删除该项 */
++    public synchronized void set(String key, String value) {
++        if (value == null || value.isBlank()) {
++            properties.remove(key);
++        } else {
++            properties.setProperty(key, value.trim());
++        }
++        store();
++    }
++
++    private void load() {
++        if (!Files.isRegularFile(file)) {
++            return;
++        }
++        try (InputStream in = Files.newInputStream(file)) {
++            properties.load(in);
++        } catch (IOException e) {
++            // 读不出来不应阻止应用启动，按「无本地设置」处理
++            log.warn("Failed to read {}: {}", file, e.getMessage());
++        }
++    }
++
++    private void store() {
++        try {
++            Files.createDirectories(dataDir);
++            try (OutputStream out = Files.newOutputStream(file)) {
++                properties.store(out, "Tangent Timetable local settings");
++            }
++        } catch (IOException e) {
++            throw new IllegalStateException("无法写入本地设置：" + file, e);
++        }
++    }
++}
+diff --git a/backend/src/main/java/com/timetable/config/SpaWebConfig.java b/backend/src/main/java/com/timetable/config/SpaWebConfig.java
+new file mode 100644
+index 0000000..7972af9
+--- /dev/null
++++ b/backend/src/main/java/com/timetable/config/SpaWebConfig.java
+@@ -0,0 +1,46 @@
++package com.timetable.config;
++
++import org.springframework.context.annotation.Configuration;
++import org.springframework.context.annotation.Profile;
++import org.springframework.core.io.ClassPathResource;
++import org.springframework.core.io.Resource;
++import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
++import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
++import org.springframework.web.servlet.resource.PathResourceResolver;
++
++import java.io.IOException;
++
++/**
++ * 桌面版（standalone）把前端构建产物打进 jar 的 {@code classpath:/static/}，
++ * 并让 React Router 的前端路由（{@code /todos}、{@code /manual}、{@code /widget} 等）
++ * 被直接访问时不返回 404 —— 找不到对应静态文件就回退到 {@code index.html}。
++ *
++ * <p>仅在 standalone profile 生效：开发时前端由 Vite 提供，这里不应插手。
++ * 资源处理器是最后兜底，因此 {@code /api/**} 仍由各 Controller 正常处理；
++ * 未知的 API 路径继续返回 404，不会被伪装成前端页面。
++ */
++@Configuration
++@Profile("standalone")
++public class SpaWebConfig implements WebMvcConfigurer {
++
++    @Override
++    public void addResourceHandlers(ResourceHandlerRegistry registry) {
++        registry.addResourceHandler("/**")
++                .addResourceLocations("classpath:/static/")
++                .resourceChain(true)
++                .addResolver(new PathResourceResolver() {
++                    @Override
++                    protected Resource getResource(String resourcePath, Resource location) throws IOException {
++                        Resource requested = location.createRelative(resourcePath);
++                        if (requested.exists() && requested.isReadable()) {
++                            return requested;
++                        }
++                        if (resourcePath.startsWith("api/")) {
++                            return null;
++                        }
++                        Resource index = new ClassPathResource("/static/index.html");
++                        return index.exists() ? index : null;
++                    }
++                });
++    }
++}
+diff --git a/backend/src/main/java/com/timetable/controller/AiController.java b/backend/src/main/java/com/timetable/controller/AiController.java
+index 0bc26a3..4af70f1 100644
+--- a/backend/src/main/java/com/timetable/controller/AiController.java
++++ b/backend/src/main/java/com/timetable/controller/AiController.java
+@@ -10,6 +10,7 @@ import com.timetable.entity.AiConversation;
+ import com.timetable.exception.BusinessException;
+ import com.timetable.interceptor.RequestContext;
+ import com.timetable.service.AiService;
++import com.timetable.service.impl.DeepSeekKeyStore;
+ import jakarta.annotation.PreDestroy;
+ import jakarta.validation.Valid;
+ import org.slf4j.Logger;
+@@ -40,6 +41,7 @@ public class AiController {
+     private static final AtomicInteger STREAM_THREAD_SEQ = new AtomicInteger();
+ 
+     private final AiService aiService;
++    private final DeepSeekKeyStore keyStore;
+ 
+     /**
+      * 流式任务执行器。
+@@ -51,10 +53,11 @@ public class AiController {
+      */
+     private final ExecutorService streamExecutor;
+ 
+-    public AiController(AiService aiService,
++    public AiController(AiService aiService, DeepSeekKeyStore keyStore,
+                         @Value("${app.ai.stream.max-concurrency:16}") int maxConcurrency,
+                         @Value("${app.ai.stream.queue-capacity:64}") int queueCapacity) {
+         this.aiService = aiService;
++        this.keyStore = keyStore;
+         int concurrency = Math.max(1, maxConcurrency);
+         ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                 concurrency, concurrency, 60L, TimeUnit.SECONDS,
+@@ -81,6 +84,48 @@ public class AiController {
+         return ApiResponse.success(data);
+     }
+ 
++    /**
++     * 读取 AI 配置。只返回掩码后的 Key，绝不回显完整 Key。
++     */
++    @GetMapping("/config")
++    public ApiResponse<Map<String, Object>> getConfig() {
++        return ApiResponse.success(configPayload());
++    }
++
++    /**
++     * 保存 DeepSeek Key 到本机数据目录（桌面版由用户在设置页填写）。
++     * 服务器部署仍可只用环境变量，两者互不影响。
++     */
++    @PutMapping("/config")
++    public ApiResponse<Map<String, Object>> saveConfig(@RequestBody(required = false) Map<String, String> body) {
++        String key = body == null ? null : body.get("key");
++        if (key == null || key.isBlank()) {
++            throw new BusinessException(400, "API Key 不能为空");
++        }
++        if (key.trim().length() < 8 || key.trim().length() > 200) {
++            throw new BusinessException(400, "API Key 长度不合法");
++        }
++        keyStore.save(key.trim());
++        log.info("DeepSeek API key updated from the settings page (source=local)");
++        return ApiResponse.success(configPayload());
++    }
++
++    /** 清除本机保存的 Key（回退到环境变量/配置文件） */
++    @DeleteMapping("/config")
++    public ApiResponse<Map<String, Object>> clearConfig() {
++        keyStore.clear();
++        log.info("DeepSeek API key cleared from local settings");
++        return ApiResponse.success(configPayload());
++    }
++
++    private Map<String, Object> configPayload() {
++        Map<String, Object> data = new HashMap<>();
++        data.put("configured", keyStore.isConfigured());
++        data.put("source", keyStore.source());
++        data.put("keyMasked", keyStore.masked());
++        return data;
++    }
++
+     @GetMapping("/conversations")
+     public ApiResponse<List<AiConversation>> listConversations() {
+         return ApiResponse.success(aiService.listConversations(RequestContext.getApiKey()));
+diff --git a/backend/src/main/java/com/timetable/exception/GlobalExceptionHandler.java b/backend/src/main/java/com/timetable/exception/GlobalExceptionHandler.java
+index 239e2b4..d7ff792 100644
+--- a/backend/src/main/java/com/timetable/exception/GlobalExceptionHandler.java
++++ b/backend/src/main/java/com/timetable/exception/GlobalExceptionHandler.java
+@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
+ import org.springframework.web.bind.annotation.ResponseStatus;
+ import org.springframework.web.bind.annotation.RestControllerAdvice;
+ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
++import org.springframework.web.servlet.resource.NoResourceFoundException;
+ 
+ @RestControllerAdvice
+ public class GlobalExceptionHandler {
+@@ -56,6 +57,18 @@ public class GlobalExceptionHandler {
+         return ApiResponse.error(400, "参数格式有误：" + e.getName());
+     }
+ 
++    /**
++     * 没有匹配到任何接口或静态资源。
++     *
++     * 必须单独处理：未匹配的路径默认抛 NoResourceFoundException，若交给下面的兜底处理器
++     * 会变成 500，让「路径写错」看起来像服务端故障。
++     */
++    @ExceptionHandler(NoResourceFoundException.class)
++    @ResponseStatus(HttpStatus.NOT_FOUND)
++    public ApiResponse<Void> handleNotFound(NoResourceFoundException e) {
++        return ApiResponse.error(404, "请求的资源不存在");
++    }
++
+     @ExceptionHandler(Exception.class)
+     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+     public ApiResponse<Void> handleException(Exception e) {
+diff --git a/backend/src/main/java/com/timetable/service/impl/DeepSeekClientImpl.java b/backend/src/main/java/com/timetable/service/impl/DeepSeekClientImpl.java
+index 10d8c97..6b3e0ae 100644
+--- a/backend/src/main/java/com/timetable/service/impl/DeepSeekClientImpl.java
++++ b/backend/src/main/java/com/timetable/service/impl/DeepSeekClientImpl.java
+@@ -27,11 +27,14 @@ public class DeepSeekClientImpl implements DeepSeekClient {
+     private static final Logger log = LoggerFactory.getLogger(DeepSeekClientImpl.class);
+ 
+     private final DeepSeekProperties properties;
++    private final DeepSeekKeyStore keyStore;
+     private final ObjectMapper objectMapper;
+     private final HttpClient httpClient;
+ 
+-    public DeepSeekClientImpl(DeepSeekProperties properties, ObjectMapper objectMapper) {
++    public DeepSeekClientImpl(DeepSeekProperties properties, DeepSeekKeyStore keyStore,
++                              ObjectMapper objectMapper) {
+         this.properties = properties;
++        this.keyStore = keyStore;
+         this.objectMapper = objectMapper;
+         this.httpClient = HttpClient.newBuilder()
+                 .connectTimeout(Duration.ofSeconds(15))
+@@ -40,8 +43,7 @@ public class DeepSeekClientImpl implements DeepSeekClient {
+ 
+     @Override
+     public boolean isConfigured() {
+-        String key = properties.getKey();
+-        return key != null && !key.isBlank() && !"your-deepseek-api-key".equals(key);
++        return keyStore.isConfigured();
+     }
+ 
+     @Override
+@@ -97,7 +99,7 @@ public class DeepSeekClientImpl implements DeepSeekClient {
+                     .uri(URI.create(properties.getBaseUrl() + "/chat/completions"))
+                     .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
+                     .header("Content-Type", "application/json")
+-                    .header("Authorization", "Bearer " + properties.getKey())
++                    .header("Authorization", "Bearer " + keyStore.effectiveKey())
+                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body), StandardCharsets.UTF_8))
+                     .build();
+ 
+diff --git a/backend/src/main/java/com/timetable/service/impl/DeepSeekKeyStore.java b/backend/src/main/java/com/timetable/service/impl/DeepSeekKeyStore.java
+new file mode 100644
+index 0000000..9cdf202
+--- /dev/null
++++ b/backend/src/main/java/com/timetable/service/impl/DeepSeekKeyStore.java
+@@ -0,0 +1,75 @@
++package com.timetable.service.impl;
++
++import com.timetable.config.DeepSeekProperties;
++import com.timetable.config.LocalSettings;
++import org.springframework.stereotype.Component;
++
++/**
++ * DeepSeek Key 的取值来源。
++ *
++ * <p>优先级：本地设置（桌面版在界面里填、存在数据目录）→ 配置项（环境变量 / application.yml）。
++ *
++ * <p>桌面版没有运维去设环境变量，所以必须允许用户自己在界面上填 Key；而服务器部署仍然可以
++ * 只用环境变量，两种方式共存且互不干扰。
++ */
++@Component
++public class DeepSeekKeyStore {
++
++    /** 本地设置里保存 Key 的键名 */
++    static final String SETTING_KEY = "deepseek.api-key";
++    /** application.yml 里的占位默认值，等同于「未配置」 */
++    private static final String PLACEHOLDER = "your-deepseek-api-key";
++
++    private final DeepSeekProperties properties;
++    private final LocalSettings settings;
++
++    public DeepSeekKeyStore(DeepSeekProperties properties, LocalSettings settings) {
++        this.properties = properties;
++        this.settings = settings;
++    }
++
++    /** 当前生效的 Key（可能为空字符串） */
++    public String effectiveKey() {
++        String local = settings.get(SETTING_KEY);
++        if (local != null && !local.isBlank()) {
++            return local.trim();
++        }
++        String configured = properties.getKey();
++        return configured == null ? "" : configured.trim();
++    }
++
++    public boolean isConfigured() {
++        String key = effectiveKey();
++        return !key.isBlank() && !PLACEHOLDER.equals(key);
++    }
++
++    /** 取值来源：{@code local}（界面填入）/ {@code config}（环境变量或配置文件）/ {@code none} */
++    public String source() {
++        String local = settings.get(SETTING_KEY);
++        if (local != null && !local.isBlank()) {
++            return "local";
++        }
++        return isConfigured() ? "config" : "none";
++    }
++
++    /** 供界面展示的掩码形式，绝不返回完整 Key；未配置时返回空串 */
++    public String masked() {
++        // 未配置时不能掩码占位默认值，否则界面上会显示成「已配置了 your****-key」
++        if (!isConfigured()) {
++            return "";
++        }
++        String key = effectiveKey();
++        if (key.length() <= 8) {
++            return "****";
++        }
++        return key.substring(0, 4) + "****" + key.substring(key.length() - 4);
++    }
++
++    public void save(String key) {
++        settings.set(SETTING_KEY, key);
++    }
++
++    public void clear() {
++        settings.set(SETTING_KEY, null);
++    }
++}
+diff --git a/backend/src/main/resources/application-standalone.yml b/backend/src/main/resources/application-standalone.yml
+new file mode 100644
+index 0000000..60dc55e
+--- /dev/null
++++ b/backend/src/main/resources/application-standalone.yml
+@@ -0,0 +1,33 @@
++# 桌面/单机版配置（profile: standalone）
++#
++# 特点：不依赖外部 MySQL —— 用 H2 文件库，数据落在用户目录下；前端构建产物由本服务直接提供。
++# 启动方式见打包产物中的启动器，或：
++#   java -jar timetable-backend-1.0.0.jar --spring.profiles.active=standalone
++
++spring:
++  datasource:
++    # H2 文件库。~ 由 H2 展开为 user.home；启动器会传入 %LOCALAPPDATA% 下的绝对路径（正斜杠）。
++    # AUTO_SERVER 允许多个连接共享同一库，避免上次异常退出后残留锁文件导致「Database may be already in use」。
++    url: jdbc:h2:file:${app.data-dir}/timetable;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE
++    driver-class-name: org.h2.Driver
++    username: sa
++    password: ""
++  sql:
++    init:
++      mode: always
++      # H2 与 MySQL 的三处语义差异见 schema-h2.sql 头部说明
++      schema-locations: classpath:db/schema-h2.sql
++      data-locations: classpath:db/data.sql
++
++# 本机专用端口：避开常见的 8080，减少与其它软件冲突的概率
++server:
++  port: ${TANGENT_PORT:17817}
++
++app:
++  # 数据目录（H2 库文件与本地设置都放这里）
++  data-dir: ${TANGENT_DATA_DIR:~/.tangent-timetable}
++  # 桌面版首次启动不写死任何账号，由 ApiKeyBootstrap 生成随机 Key 并打印
++
++logging:
++  file:
++    name: ${app.data-dir}/logs/timetable.log
+diff --git a/backend/src/main/resources/db/schema-h2.sql b/backend/src/main/resources/db/schema-h2.sql
+new file mode 100644
+index 0000000..fd8d567
+--- /dev/null
++++ b/backend/src/main/resources/db/schema-h2.sql
+@@ -0,0 +1,142 @@
++-- H2 专用建表脚本（standalone / 桌面版使用；MySQL 版见 schema.sql）
++--
++-- 与 schema.sql 的三处差异，全部因为 H2 与 MySQL 的语义不同：
++--   1) H2 的索引名是「全库唯一」，MySQL 只在表内唯一 → schedule 与 todo 的 idx_api_key 分别改名
++--   2) H2 的 JSON 列会把字符串参数存成 JSON 字符串标量，读回带外层引号，
++--      导致 MyBatis-Plus 的 JacksonTypeHandler 解析失败 → weeks / action_data 改用文本列
++--   3) UNIQUE KEY 是 MySQL 语法 → 改用标准 CONSTRAINT ... UNIQUE
++-- 修改 schema.sql 时请同步本文件。
++CREATE TABLE IF NOT EXISTS api_key (
++    api_key VARCHAR(64) PRIMARY KEY,
++    label VARCHAR(50) NOT NULL,
++    avatar_url VARCHAR(500),
++    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
++);
++
++CREATE TABLE IF NOT EXISTS schedule (
++    id BIGINT PRIMARY KEY AUTO_INCREMENT,
++    api_key VARCHAR(64) NOT NULL,
++    name VARCHAR(100) NOT NULL,
++    period_start_date DATE NOT NULL,
++    period_end_date DATE NOT NULL,
++    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
++    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
++    FOREIGN KEY (api_key) REFERENCES api_key(api_key) ON DELETE CASCADE,
++    INDEX idx_schedule_api_key (api_key)
++);
++
++CREATE TABLE IF NOT EXISTS period_config (
++    period_number TINYINT PRIMARY KEY,
++    start_time TIME NOT NULL,
++    end_time TIME NOT NULL,
++    category VARCHAR(10) NOT NULL
++);
++
++CREATE TABLE IF NOT EXISTS course (
++    id BIGINT PRIMARY KEY AUTO_INCREMENT,
++    schedule_id BIGINT NOT NULL,
++    name VARCHAR(200) NOT NULL,
++    location VARCHAR(200),
++    teacher VARCHAR(100),
++    day_of_week TINYINT NOT NULL,
++    start_period TINYINT NOT NULL,
++    end_period TINYINT NOT NULL,
++    weeks VARCHAR(1000) NOT NULL,
++    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
++    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
++    FOREIGN KEY (schedule_id) REFERENCES schedule(id) ON DELETE CASCADE,
++    INDEX idx_schedule_day (schedule_id, day_of_week)
++);
++
++CREATE TABLE IF NOT EXISTS exam (
++    id BIGINT PRIMARY KEY AUTO_INCREMENT,
++    schedule_id BIGINT NOT NULL,
++    name VARCHAR(200) NOT NULL,
++    location VARCHAR(200),
++    exam_date DATE NOT NULL,
++    start_time TIME NOT NULL,
++    end_time TIME NOT NULL,
++    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
++    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
++    FOREIGN KEY (schedule_id) REFERENCES schedule(id) ON DELETE CASCADE,
++    INDEX idx_exam_schedule (schedule_id)
++);
++
++CREATE TABLE IF NOT EXISTS todo (
++    id BIGINT PRIMARY KEY AUTO_INCREMENT,
++    api_key VARCHAR(64) NOT NULL,
++    title VARCHAR(500) NOT NULL,
++    ddl DATETIME NOT NULL,
++    completed BOOLEAN DEFAULT FALSE,
++    recurring_id BIGINT,
++    exam_id BIGINT,
++    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
++    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
++    FOREIGN KEY (api_key) REFERENCES api_key(api_key) ON DELETE CASCADE,
++    INDEX idx_todo_api_key (api_key),
++    INDEX idx_ddl (ddl),
++    INDEX idx_completed (completed),
++    INDEX idx_todo_recurring (recurring_id),
++    INDEX idx_todo_exam (exam_id),
++    -- 同一循环规则同一次触发只能有一条待办。应用层已用条件更新原子占位，
++    -- 这条唯一键是多实例/异常路径下的兜底（recurring_id 为 NULL 的手工待办不受影响）。
++    CONSTRAINT uk_todo_recurring_ddl UNIQUE (recurring_id, ddl)
++);
++
++CREATE TABLE IF NOT EXISTS ai_conversation (
++    id BIGINT PRIMARY KEY AUTO_INCREMENT,
++    api_key VARCHAR(64) NOT NULL,
++    schedule_id BIGINT,
++    title VARCHAR(200),
++    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
++    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
++    FOREIGN KEY (api_key) REFERENCES api_key(api_key) ON DELETE CASCADE,
++    INDEX idx_ai_conv_api_key (api_key)
++);
++
++CREATE TABLE IF NOT EXISTS ai_message (
++    id BIGINT PRIMARY KEY AUTO_INCREMENT,
++    conversation_id BIGINT NOT NULL,
++    role VARCHAR(16) NOT NULL,
++    content TEXT,
++    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
++    FOREIGN KEY (conversation_id) REFERENCES ai_conversation(id) ON DELETE CASCADE,
++    INDEX idx_ai_msg_conv (conversation_id)
++);
++
++CREATE TABLE IF NOT EXISTS ai_action (
++    id BIGINT PRIMARY KEY AUTO_INCREMENT,
++    message_id BIGINT NOT NULL,
++    api_key VARCHAR(64) NOT NULL,
++    scope VARCHAR(16) NOT NULL,
++    action_type VARCHAR(32) NOT NULL,
++    action_status VARCHAR(16) NOT NULL,
++    action_data TEXT,
++    data_fingerprint VARCHAR(64),
++    sort_order INT NOT NULL DEFAULT 0,
++    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
++    FOREIGN KEY (message_id) REFERENCES ai_message(id) ON DELETE CASCADE,
++    INDEX idx_ai_action_msg (message_id),
++    INDEX idx_ai_action_pending (api_key, scope, action_status)
++);
++
++CREATE TABLE IF NOT EXISTS recurring_todo (
++    id BIGINT PRIMARY KEY AUTO_INCREMENT,
++    api_key VARCHAR(64) NOT NULL,
++    title VARCHAR(500) NOT NULL,
++    frequency VARCHAR(16) NOT NULL,
++    day_of_week TINYINT,
++    day_of_month TINYINT,
++    trigger_time TIME,
++    script TEXT,
++    ddl_offset_minutes INT NOT NULL,
++    enabled BOOLEAN NOT NULL DEFAULT TRUE,
++    chain_after_complete BOOLEAN NOT NULL DEFAULT FALSE,
++    last_triggered_at DATETIME,
++    next_trigger_at DATETIME,
++    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
++    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
++    FOREIGN KEY (api_key) REFERENCES api_key(api_key) ON DELETE CASCADE,
++    INDEX idx_recurring_api_key (api_key),
++    INDEX idx_recurring_next (enabled, next_trigger_at)
++);
+diff --git a/desktop/build-desktop.ps1 b/desktop/build-desktop.ps1
+new file mode 100644
+index 0000000..5cb84a6
+--- /dev/null
++++ b/desktop/build-desktop.ps1
+@@ -0,0 +1,171 @@
++﻿<#
++.SYNOPSIS
++    构建「大切课程表」Windows 免安装桌面版。
++
++.DESCRIPTION
++    一条命令完成：前端构建 → 打包含前端的 Spring Boot fat jar → jlink 裁剪 JRE →
++    下载/解出 WebView2 SDK → 用系统自带 csc 编译 WinForms+WebView2 外壳 → 组装免安装目录。
++
++    产物是一个可直接拷走运行的目录（默认 <仓库>/desktop/app-image/TangentTimetable），
++    零外部依赖：不需要用户安装 Java、Node 或数据库。
++
++.PARAMETER OutputDir
++    输出目录。默认 <脚本目录>\app-image。
++
++.PARAMETER SkipWebView2Download
++    复用已解出的 WebView2 SDK（位于 %TEMP%\webview2-sdk\extract）而不重新下载。
++
++.EXAMPLE
++    powershell -ExecutionPolicy Bypass -File desktop\build-desktop.ps1
++#>
++[CmdletBinding()]
++param(
++    [string]$OutputDir,
++    [switch]$SkipWebView2Download
++)
++
++$ErrorActionPreference = 'Stop'
++
++$desktopDir = $PSScriptRoot
++$repoRoot   = Split-Path $desktopDir -Parent
++$backend    = Join-Path $repoRoot 'backend'
++$frontend   = Join-Path $repoRoot 'frontend'
++$shellDir   = Join-Path $desktopDir 'shell'
++if (-not $OutputDir) { $OutputDir = Join-Path $desktopDir 'app-image' }
++$dist = Join-Path $OutputDir 'TangentTimetable'
++
++# H2 之外还需要这些 JDK 模块：Spring Boot 用到 sql/naming/net.http/management，
++# Rhino 与 Jackson 用到 unsupported/compiler，jdk.zipfs 供 H2/资源读取。
++$jlinkModules = @(
++    'java.base', 'java.compiler', 'java.desktop', 'java.instrument', 'java.management',
++    'java.naming', 'java.net.http', 'java.prefs', 'java.rmi', 'java.scripting',
++    'java.security.jgss', 'java.sql', 'java.transaction.xa', 'java.xml',
++    'jdk.crypto.ec', 'jdk.unsupported', 'jdk.jfr', 'jdk.zipfs'
++) -join ','
++
++function Write-Step($text) { Write-Host "`n=== $text ===" -ForegroundColor Cyan }
++
++# ---------- 0. 前置检查 ----------
++Write-Step '0/7 前置检查'
++
++$javaHome = (Get-Command java -ErrorAction SilentlyContinue).Source
++if (-not $javaHome) { throw '未找到 java，请先安装 JDK 17+。' }
++$javaHome = Split-Path (Split-Path $javaHome -Parent) -Parent
++$jlink = Join-Path $javaHome 'bin\jlink.exe'
++if (-not (Test-Path $jlink)) { throw "未找到 jlink：$jlink（需要完整 JDK，而非仅 JRE）" }
++
++$csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
++if (-not (Test-Path $csc)) { throw "未找到 .NET Framework 编译器：$csc" }
++
++$webView2Runtime = Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' -ErrorAction SilentlyContinue
++if (-not $webView2Runtime) {
++    Write-Warning '未检测到 WebView2 Runtime。目标机器若也没有，需要先安装（Win10/11 通常自带）。'
++}
++
++Write-Host "JDK   : $javaHome"
++Write-Host "csc   : $csc"
++Write-Host "输出  : $dist"
++
++# ---------- 1. 前端 ----------
++Write-Step '1/7 构建前端（vite build）'
++Push-Location $frontend
++try {
++    if (-not (Test-Path (Join-Path $frontend 'node_modules'))) { & npm install }
++    & npm run build
++    if ($LASTEXITCODE -ne 0) { throw '前端构建失败' }
++} finally { Pop-Location }
++
++# ---------- 2. 含前端的 fat jar ----------
++Write-Step '2/7 打包后端（-Pstandalone：前端产物并入 jar + H2 运行时依赖）'
++Push-Location $backend
++try {
++    & .\mvnw.cmd -q -B -ntp package -Pstandalone -DskipTests
++    if ($LASTEXITCODE -ne 0) { throw '后端打包失败' }
++} finally { Pop-Location }
++$jar = Join-Path $backend 'target\timetable-backend-1.0.0.jar'
++if (-not (Test-Path $jar)) { throw "未生成 $jar" }
++
++# ---------- 3. jlink ----------
++Write-Step '3/7 jlink 裁剪运行时'
++if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
++New-Item -ItemType Directory -Force -Path (Join-Path $dist 'app') | Out-Null
++& $jlink --add-modules $jlinkModules --strip-debug --no-header-files --no-man-pages `
++    --compress=zip-6 --output (Join-Path $dist 'runtime')
++if ($LASTEXITCODE -ne 0) { throw 'jlink 失败' }
++Copy-Item $jar (Join-Path $dist 'app\timetable-backend.jar') -Force
++
++# ---------- 4. WebView2 SDK ----------
++Write-Step '4/7 准备 WebView2 SDK（仅编译期需要 net462 的程序集与原生 Loader）'
++$sdkRoot = Join-Path $env:TEMP 'webview2-sdk'
++$extract = Join-Path $sdkRoot 'extract'
++if ($SkipWebView2Download -and (Test-Path (Join-Path $extract 'lib\net462'))) {
++    Write-Host "复用已解出的 SDK：$extract"
++} else {
++    New-Item -ItemType Directory -Force -Path $sdkRoot | Out-Null
++    $index = Invoke-RestMethod 'https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/index.json'
++    $version = ($index.versions | Where-Object { $_ -notmatch '-' })[-1]
++    $nupkg = Join-Path $sdkRoot 'webview2.nupkg'
++    $url = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$version/microsoft.web.webview2.$version.nupkg"
++    Write-Host "下载 Microsoft.Web.WebView2 $version"
++    Invoke-WebRequest $url -OutFile $nupkg
++    if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
++    # 用 .NET 解压：Expand-Archive 只接受 .zip 扩展名，而 nupkg 本身就是 zip
++    Add-Type -AssemblyName System.IO.Compression.FileSystem
++    [System.IO.Compression.ZipFile]::ExtractToDirectory($nupkg, $extract)
++}
++Copy-Item (Join-Path $extract 'lib\net462\Microsoft.Web.WebView2.Core.dll') $dist -Force
++Copy-Item (Join-Path $extract 'lib\net462\Microsoft.Web.WebView2.WinForms.dll') $dist -Force
++Copy-Item (Join-Path $extract 'runtimes\win-x64\native\WebView2Loader.dll') $dist -Force
++
++# ---------- 5. 外壳 ----------
++Write-Step '5/7 编译桌面外壳（WinForms + WebView2，用 .NET Framework 自带 csc）'
++$icon = Join-Path $shellDir 'app.ico'
++$cscArgs = @(
++    '/nologo', '/target:winexe', '/platform:x64', '/optimize+',
++    "/out:$dist\TangentTimetable.exe",
++    '/reference:System.dll', '/reference:System.Drawing.dll',
++    '/reference:System.Windows.Forms.dll', '/reference:System.Core.dll',
++    "/reference:$dist\Microsoft.Web.WebView2.Core.dll",
++    "/reference:$dist\Microsoft.Web.WebView2.WinForms.dll"
++)
++if (Test-Path $icon) { $cscArgs += "/win32icon:$icon" }
++$cscArgs += (Join-Path $shellDir 'Program.cs')
++& $csc @cscArgs
++if ($LASTEXITCODE -ne 0) { throw '外壳编译失败' }
++
++# ---------- 6. 汇总 ----------
++Write-Step '6/7 体积汇总'
++$total = (Get-ChildItem $dist -Recurse -File | Measure-Object Length -Sum).Sum
++Get-ChildItem $dist | ForEach-Object {
++    if ($_.PSIsContainer) {
++        $size = (Get-ChildItem $_.FullName -Recurse -File | Measure-Object Length -Sum).Sum
++        '{0,-40} {1,8:N1} MB' -f ($_.Name + '\'), ($size / 1MB)
++    } else {
++        '{0,-40} {1,8:N0} KB' -f $_.Name, ($_.Length / 1KB)
++    }
++}
++'{0,-40} {1,8:N1} MB' -f '合计', ($total / 1MB)
++
++# ---------- 7. 冒烟 ----------
++Write-Step '7/7 冒烟：启动外壳，等内置后端就绪，再关窗'
++$proc = Start-Process -FilePath (Join-Path $dist 'TangentTimetable.exe') -PassThru
++$ready = $false
++for ($i = 1; $i -le 90; $i++) {
++    Start-Sleep -Seconds 1
++    if (Get-NetTCPConnection -LocalPort 17817 -State Listen -ErrorAction SilentlyContinue) { $ready = $true; break }
++    if ($proc.HasExited) { break }
++}
++if ($ready) {
++    Write-Host '内置后端已就绪，窗口已打开 ✓' -ForegroundColor Green
++    Start-Sleep -Seconds 3
++    $proc.CloseMainWindow() | Out-Null
++    Start-Sleep -Seconds 3
++    $left = @(Get-Process javaw -ErrorAction SilentlyContinue).Count
++    if ($left -eq 0) { Write-Host '关窗后后端已一并退出 ✓' -ForegroundColor Green }
++    else { Write-Warning "关窗后仍有 $left 个 javaw 进程" }
++} else {
++    Write-Warning '冒烟未通过：内置后端未在 90 秒内就绪，请查看 %LOCALAPPDATA%\TangentTimetable\logs\timetable.log'
++}
++
++Write-Host "`n完成。产物目录：$dist" -ForegroundColor Green
++Write-Host '整个目录拷到任何 Windows 10/11 x64 机器即可双击运行（无需 Java / Node / 数据库）。'
+diff --git a/desktop/shell/Program.cs b/desktop/shell/Program.cs
+new file mode 100644
+index 0000000..e5222ea
+--- /dev/null
++++ b/desktop/shell/Program.cs
+@@ -0,0 +1,403 @@
++// 大切课程表 —— Windows 桌面外壳（.NET Framework 4.8 + WebView2）
++//
++// 职责：
++//   1. 单实例：已有实例在跑就直接提示退出
++//   2. 本机账号：首次运行生成一个随机 API Key 存在数据目录，之后自动登录，用户无需手输
++//   3. 启动内置后端（jlink 裁剪运行时 + Spring Boot fat jar），数据落在 %LOCALAPPDATA%
++//   4. 用 WebView2 打开界面（无地址栏，就是桌面应用的样子）
++//   5. 关窗时结束后端进程；并用 Job Object 保证外壳异常退出时子进程也被系统回收
++//
++// 为什么外壳要管账号：应用本身没有注册页，账号是 api_key 表里的一行，服务端在表为空时
++// 会随机生成并只打印到日志 —— 桌面用户看不到日志。所以外壳自己生成 Key、持久化、并注入
++// WebView 的 localStorage 实现自动登录；首次运行时把 Key 显示出来，便于在其它设备使用。
++//
++// 编译：csc /target:winexe /platform:x64（见 build-desktop.ps1）
++// 注意：本文件必须保持 C# 5 语法 —— 只能用 .NET Framework 自带的 csc（它不认 C# 6+）。
++
++using System;
++using System.Diagnostics;
++using System.Drawing;
++using System.IO;
++using System.Net;
++using System.Runtime.InteropServices;
++using System.Security.Cryptography;
++using System.Text;
++using System.Threading;
++using System.Windows.Forms;
++using Microsoft.Web.WebView2.Core;
++using Microsoft.Web.WebView2.WinForms;
++
++namespace TangentTimetable
++{
++    internal static class Program
++    {
++        internal const int Port = 17817;
++        private const string MutexName = "TangentTimetable.SingleInstance.v1";
++
++        [STAThread]
++        private static void Main()
++        {
++            bool createdNew;
++            using (Mutex mutex = new Mutex(true, MutexName, out createdNew))
++            {
++                if (!createdNew)
++                {
++                    MessageBox.Show("大切课程表已经在运行了。", "大切课程表",
++                        MessageBoxButtons.OK, MessageBoxIcon.Information);
++                    return;
++                }
++                Application.EnableVisualStyles();
++                Application.SetCompatibleTextRenderingDefault(false);
++                Application.Run(new MainForm());
++                GC.KeepAlive(mutex);
++            }
++        }
++    }
++
++    internal sealed class MainForm : Form
++    {
++        private readonly WebView2 webView = new WebView2();
++        private readonly string dataDir;
++        private string keyFile;
++        private string accountKey;
++        private bool freshAccount;
++        private Process backend;
++        private bool ownsBackend;
++        private JobObject job;
++
++        internal MainForm()
++        {
++            this.Text = "大切课程表";
++            this.Width = 1180;
++            this.Height = 820;
++            this.MinimumSize = new Size(760, 560);
++            this.StartPosition = FormStartPosition.CenterScreen;
++            this.webView.Dock = DockStyle.Fill;
++            this.Controls.Add(this.webView);
++
++            this.dataDir = Path.Combine(
++                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
++                "TangentTimetable");
++        }
++
++        protected override void OnLoad(EventArgs e)
++        {
++            base.OnLoad(e);
++            try
++            {
++                Directory.CreateDirectory(dataDir);
++                EnsureAccountKey();
++                StartBackendIfNeeded();
++            }
++            catch (Exception ex)
++            {
++                MessageBox.Show(ex.Message, "大切课程表 - 启动失败",
++                    MessageBoxButtons.OK, MessageBoxIcon.Error);
++                Close();
++                return;
++            }
++            InitWebView();
++        }
++
++        /// <summary>
++        /// 读取（或首次生成）本机账号 Key。生成后立即落盘，避免中途崩溃导致账号丢失。
++        /// 始终把该 Key 作为 bootstrap-key 传给后端：即使数据库被清空，
++        /// 也会用同一个 Key 重建账号，用户不会突然被锁在外面。
++        /// </summary>
++        private void EnsureAccountKey()
++        {
++            keyFile = Path.Combine(dataDir, "desktop-key.txt");
++            if (File.Exists(keyFile))
++            {
++                accountKey = File.ReadAllText(keyFile).Trim();
++            }
++            if (accountKey == null || accountKey.Length == 0)
++            {
++                accountKey = GenerateKey();
++                freshAccount = true;
++                File.WriteAllText(keyFile, accountKey);
++            }
++        }
++
++        private static string GenerateKey()
++        {
++            byte[] bytes = new byte[32];
++            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
++            {
++                rng.GetBytes(bytes);
++            }
++            StringBuilder sb = new StringBuilder(64);
++            for (int i = 0; i < bytes.Length; i++)
++            {
++                sb.Append(bytes[i].ToString("x2"));
++            }
++            return sb.ToString();
++        }
++
++        /// <summary>端口上已有服务就直接复用；否则启动内置后端并等它就绪。</summary>
++        private void StartBackendIfNeeded()
++        {
++            if (IsServerUp())
++            {
++                ownsBackend = false;
++                return;
++            }
++
++            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
++            string java = Path.Combine(baseDir, Path.Combine("runtime", Path.Combine("bin", "javaw.exe")));
++            string jar = Path.Combine(baseDir, Path.Combine("app", "timetable-backend.jar"));
++            if (!File.Exists(java) || !File.Exists(jar))
++            {
++                throw new FileNotFoundException(
++                    "安装不完整：缺少 runtime\\bin\\javaw.exe 或 app\\timetable-backend.jar。\r\n"
++                    + "请重新解压完整的安装目录后运行。");
++            }
++
++            string args = "-jar \"" + jar + "\""
++                + " --spring.profiles.active=standalone"
++                + " --app.data-dir=\"" + dataDir.Replace('\\', '/') + "\""
++                + " --app.bootstrap-key=" + accountKey
++                + " --server.port=" + Program.Port;
++
++            ProcessStartInfo psi = new ProcessStartInfo(java, args);
++            psi.UseShellExecute = false;
++            psi.CreateNoWindow = true;
++            psi.WorkingDirectory = baseDir;
++
++            backend = Process.Start(psi);
++            ownsBackend = true;
++            // 外壳被强杀时，靠 Job Object 让系统一并回收后端进程
++            job = new JobObject();
++            job.AddProcess(backend.Handle);
++
++            WaitForServer();
++        }
++
++        private void WaitForServer()
++        {
++            DateTime deadline = DateTime.UtcNow.AddSeconds(90);
++            while (DateTime.UtcNow < deadline)
++            {
++                if (backend != null && backend.HasExited)
++                {
++                    throw new InvalidOperationException(
++                        "后端进程意外退出（退出码 " + backend.ExitCode + "）。\r\n日志："
++                        + Path.Combine(dataDir, Path.Combine("logs", "timetable.log")));
++                }
++                if (IsServerUp())
++                {
++                    return;
++                }
++                Thread.Sleep(300);
++            }
++            throw new TimeoutException(
++                "后端启动超时。\r\n日志：" + Path.Combine(dataDir, Path.Combine("logs", "timetable.log")));
++        }
++
++        /// <summary>能拿到任何 HTTP 响应（含 401/404）都说明服务已监听。</summary>
++        private static bool IsServerUp()
++        {
++            try
++            {
++                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + Program.Port + "/");
++                req.Method = "GET";
++                req.Timeout = 2000;
++                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
++                {
++                    return true;
++                }
++            }
++            catch (WebException ex)
++            {
++                return ex.Response != null;
++            }
++            catch (Exception)
++            {
++                return false;
++            }
++        }
++
++        private async void InitWebView()
++        {
++            try
++            {
++                string userDataFolder = Path.Combine(dataDir, "webview2");
++                Directory.CreateDirectory(userDataFolder);
++                CoreWebView2Environment env =
++                    await CoreWebView2Environment.CreateAsync(null, userDataFolder, null);
++                await this.webView.EnsureCoreWebView2Async(env);
++
++                CoreWebView2Settings settings = this.webView.CoreWebView2.Settings;
++                settings.AreDefaultContextMenusEnabled = false;
++                settings.IsStatusBarEnabled = false;
++                settings.IsZoomControlEnabled = true;
++
++                // 自动登录：在文档创建前写入前端读取的那两个 localStorage 键
++                string script =
++                    "try{"
++                    + "localStorage.setItem('timetable.apiKey','" + accountKey + "');"
++                    + "localStorage.setItem('timetable.apiLabel','管理员');"
++                    + "}catch(e){}";
++                await this.webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(script);
++
++                this.webView.Source = new Uri("http://127.0.0.1:" + Program.Port + "/");
++            }
++            catch (Exception ex)
++            {
++                MessageBox.Show(
++                    "无法初始化 WebView2 组件：\r\n\r\n" + ex.Message
++                    + "\r\n\r\n请先安装 Microsoft Edge WebView2 Runtime（Win10/11 通常已自带）。",
++                    "大切课程表", MessageBoxButtons.OK, MessageBoxIcon.Error);
++                Close();
++            }
++        }
++
++        /// <summary>首次运行时把本机账号 Key 显示一次，便于在其它设备（小组件/手机）使用。</summary>
++        protected override void OnShown(EventArgs e)
++        {
++            base.OnShown(e);
++            if (!freshAccount)
++            {
++                return;
++            }
++            bool copied = false;
++            try
++            {
++                Clipboard.SetText(accountKey);
++                copied = true;
++            }
++            catch (Exception)
++            {
++                // 剪贴板被其它程序占用时不阻断启动
++            }
++            MessageBox.Show(
++                "已为你创建本机账号，并已自动登录，无需手动输入。\r\n\r\n"
++                + "如需在其它设备（iPad/手机小组件、其它浏览器）使用，API Key 为：\r\n\r\n"
++                + accountKey
++                + (copied ? "\r\n\r\n（已复制到剪贴板）" : "")
++                + "\r\n\r\n该 Key 也保存在：" + keyFile,
++                "大切课程表 - 首次运行", MessageBoxButtons.OK, MessageBoxIcon.Information);
++        }
++
++        protected override void OnFormClosing(FormClosingEventArgs e)
++        {
++            try
++            {
++                if (ownsBackend && backend != null && !backend.HasExited)
++                {
++                    backend.Kill();
++                    backend.WaitForExit(5000);
++                }
++            }
++            catch (Exception)
++            {
++                // 关窗阶段的清理失败无需打扰用户；Job Object 仍会兜底回收
++            }
++            if (job != null)
++            {
++                job.Dispose();
++                job = null;
++            }
++            base.OnFormClosing(e);
++        }
++    }
++
++    /// <summary>
++    /// 最小化的 Windows Job Object 封装：设置 KILL_ON_JOB_CLOSE，句柄随外壳进程关闭时
++    /// 由系统结束 job 内所有进程，避免外壳崩溃后残留 javaw.exe 占着端口。
++    /// </summary>
++    internal sealed class JobObject : IDisposable
++    {
++        private const int JobObjectExtendedLimitInformation = 9;
++        private const uint JobObjectLimitKillOnJobClose = 0x2000;
++
++        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
++        private static extern IntPtr CreateJobObject(IntPtr attributes, string name);
++
++        [DllImport("kernel32.dll")]
++        private static extern bool SetInformationJobObject(IntPtr job, int infoType, IntPtr info, uint length);
++
++        [DllImport("kernel32.dll", SetLastError = true)]
++        private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
++
++        [DllImport("kernel32.dll", SetLastError = true)]
++        private static extern bool CloseHandle(IntPtr handle);
++
++        [StructLayout(LayoutKind.Sequential)]
++        private struct IoCounters
++        {
++            public ulong ReadOperationCount;
++            public ulong WriteOperationCount;
++            public ulong OtherOperationCount;
++            public ulong ReadTransferCount;
++            public ulong WriteTransferCount;
++            public ulong OtherTransferCount;
++        }
++
++        [StructLayout(LayoutKind.Sequential)]
++        private struct BasicLimitInformation
++        {
++            public long PerProcessUserTimeLimit;
++            public long PerJobUserTimeLimit;
++            public uint LimitFlags;
++            public UIntPtr MinimumWorkingSetSize;
++            public UIntPtr MaximumWorkingSetSize;
++            public uint ActiveProcessLimit;
++            public UIntPtr Affinity;
++            public uint PriorityClass;
++            public uint SchedulingClass;
++        }
++
++        [StructLayout(LayoutKind.Sequential)]
++        private struct ExtendedLimitInformation
++        {
++            public BasicLimitInformation BasicLimitInformation;
++            public IoCounters IoInfo;
++            public UIntPtr ProcessMemoryLimit;
++            public UIntPtr JobMemoryLimit;
++            public UIntPtr PeakProcessMemoryUsed;
++            public UIntPtr PeakJobMemoryUsed;
++        }
++
++        private IntPtr handle;
++
++        internal JobObject()
++        {
++            handle = CreateJobObject(IntPtr.Zero, null);
++            if (handle == IntPtr.Zero)
++            {
++                return;
++            }
++            ExtendedLimitInformation info = new ExtendedLimitInformation();
++            info.BasicLimitInformation.LimitFlags = JobObjectLimitKillOnJobClose;
++            int size = Marshal.SizeOf(typeof(ExtendedLimitInformation));
++            IntPtr buffer = Marshal.AllocHGlobal(size);
++            try
++            {
++                Marshal.StructureToPtr(info, buffer, false);
++                SetInformationJobObject(handle, JobObjectExtendedLimitInformation, buffer, (uint)size);
++            }
++            finally
++            {
++                Marshal.FreeHGlobal(buffer);
++            }
++        }
++
++        internal void AddProcess(IntPtr processHandle)
++        {
++            if (handle != IntPtr.Zero && processHandle != IntPtr.Zero)
++            {
++                AssignProcessToJobObject(handle, processHandle);
++            }
++        }
++
++        public void Dispose()
++        {
++            if (handle != IntPtr.Zero)
++            {
++                CloseHandle(handle);
++                handle = IntPtr.Zero;
++            }
++        }
++    }
++}
+diff --git a/desktop/shell/app.ico b/desktop/shell/app.ico
+new file mode 100644
+index 0000000000000000000000000000000000000000..dfcbd941b492813c3e5e402683168dfb6278a649
+GIT binary patch
+literal 10366
+zcmeHNy;8$440exRyKq+~)~>t-9XMDz@E8mX4A69IHrRNjY%F~k#ts}tiep=H3m2)}
+z@l&}?BDwzT&tGDxY3kenUUhxqu-u$EcM3;1xEeP22;M`qLS?XueH|Ltb&J70n6TBZ
+zX&Pwj+qd%`E!g0NRk-^fWq2ViY~ELuyj<rVH1MiQ9gO9Jw}?nU39s%#2O}-M3V7Y@
+zanPWEdiXGbp&tK$6VR%U!~QgW1_bo-SC!$Jeov{uxm_mb5xnF);dzgx(C--{YFjqY
+zU>O~cc=l0*m-@3thK~Z8et+cpVT(kue$u+=YZU9RFD$h)Jd1xxm%c`!-@fPH;$Ii?
+zEPoti{@i!{^j)^8U9o;seP6@y7C*`ThsAG;->m{al)o%~_6^)!JB!~ee&_4wD+_N&
+zck7qpU%YeOc{F^K@6+EucIp-@f0=&sG#m0Gk>L87zvK?27Ovm<T8hf;171%c;PnJL
+zyqZ9VR}+YMErE#F5=eL@frM8Q$ao!rjMot$cohMHR}r9i4FQVR5MX!(0ftu)K>YDK
+z7C8ZqmlJ^D-6#&fUW*AJewgu60{4h_x48o$f$#urp7BBgvvzzs0TF>k3uhA$5$K-(
+zF$Dz#f_lh-oI(MCSw|lZms!HT1QrAiJxCt_=dlmlieIYK$2Y3q)caTJA9>$Uf8c#h
+z{q}DNv|{y6J?G9#pAF~SwDdO|KQW&PVtOz+oateDPzCIIplZ0oTOUO}nH2t3zA5ul
+c=@<X7TW#gPh6)b(k>$^^_pC$6uisog0MTbG^8f$<
+
+literal 0
+HcmV?d00001
+
+diff --git a/frontend/src/api/index.ts b/frontend/src/api/index.ts
+index 459c140..1db361f 100644
+--- a/frontend/src/api/index.ts
++++ b/frontend/src/api/index.ts
+@@ -1,6 +1,7 @@
+ import { request } from './client'
+ import { streamMessage } from './stream'
+ import type {
++  AiConfig,
+   AiConversation,
+   AiMessage,
+   AuthVerifyResponse,
+@@ -89,6 +90,13 @@ export const periodApi = {
+ 
+ export const aiApi = {
+   status: () => request<{ enabled: boolean }>('/ai/status'),
++  /** 读取 AI 配置（只返回掩码后的 Key） */
++  getConfig: () => request<AiConfig>('/ai/config'),
++  /** 保存 DeepSeek Key 到本机（桌面版由用户在设置页填写） */
++  saveConfig: (key: string) =>
++    request<AiConfig>('/ai/config', { method: 'PUT', body: { key } }),
++  /** 清除本机保存的 Key，回退到环境变量/配置文件 */
++  clearConfig: () => request<AiConfig>('/ai/config', { method: 'DELETE' }),
+   listConversations: () => request<AiConversation[]>('/ai/conversations'),
+   createConversation: (scheduleId: number | null) =>
+     request<AiConversation>('/ai/conversations', {
+diff --git a/frontend/src/pages/SettingsPage.tsx b/frontend/src/pages/SettingsPage.tsx
+index 4331425..14dabff 100644
+--- a/frontend/src/pages/SettingsPage.tsx
++++ b/frontend/src/pages/SettingsPage.tsx
+@@ -15,11 +15,11 @@ import {
+ import { CopyOutlined } from '@ant-design/icons'
+ import type { ColumnsType } from 'antd/es/table'
+ import type { Dayjs } from 'dayjs'
+-import { periodApi } from '../api'
++import { aiApi, periodApi } from '../api'
+ import { getApiKey } from '../api/client'
+ import { useApp } from '../store/AppContext'
+ import { useFont } from '../store/FontContext'
+-import type { PeriodCategory, PeriodConfig } from '../types'
++import type { AiConfig, PeriodCategory, PeriodConfig } from '../types'
+ import { dayjs } from '../utils/schedule'
+ 
+ const TIME_FORMAT = 'HH:mm'
+@@ -52,6 +52,51 @@ export default function SettingsPage() {
+   const { globalScale, ttScale, setGlobalScale, setTtScale } = useFont()
+   const [rows, setRows] = useState<PeriodConfig[]>([])
+   const [widgetKey] = useState(() => getApiKey() ?? '')
++  const [aiConfig, setAiConfig] = useState<AiConfig | null>(null)
++  const [aiKeyInput, setAiKeyInput] = useState('')
++  const [savingKey, setSavingKey] = useState(false)
++
++  const loadAiConfig = async () => {
++    try {
++      setAiConfig(await aiApi.getConfig())
++    } catch {
++      setAiConfig(null)
++    }
++  }
++
++  useEffect(() => {
++    void loadAiConfig()
++  }, [])
++
++  const saveAiKey = async () => {
++    const key = aiKeyInput.trim()
++    if (!key) {
++      message.warning('请先填写 DeepSeek API Key')
++      return
++    }
++    setSavingKey(true)
++    try {
++      setAiConfig(await aiApi.saveConfig(key))
++      setAiKeyInput('')
++      message.success('已保存到本机，AI 功能即刻可用')
++    } catch (e) {
++      message.error(e instanceof Error ? e.message : '保存失败')
++    } finally {
++      setSavingKey(false)
++    }
++  }
++
++  const clearAiKey = async () => {
++    setSavingKey(true)
++    try {
++      setAiConfig(await aiApi.clearConfig())
++      message.success('已清除本机保存的 Key')
++    } catch (e) {
++      message.error(e instanceof Error ? e.message : '清除失败')
++    } finally {
++      setSavingKey(false)
++    }
++  }
+ 
+   // 桌面小组件只读展示页地址（含 key 与当前课表）。
+   // Key 放在 fragment（#）而不是 query（?）：fragment 不会随请求发往服务端，也不进 Referer。
+@@ -228,6 +273,46 @@ export default function SettingsPage() {
+         </Space>
+       </Card>
+ 
++      <Card title="AI 助手（DeepSeek）">
++        <Space direction="vertical" size={12} style={{ width: '100%' }}>
++          <Alert
++            type={aiConfig?.configured ? 'success' : 'warning'}
++            showIcon
++            message={
++              aiConfig?.configured
++                ? `AI 功能已启用（来源：${
++                    aiConfig.source === 'local' ? '本机设置' : '环境变量 / 配置文件'
++                  }${aiConfig.keyMasked ? `，Key：${aiConfig.keyMasked}` : ''}）`
++                : 'AI 功能未启用：填入 DeepSeek API Key 后即可使用自然语言增删改与 HTML 课表导入'
++            }
++          />
++          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
++            <Input.Password
++              style={{ minWidth: 280, flex: 1 }}
++              placeholder="sk-..."
++              value={aiKeyInput}
++              onChange={(e) => setAiKeyInput(e.target.value)}
++              onPressEnter={saveAiKey}
++            />
++            <Button type="primary" loading={savingKey} onClick={saveAiKey}>
++              保存
++            </Button>
++            <Button
++              danger
++              loading={savingKey}
++              disabled={!aiConfig?.configured || aiConfig.source !== 'local'}
++              onClick={clearAiKey}
++            >
++              清除本机 Key
++            </Button>
++          </div>
++          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
++            Key 只保存在本机数据目录（settings.properties），不会上传；接口也只会返回掩码形式。
++            若已通过环境变量 DEEPSEEK_API_KEY 配置，这里可以留空。
++          </Typography.Text>
++        </Space>
++      </Card>
++
+       <Card
+         title="字体大小"
+         extra={
+diff --git a/frontend/src/types/index.ts b/frontend/src/types/index.ts
+index efa7c89..5f68561 100644
+--- a/frontend/src/types/index.ts
++++ b/frontend/src/types/index.ts
+@@ -149,6 +149,14 @@ export interface AiConversation {
+   updatedAt?: string
+ }
+ 
++/** AI（DeepSeek）配置状态。后端只返回掩码后的 Key，绝不返回完整 Key。 */
++export interface AiConfig {
++  configured: boolean
++  /** 取值来源：local（界面填入）/ config（环境变量或配置文件）/ none */
++  source: 'local' | 'config' | 'none'
++  keyMasked: string
++}
++
+ export interface ParsedCourse {
+   name: string | null
+   location: string | null
+-- 
+2.55.0.windows.5
+
+
+From 8f4f6866f08bf2985d828fdd9db06527f5ae6f90 Mon Sep 17 00:00:00 2001
+From: Code Review Bot <review@localhost>
+Date: Sat, 26 Sep 2026 18:13:58 +0800
+Subject: [PATCH 2/2] =?UTF-8?q?fix(desktop):=20=E4=BF=AE=E5=A4=8D=E9=AB=98?=
+ =?UTF-8?q?=20DPI=20=E5=B1=8F=E5=B9=95=E4=B8=8A=E7=95=8C=E9=9D=A2=E5=8F=91?=
+ =?UTF-8?q?=E8=99=9A?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+进程原本没有 DPI 感知声明（GetProcessDpiAwareness 返回 0 = UNAWARE），在 200% 缩放的
+屏幕上 Windows 会把整个窗口位图放大，界面与 WebView 内容都发虚。
+
+- 新增 desktop/shell/app.manifest：permonitorv2 / permonitor / true-pm 逐级回退
+- Main 里再调用 SetProcessDpiAwarenessContext 兜底（清单被忽略时仍生效）
+- 随包发布 TangentTimetable.exe.config（WinForms 的 PerMonitorV2 需要该开关）
+- 窗口尺寸改为按窗口所在显示器 DPI 换算，并用 SetWindowPos 落物理像素，
+  绕开 WinForms 首次显示时的二次缩放
+- build-desktop.ps1 接入清单与 exe.config
+
+实测：DPI 感知 0 -> 2（PER_MONITOR_AWARE）；窗口 2360x1640 物理像素 = 1180x820 逻辑
+（200% 缩放屏）。
+---
+ desktop/build-desktop.ps1                 |  7 ++
+ desktop/shell/Program.cs                  | 83 ++++++++++++++++++++++-
+ desktop/shell/TangentTimetable.exe.config | 12 ++++
+ desktop/shell/app.manifest                | 36 ++++++++++
+ 4 files changed, 135 insertions(+), 3 deletions(-)
+ create mode 100644 desktop/shell/TangentTimetable.exe.config
+ create mode 100644 desktop/shell/app.manifest
+
+diff --git a/desktop/build-desktop.ps1 b/desktop/build-desktop.ps1
+index 5cb84a6..6a34a2f 100644
+--- a/desktop/build-desktop.ps1
++++ b/desktop/build-desktop.ps1
+@@ -120,6 +120,7 @@ Copy-Item (Join-Path $extract 'runtimes\win-x64\native\WebView2Loader.dll') $dis
+ # ---------- 5. 外壳 ----------
+ Write-Step '5/7 编译桌面外壳（WinForms + WebView2，用 .NET Framework 自带 csc）'
+ $icon = Join-Path $shellDir 'app.ico'
++$manifest = Join-Path $shellDir 'app.manifest'
+ $cscArgs = @(
+     '/nologo', '/target:winexe', '/platform:x64', '/optimize+',
+     "/out:$dist\TangentTimetable.exe",
+@@ -129,10 +130,16 @@ $cscArgs = @(
+     "/reference:$dist\Microsoft.Web.WebView2.WinForms.dll"
+ )
+ if (Test-Path $icon) { $cscArgs += "/win32icon:$icon" }
++# DPI 感知清单：缺失时在高 DPI 屏幕上整个界面会被系统位图放大而发虚
++if (Test-Path $manifest) { $cscArgs += "/win32manifest:$manifest" }
+ $cscArgs += (Join-Path $shellDir 'Program.cs')
+ & $csc @cscArgs
+ if ($LASTEXITCODE -ne 0) { throw '外壳编译失败' }
+ 
++# WinForms 的 PerMonitorV2 需要这份配置才生效（必须与 exe 同名 + .config）
++$exeConfig = Join-Path $shellDir 'TangentTimetable.exe.config'
++if (Test-Path $exeConfig) { Copy-Item $exeConfig "$dist\TangentTimetable.exe.config" -Force }
++
+ # ---------- 6. 汇总 ----------
+ Write-Step '6/7 体积汇总'
+ $total = (Get-ChildItem $dist -Recurse -File | Measure-Object Length -Sum).Sum
+diff --git a/desktop/shell/Program.cs b/desktop/shell/Program.cs
+index e5222ea..d30643a 100644
+--- a/desktop/shell/Program.cs
++++ b/desktop/shell/Program.cs
+@@ -34,9 +34,47 @@ namespace TangentTimetable
+         internal const int Port = 17817;
+         private const string MutexName = "TangentTimetable.SingleInstance.v1";
+ 
++        private static readonly IntPtr DpiAwarenessPerMonitorV2 = new IntPtr(-4);
++        private static readonly IntPtr DpiAwarenessPerMonitor = new IntPtr(-3);
++        private static readonly IntPtr DpiAwarenessSystem = new IntPtr(-2);
++
++        [DllImport("user32.dll", SetLastError = true)]
++        private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
++
++        /// <summary>窗口所在显示器的 DPI（Win10 1607+）</summary>
++        [DllImport("user32.dll")]
++        internal static extern uint GetDpiForWindow(IntPtr hwnd);
++
++        /// <summary>直接设置窗口的物理像素位置与尺寸</summary>
++        [DllImport("user32.dll")]
++        internal static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter,
++            int x, int y, int width, int height, uint flags);
++
++        /// <summary>
++        /// 声明 DPI 感知。app.manifest 已经声明过一次，这里再调用一次是为了在清单被忽略或
++        /// 被环境覆盖时仍然生效（若已声明，该调用会失败并返回 false，属正常情况）。
++        ///
++        /// 不声明时进程是 DPI-UNAWARE：在 200% 缩放的屏幕上 Windows 会把整个窗口位图放大，
++        /// 界面与 WebView 内容都会发虚。
++        /// </summary>
++        private static void EnableDpiAwareness()
++        {
++            try
++            {
++                if (SetProcessDpiAwarenessContext(DpiAwarenessPerMonitorV2)) return;
++                if (SetProcessDpiAwarenessContext(DpiAwarenessPerMonitor)) return;
++                SetProcessDpiAwarenessContext(DpiAwarenessSystem);
++            }
++            catch (Exception)
++            {
++                // 旧版 Windows 没有该 API：由清单里的 true/pm 兜底
++            }
++        }
++
+         [STAThread]
+         private static void Main()
+         {
++            EnableDpiAwareness();
+             bool createdNew;
+             using (Mutex mutex = new Mutex(true, MutexName, out createdNew))
+             {
+@@ -68,10 +106,12 @@ namespace TangentTimetable
+         internal MainForm()
+         {
+             this.Text = "大切课程表";
+-            this.Width = 1180;
+-            this.Height = 820;
+-            this.MinimumSize = new Size(760, 560);
++
++            // 窗口内容只有一个 Dock 填充的 WebView2，不需要 WinForms 自动缩放布局；
++            // 尺寸在 OnLoad 里按窗口实际 DPI 换算，避免与 AutoScaleMode 重复缩放。
++            this.AutoScaleMode = AutoScaleMode.None;
+             this.StartPosition = FormStartPosition.CenterScreen;
++
+             this.webView.Dock = DockStyle.Fill;
+             this.Controls.Add(this.webView);
+ 
+@@ -80,6 +120,41 @@ namespace TangentTimetable
+                 "TangentTimetable");
+         }
+ 
++        /// <summary>
++        /// 按窗口所在显示器的 DPI 设置窗口的物理尺寸，并在工作区内居中。
++        ///
++        /// 为什么用 Win32 而不是 Form.Width/Height：WinForms 在首次显示时会再按 DPI 缩放一次
++        /// 窗口尺寸（实测把 2360x1640 缩成 1180x820，正好 0.5 倍），所以在 OnShown 里直接落
++        /// 最终物理尺寸最可靠。DPI 用 GetDpiForWindow 取，它报告的是窗口所在显示器。
++        /// </summary>
++        private void ApplyPhysicalWindowSize()
++        {
++            int dpi = 96;
++            try
++            {
++                int measured = (int)Program.GetDpiForWindow(this.Handle);
++                if (measured > 0)
++                {
++                    dpi = measured;
++                }
++            }
++            catch (Exception)
++            {
++                // 取不到就按 100% 处理
++            }
++
++            float scale = dpi / 96f;
++            Rectangle work = Screen.FromControl(this).WorkingArea;   // DPI 感知进程下即为物理像素
++            int width = Math.Min((int)(1180 * scale), work.Width - 40);
++            int height = Math.Min((int)(820 * scale), work.Height - 40);
++            int x = work.Left + (work.Width - width) / 2;
++            int y = work.Top + (work.Height - height) / 2;
++
++            const uint swpNoZOrder = 0x0004;
++            const uint swpNoActivate = 0x0010;
++            Program.SetWindowPos(this.Handle, IntPtr.Zero, x, y, width, height, swpNoZOrder | swpNoActivate);
++        }
++
+         protected override void OnLoad(EventArgs e)
+         {
+             base.OnLoad(e);
+@@ -256,6 +331,8 @@ namespace TangentTimetable
+         protected override void OnShown(EventArgs e)
+         {
+             base.OnShown(e);
++            // 放在 OnShown 而不是 OnLoad：WinForms 首次显示时会再缩放一次窗口尺寸
++            ApplyPhysicalWindowSize();
+             if (!freshAccount)
+             {
+                 return;
+diff --git a/desktop/shell/TangentTimetable.exe.config b/desktop/shell/TangentTimetable.exe.config
+new file mode 100644
+index 0000000..be06a5b
+--- /dev/null
++++ b/desktop/shell/TangentTimetable.exe.config
+@@ -0,0 +1,12 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++  随 exe 一起发布的运行时配置（构建脚本会把它复制成 TangentTimetable.exe.config）。
++
++  .NET Framework 4.7+ 的 WinForms 需要这个开关才会按 PerMonitorV2 处理 DPI 变化；
++  与 app.manifest 里的 dpiAwareness 配合使用。
++-->
++<configuration>
++  <System.Windows.Forms.ApplicationConfigurationSection>
++    <add key="DpiAwareness" value="PerMonitorV2" />
++  </System.Windows.Forms.ApplicationConfigurationSection>
++</configuration>
+diff --git a/desktop/shell/app.manifest b/desktop/shell/app.manifest
+new file mode 100644
+index 0000000..ac6917d
+--- /dev/null
++++ b/desktop/shell/app.manifest
+@@ -0,0 +1,36 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++  DPI 感知清单。
++  没有它时进程是 DPI-UNAWARE：在 200% 缩放的屏幕上，Windows 会把整个窗口位图放大 2 倍，
++  文字与 WebView 内容都会发虚。声明 PerMonitorV2 之后由程序自己按真实像素渲染。
++
++  permonitorv2 需要 Windows 10 1703+；旧系统回退到 permonitor / true/pm。
++-->
++<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
++  <assemblyIdentity version="1.0.0.0" name="TangentTimetable.app" />
++
++  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
++    <security>
++      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
++        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
++      </requestedPrivileges>
++    </security>
++  </trustInfo>
++
++  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
++    <application>
++      <!-- Windows 10 / 11 -->
++      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
++      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}" />
++      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}" />
++    </application>
++  </compatibility>
++
++  <application xmlns="urn:schemas-microsoft-com:asm.v3">
++    <windowsSettings>
++      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
++      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">permonitorv2,permonitor</dpiAwareness>
++      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
++    </windowsSettings>
++  </application>
++</assembly>
+-- 
+2.55.0.windows.5
+

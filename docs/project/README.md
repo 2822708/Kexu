@@ -160,4 +160,4 @@ npm run dev        # http://localhost:5173，/api 已代理到 :8080
 
 ## License
 
-[MIT](LICENSE) © 2026 Tangent0712
+[MIT](../../LICENSE) © 2026 Tangent0712

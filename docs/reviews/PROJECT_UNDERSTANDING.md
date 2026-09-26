@@ -1,4 +1,4 @@
-> 工作区说明：本文件记录读取修复版基线时的项目认识，文中 `fixed` / `original` 指来源版本；当前项目源码位于 `src`，源码证据链接已改到新目录。建立过程见 [WORKSPACE_SETUP](../WORKSPACE_SETUP.md)。
+> 工作区说明：本文件记录读取 Web 修复版 `32de25c` 时的项目认识，文中 `fixed` / `original` 指来源版本；当前项目已纳入桌面版 `8f4f686`，源码位于 `src`，源码证据链接已改到新目录。桌面版新增 H2、界面设置 AI Key 及 Windows 外壳，具体见 [桌面版说明](../desktop/README.md)。建立过程见 [WORKSPACE_SETUP](../WORKSPACE_SETUP.md)。
 
 # Tangent-Timetable 项目理解与接手说明
 

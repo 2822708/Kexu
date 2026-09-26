@@ -1,6 +1,7 @@
 import { request } from './client'
 import { streamMessage } from './stream'
 import type {
+  AiConfig,
   AiConversation,
   AiMessage,
   AuthVerifyResponse,
@@ -89,6 +90,13 @@ export const periodApi = {
 
 export const aiApi = {
   status: () => request<{ enabled: boolean }>('/ai/status'),
+  /** 读取 AI 配置（只返回掩码后的 Key） */
+  getConfig: () => request<AiConfig>('/ai/config'),
+  /** 保存 DeepSeek Key 到本机（桌面版由用户在设置页填写） */
+  saveConfig: (key: string) =>
+    request<AiConfig>('/ai/config', { method: 'PUT', body: { key } }),
+  /** 清除本机保存的 Key，回退到环境变量/配置文件 */
+  clearConfig: () => request<AiConfig>('/ai/config', { method: 'DELETE' }),
   listConversations: () => request<AiConversation[]>('/ai/conversations'),
   createConversation: (scheduleId: number | null) =>
     request<AiConversation>('/ai/conversations', {

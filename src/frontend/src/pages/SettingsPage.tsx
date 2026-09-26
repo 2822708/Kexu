@@ -15,11 +15,11 @@ import {
 import { CopyOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
-import { periodApi } from '../api'
+import { aiApi, periodApi } from '../api'
 import { getApiKey } from '../api/client'
 import { useApp } from '../store/AppContext'
 import { useFont } from '../store/FontContext'
-import type { PeriodCategory, PeriodConfig } from '../types'
+import type { AiConfig, PeriodCategory, PeriodConfig } from '../types'
 import { dayjs } from '../utils/schedule'
 
 const TIME_FORMAT = 'HH:mm'
@@ -52,6 +52,51 @@ export default function SettingsPage() {
   const { globalScale, ttScale, setGlobalScale, setTtScale } = useFont()
   const [rows, setRows] = useState<PeriodConfig[]>([])
   const [widgetKey] = useState(() => getApiKey() ?? '')
+  const [aiConfig, setAiConfig] = useState<AiConfig | null>(null)
+  const [aiKeyInput, setAiKeyInput] = useState('')
+  const [savingKey, setSavingKey] = useState(false)
+
+  const loadAiConfig = async () => {
+    try {
+      setAiConfig(await aiApi.getConfig())
+    } catch {
+      setAiConfig(null)
+    }
+  }
+
+  useEffect(() => {
+    void loadAiConfig()
+  }, [])
+
+  const saveAiKey = async () => {
+    const key = aiKeyInput.trim()
+    if (!key) {
+      message.warning('请先填写 DeepSeek API Key')
+      return
+    }
+    setSavingKey(true)
+    try {
+      setAiConfig(await aiApi.saveConfig(key))
+      setAiKeyInput('')
+      message.success('已保存到本机，AI 功能即刻可用')
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '保存失败')
+    } finally {
+      setSavingKey(false)
+    }
+  }
+
+  const clearAiKey = async () => {
+    setSavingKey(true)
+    try {
+      setAiConfig(await aiApi.clearConfig())
+      message.success('已清除本机保存的 Key')
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '清除失败')
+    } finally {
+      setSavingKey(false)
+    }
+  }
 
   // 桌面小组件只读展示页地址（含 key 与当前课表）。
   // Key 放在 fragment（#）而不是 query（?）：fragment 不会随请求发往服务端，也不进 Referer。
@@ -224,6 +269,46 @@ export default function SettingsPage() {
           <Input readOnly value={widgetPageUrl} onFocus={(e) => e.currentTarget.select()} />
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             该地址包含你的 API Key，仅供自己使用，请勿公开。
+          </Typography.Text>
+        </Space>
+      </Card>
+
+      <Card title="AI 助手（DeepSeek）">
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Alert
+            type={aiConfig?.configured ? 'success' : 'warning'}
+            showIcon
+            message={
+              aiConfig?.configured
+                ? `AI 功能已启用（来源：${
+                    aiConfig.source === 'local' ? '本机设置' : '环境变量 / 配置文件'
+                  }${aiConfig.keyMasked ? `，Key：${aiConfig.keyMasked}` : ''}）`
+                : 'AI 功能未启用：填入 DeepSeek API Key 后即可使用自然语言增删改与 HTML 课表导入'
+            }
+          />
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <Input.Password
+              style={{ minWidth: 280, flex: 1 }}
+              placeholder="sk-..."
+              value={aiKeyInput}
+              onChange={(e) => setAiKeyInput(e.target.value)}
+              onPressEnter={saveAiKey}
+            />
+            <Button type="primary" loading={savingKey} onClick={saveAiKey}>
+              保存
+            </Button>
+            <Button
+              danger
+              loading={savingKey}
+              disabled={!aiConfig?.configured || aiConfig.source !== 'local'}
+              onClick={clearAiKey}
+            >
+              清除本机 Key
+            </Button>
+          </div>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Key 只保存在本机数据目录（settings.properties），不会上传；接口也只会返回掩码形式。
+            若已通过环境变量 DEEPSEEK_API_KEY 配置，这里可以留空。
           </Typography.Text>
         </Space>
       </Card>
