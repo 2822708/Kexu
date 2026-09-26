@@ -121,9 +121,9 @@ UI 状态推荐以 `Loading / Content / Empty / RecoverableError` 表示；本�
 
 ### 5.2 本地日期、时区和循环实例
 
-学期、课程节次、考试及待办截止时间分别保存 `LocalDate`、`LocalTime` 或 `LocalDateTime` 语义，数据库采用 ISO 文本；只有投递给系统 AlarmManager 时才转换成 `Instant/epochMillis`。课表保存 IANA `ZoneId`，默认取建立时设备时区；考试沿用该课表时区。全局待办/循环规则保存自己的时区策略（固定时区或跟随设备本地时区），不得只存 epoch 后让时区变化悄悄改写墙上时间。设备时间/时区变化后重算未触发闹钟。
+学期、课程节次、考试及待办截止时间分别保存 `LocalDate`、`LocalTime` 或 `LocalDateTime` 语义，数据库采用 ISO 文本；只有投递给系统 AlarmManager 时才转换成 `Instant/epochMillis`。课表保存 IANA `ZoneId`，默认取建立时设备时区；考试沿用该课表时区。全局待办/循环规则保存自己的时区策略（固定时区或跟随设备本地时区），不得只存 epoch 后让时区变化悄悄改写墙上时间。DST 导致墙上时间不存在时顺延到该时区的下一个有效时刻；墙上时间重复时选择较早 offset，每次只生成一个循环实例。设备时间/时区变化后重算未触发闹钟。
 
-循环规则字段：标题、`DAILY/WEEKLY/MONTHLY` 或有限预设、星期/每月日期、触发 `LocalTime`、DDL 偏移分钟、时区策略、启用/归档状态、是否“完成当期后生成下一期”。下一期计算必须为纯 Kotlin 函数并有跨月、闰年、同一时刻边界测试。发生月末时，目标日取当月最后一天。每次具体期次按 `(rulePublicId, occurrenceLocalDateTime + zoneId)` 建唯一键；用户改截止时间不改变期次身份。生成待办与期次占位在同一 Room 事务中，重放、并发接收或补扫不能生成重复记录。完成后续期模式也通过唯一期次键生成，防止与定时触发重复。
+循环规则字段：标题、`DAILY/WEEKLY/MONTHLY` 或有限预设、星期/每月日期、触发 `LocalTime`、DDL 偏移分钟、时区策略、启用/归档状态、是否“完成当期后生成下一期”。`WEEKDAYS` 只在周一至周五触发；`EVERY_N_WEEKS` 必须保存 `anchorDate`、`intervalWeeks >= 2` 和 ISO 星期号，先取 anchorDate 所在周的周一，候选日相对该周的教学周序号模 intervalWeeks 为 0 且不早于 anchorDate 时才触发；不可用 ISO 年周数奇偶替代学期/规则锚点。下一期计算必须为纯 Kotlin 函数并有跨月、闰年、同一时刻边界测试。发生月末时，目标日取当月最后一天。每次具体期次按 `(rulePublicId, occurrenceLocalDateTime + zoneId)` 建唯一键；用户改截止时间不改变期次身份。生成待办与期次占位在同一 Room 事务中，重放、并发接收或补扫不能生成重复记录。若 `chainAfterComplete=true`，完成当前期时以规则已保存的 `nextTriggerAt` 立即物化下一期；随后到时的调度器按同一 occurrenceKey 命中已有实例并只推进规则，不重复生成待办。
 
 考试自动完成不依赖每分钟数据库扫描：打开应用时执行一次到期收敛；可用不要求准点的单次后台任务在考试结束后尽快收敛。课程/考试/待办当前是否到期由已保存的墙上时间及时区计算，过期时用户打开应用必须立即看到正确状态。
 
@@ -134,11 +134,12 @@ UI 状态推荐以 `Loading / Content / Empty / RecoverableError` 表示；本�
 | 表 | 关键字段及约束 |
 |---|---|
 | `ScheduleEntity` | publicId、名称、学期起止日、时区、默认标记、revision；publicId 唯一；一张课表拥有多门课程和考试 |
+| `DatasetMetadataEntity` | 单例数据集 publicId/sourceDatasetId、创建时间；恢复/合并不覆盖本机身份，文件保留来源身份 |
 | `PeriodConfigEntity` | 节次号、起止 LocalTime、标签；首装种入当前默认作息，唯一节次号。沿用现状先全局共享 |
 | `CourseEntity` | scheduleId、星期、起止节次、weeks JSON、名称/教师/地点/颜色；课表删除级联；索引 scheduleId + dayOfWeek |
 | `ExamEntity` | scheduleId、标题、开始/结束墙上时间、地点、时区；课表删除级联；索引 scheduleId + startAt |
 | `TodoEntity` | 标题、DDL LocalDateTime/ZoneId、完成状态/时间、可空 examId；考试生成待办的外键删除策略为随考试级联，普通待办为全局数据；索引 completed + dueAt、examId |
-| `RecurringRuleEntity` | 频率（DAILY/WEEKLY/MONTHLY/WEEKDAYS/EVERY_N_WEEKS/LEGACY_CUSTOM）、星期/日期、间隔周数与锚点、触发时间/DDL 偏移、时区策略、下次触发、启用、chainAfterComplete、revision、归档时间；仅 LEGACY_CUSTOM 可有只读 legacyScript 且永不执行；索引 enabled + nextTriggerAt；删除采用归档 |
+| `RecurringRuleEntity` | 频率（DAILY/WEEKLY/MONTHLY/WEEKDAYS/EVERY_N_WEEKS/LEGACY_CUSTOM）、星期/日期、间隔周数与锚点、触发时间/DDL 偏移、时区策略、下次触发、启用、chainAfterComplete、最近跳过区间摘要、revision、归档时间；仅 LEGACY_CUSTOM 可有只读 legacyScript 且永不执行；索引 enabled + nextTriggerAt；删除采用归档 |
 | `RecurringOccurrenceEntity` | ruleId、唯一 (ruleId + occurrenceKey)、计划触发/DDL、状态、可空 todoId；支持已生成/跳过/失败记录与去重 |
 | `TodoReminderEntity` | todoId、相对截止偏移或计算后的计划墙上时间、状态；Todo 删除级联；索引状态 + triggerAt |
 | `ExamReminderEntity` | examId、考试前偏移、计划墙上时间、状态；Exam 删除级联；索引状态 + triggerAt |
@@ -151,7 +152,7 @@ UI 状态推荐以 `Loading / Content / Empty / RecoverableError` 表示；本�
 
 `RecurringRule` 采用归档而非硬删，历史待办及 `RecurringOccurrence` 保留；用户删除循环规则只停止未来触发。考试与其自动待办必须在同一事务内创建、修改或删除。删除整张课表时，考试待办按上述外键一并清理，相关 AI 会话保留但解除课表绑定，所有受影响提案置为 `STALE`。
 
-偏好（当前课表 UUID、主题、UI 选项、AI 发送范围等）放 DataStore，不放 Room。DeepSeek Key 以随机 AES-GCM 数据密钥加密，密钥由 Android Keystore 持有；DataStore/私有文件只保存密文、nonce 和版本信息。密钥不能进入导出文件、日志、崩溃报告或 UI State。
+偏好（当前课表 UUID、主题、UI 选项、AI 发送范围等）放 DataStore，不放 Room。设备内本机数据集 UUID 持久化在 `DatasetMetadataEntity`；导入文件中的 sourceDatasetId 仅记为来源元数据，不覆盖本机数据集身份。DeepSeek Key 以随机 AES-GCM 数据密钥加密，密钥由 Android Keystore 持有；DataStore/私有文件只保存密文、nonce 和版本信息。密钥不能进入导出文件、日志、崩溃报告或 UI State。
 
 ## 7. 后台提醒、循环任务和平台边界
 
@@ -167,7 +168,7 @@ Web 版服务端可持续每分钟扫描；Android 不能把这一服务端行�
 
 Android Manifest 声明最小权限：`INTERNET`、按需的 `POST_NOTIFICATIONS`、`RECEIVE_BOOT_COMPLETED`；若用 ConnectivityManager 显示网络状态再加 `ACCESS_NETWORK_STATE`；只有实现精确闹钟选项时才声明 `SCHEDULE_EXACT_ALARM`。创建“待办提醒”“考试提醒”通知渠道。Receiver 只执行轻量数据库收敛与发通知，较长任务交给 Worker。
 
-设备开机、应用升级、时间/时区变化、精确闹钟权变化、用户改提醒或规则时，触发唯一的 `ReconcileSchedulesWorker` 或轻量协调器：分别重算最近通知提醒与下一次业务收敛事件。循环命中用不精确 AlarmManager 单次唤醒生成一期；应用回到前台、设备重启或周期补扫时再次调用同一事务用例。补扫保持每规则最多补 5 期，过旧期次按既定规则记为跳过后跳到未来，避免刷屏。
+设备开机、应用升级、时间/时区变化、精确闹钟权变化、用户改提醒或规则时，触发唯一的 `ReconcileSchedulesWorker` 或轻量协调器：分别重算最近通知提醒与下一次业务收敛事件。循环命中用不精确 AlarmManager 单次唤醒生成一期；应用回到前台、设备重启或周期补扫时再次调用同一事务用例。补扫保持每规则最多补 5 期；若仍有过期期次，直接计算首个未来触发点，并在规则记录保存跳过期数及起止时间摘要，UI 告知用户，不批量刷出历史待办。
 
 清楚告知：通知权限关闭、用户强制停止应用、系统省电或部分厂商后台策略下，提醒可能不出现或延迟；本应用不会以常驻前台服务换取后台运行。验证覆盖授权/拒绝、Doze、重启、强制停止后重新打开、手动改时区与系统时间。精确闹钟权限与通知权限是两个独立状态，设置页分别显示。
 
@@ -186,24 +187,59 @@ Android 直连模型意味着用户的 DeepSeek Key 会被装在该用户自己�
 ### 8.2 提案数据流和一致性
 
 1. 用户输入；ViewModel 保存草稿并调用 AI Repository。
-2. 请求上下文来自所选课表的 Room 快照；提示模型返回 `text + actions[]` 的版本化 JSON。流式文本只更新消息草稿。
+2. 通过 Room 只读事务一次性装载所选课表与用户允许发送的关联数据，形成一致的请求快照；提示模型返回 `text + actions[]` 的版本化 JSON。流式文本只更新消息草稿。
 3. 响应结束后按 action allowlist、payload schema、字段长度/日期/周次范围验证。非法条目显示失败说明，不插入可执行 PENDING 卡片。将回复和各提案一起存入 Room。
 4. 卡片展示作用对象、差异、关联副作用和冲突。用户明确点一张卡片的“执行”才调用 `ExecuteAiActionUseCase`；“拒绝”仅改该卡片状态。
 5. 执行用例在单一 Room 事务中用 `UPDATE ... WHERE status='PENDING'` 领取动作并检查唯一 `idempotencyKey`；更新/删除操作核实目标 `publicId` 属于当前会话工作区且 `revision` 未变。创建操作重新运行当前 Room 状态下的校验与冲突检测。调用既有本地业务用例完成写入后，在同一事务标记 `EXECUTED`。
-6. 发现目标过期或业务校验失败时，不写业务数据，并在当前事务把提案提交为 `STALE`；执行过程中发生异常则让业务事务整体回滚，再由外层错误处理用独立短事务把提案标为 `FAILED`。这样不会出现“标记失败也随着业务回滚而消失”。重试网络只会重试生成回复，不会自动重试执行已确认动作。成功后 Room Flow 刷新所有相关页面、Widget 和提醒计划。
+6. 发现目标过期或业务校验失败时，不写业务数据，并在当前事务把提案提交为 `STALE`；执行过程中发生异常则让业务事务整体回滚，再由外层错误处理用独立短事务把提案标为 `FAILED`。这样不会出现“标记失败也随着业务回滚而消失”。取消/断流留下未完成消息状态但不产生可执行提案。重试网络只会重试生成回复，不会自动重试执行已确认动作。成功后 Room Flow 刷新所有相关页面、Widget 和提醒计划。
 
 同一回答多张卡片保持可分别确认。不要用一个整库快照指纹使一张卡执行后所有不相关卡片失效；采用目标实体 revision、工作区归属和每次创建时重跑业务约束验证。若课表/目标已变更，只有依赖已变化目标的卡片失效，并提示重新生成。所有 AI 写路径（含重复待办完成、考试待办联动）与手动 UI 共用 Use Case，避免复刻当前 Web 路径之间的遗漏。
 
 ## 9. 导入、导出和恢复
 
-首版定义独立于 Room 实体的可移植 JSON，不直接序列化 Entity 类。文件包含 `format = "tangent-timetable-backup"`、`schemaVersion`、导出时间、最低读取版本和 `payload`。payload 按数组存课表、作息、课程、考试、待办、循环规则/期次、提醒；AI 对话/消息由用户可选。明确排除 API Key、通知授权、Alarm/Work 队列、设备偏好与临时 AI token。导入的 PENDING 提案一律转成 STALE；不得恢复成待确认后可直接执行的动作。
+首版提供两种用途明确、共享业务 payload 的文件格式，不直接序列化 Room Entity：
 
-应用使用 Storage Access Framework 的 `ACTION_CREATE_DOCUMENT` 保存、`ACTION_OPEN_DOCUMENT` 读取，由用户选择设备或云端文档提供方；此用户选择式流程不需要广泛存储权限（[SAF 官方指南](https://developer.android.com/training/data-storage/shared/documents-files)）。导出 UTF-8 JSON，并对含个人课表的明文文件做清晰提示；实现密码保护备份时使用版本化 AES-GCM envelope 和设备支持的强 KDF，不自创密码算法。
+| 文件格式 | 用途 | 内容 |
+|---|---|---|
+| `tangent-timetable-backup` | 手机完整备份/恢复 | 所有业务数据；AI 会话/消息可选；可选口令加密 |
+| `tangent-timetable-exchange` | Android 与桌面版手动文件交换 | 课表、课程、考试、待办、结构化循环规则/期次、作息和提醒；不带 AI 历史、设备权限、队列和密钥 |
 
-导入流程为“选文件 → 临时解析 → schema/大小/UUID/外键/重复期次/时间范围全量校验 → 显示导入统计和冲突 → 用户选择恢复全部或合并 → Room 事务提交 → 重建提醒/Widget”。校验失败时不改动当前数据库；恢复全部前自动创建本机安全快照或要求用户先导出；失败回滚。合并以 `publicId` 为身份，不以标题或数据库自增 ID 猜测相同记录；相同 UUID 内容不同必须显示冲突并让用户选择保留本机或采用导入数据。以后格式升级写纯数据迁移器 `v1 -> v2`，老文件继续可读，不复用数据库 destructive migration。
+两种文件都包含 format、整数 schemaVersion、sourceDatasetId、exportedAt（UTC RFC 3339）和 minimumReaderVersion；schemaVersion 与 Room 数据库版本各自演进。v1 交换文件示例如下：
 
-针对“可导入导出”的范围，本方案首发指 Android 完整备份/恢复及可移植 JSON 交换格式。当前桌面版并无已确认的同格式导出实现；若首发必须直接导入桌面现有数据，需在 Android 导入器中增加明确的旧版 JSON/接口适配，并配套桌面/后端导出验证，不能声称只靠通用备份文件即可读取现有桌面数据库。
+```json
+{
+  "format": "tangent-timetable-exchange",
+  "schemaVersion": 1,
+  "sourceDatasetId": "uuid",
+  "exportedAt": "2026-09-27T12:00:00Z",
+  "minimumReaderVersion": "1.0.0",
+  "payload": {
+    "schedules": [],
+    "periodConfigs": [],
+    "courses": [],
+    "exams": [],
+    "todos": [],
+    "recurringRules": [],
+    "recurringOccurrences": [],
+    "todoReminders": [],
+    "examReminders": []
+  }
+}
+```
 
+payload 契约如下：
+
+- 每个可独立编辑的业务记录带不可变 publicId UUID；作息节次使用唯一 periodNumber 作为自然键。跨记录关联引用 publicId 或明确声明的自然键，不导出 Android localId 或服务器自增 id。
+- 课程周次为整数数组；日期与墙上时间使用 ISO 文本；相关对象附 IANA zoneId。时间按课程/考试所在时区或 Todo/Rule 自带时区策略还原。
+- sourceDatasetId 是来源数据集稳定 UUID，用于诊断来源和未来同步准备，不是秘密，也不代替实体 publicId。
+- 旧版任意脚本循环规则以 LEGACY_CUSTOM 标记并保留只读 legacyScript；它不会被交换文件触发执行。
+- 未识别的主版本或必需字段缺失必须整份拒绝，不允许“尽量导入”后静默丢记录。
+
+完整备份可另包含 AI 会话/消息；恢复后所有 PENDING 提案改为 STALE。所有格式都排除 DeepSeek API Key、服务器登录凭据、通知/精确闹钟授权、Alarm/Work 队列、设备偏好与临时 AI token。首版支持 UTF-8 明文 JSON 交换并在保存前提示文件包含个人课表；完整备份另提供可选口令加密 envelope，头部标注算法版本，采用 AES-GCM 和经评审的 KDF，不自创密码算法。
+
+应用使用 Storage Access Framework 的 `ACTION_CREATE_DOCUMENT` 保存、`ACTION_OPEN_DOCUMENT` 读取，由用户选择设备或云端文档提供方；此用户选择式流程不需要广泛存储权限（[SAF 官方指南](https://developer.android.com/training/data-storage/shared/documents-files)）。导入流程为“选文件 → 临时解析 → format/schema/大小/UUID/外键/重复期次/时间范围全量校验 → 显示统计与冲突 → 用户选择恢复全部或合并 → Room 事务提交 → 重建提醒/Widget”。校验失败时不改当前数据库；恢复全部前先生成本机安全快照或要求用户导出；提交失败则整体回滚。合并以 publicId 为身份：完全相同的记录跳过，有差异的相同 UUID 显示本机/导入内容供用户选择。未知格式版本、损坏文件或文件提供方读取失败都不得部分写入。格式升级使用纯数据迁移器 v1 -> v2；老文件继续可读，不使用 Room destructive migration。
+
+桌面互通不解析 H2 数据文件，也不让手机直连 MySQL。要宣称桌面与 Android 可来回交换，桌面侧需配套增加 exchange v1 导出和导入适配器。桌面端现有自增 ID 必须映射为稳定 portable UUID：为每个桌面数据集持久化 sourceDatasetId，为已有业务记录生成并持久保存 UUID；从 Android 导入的新记录也保存其 UUID，确保下一次交换时身份不变。桌面适配器交付前用课程/考试/待办/循环规则做双向往返测试。Android 完整备份不依赖此桌面适配器；Android 与桌面互通的完成状态单独跟踪。
 ## 10. Room 版本升级与未来同步边界
 
 每个 App 版本递增 Room schema version，提交 Room 导出的 schema JSON 和明确 Migration；禁止 `fallbackToDestructiveMigration()`。对每条迁移用历史 schema 创建数据库后跑迁移测试，核对课程周次、考试—待办关系、循环期次及 UUID 均被保留。导入文件的 `schemaVersion` 与 Room schema version 分开管理。
@@ -215,7 +251,7 @@ Android 直连模型意味着用户的 DeepSeek Key 会被装在该用户自己�
 | 阶段 | 交付 | 完成定义 |
 |---|---|---|
 | A. 工程与领域底座 | `src/android` 构建、Compose 导航、DI、Room v1 schema、迁移测试、DataStore、日期/教学周/循环纯函数 | 干净克隆能构建 Debug APK；数据库升级测试保留数据；离线首次启动可创建课表 |
-| B. 本地核心与备份 | 课表/课程、考试/待办 CRUD，考试联动，手机版课表布局；JSON 导入导出/恢复/合并 | 飞行模式下完成核心 CRUD；冲突与外键校验生效；坏文件不会破坏现有数据；备份往返数据一致 |
+| B. 本地核心与备份 | 课表/课程、考试/待办 CRUD，考试联动，手机版课表布局；Android 备份恢复与可移植 JSON 导入导出；桌面版文件桥接适配器单独验收 | 飞行模式下完成核心 CRUD；冲突与外键校验生效；坏文件不会破坏现有数据；Android 备份往返数据一致；若宣称桌面互通，另须验证桌面↔Android 文件往返 |
 | C. 循环与通知 | 结构化规则、期次去重/补扫、通知权限和渠道、最近提醒 AlarmManager 调度、重启/时区重建 | 重启后重建提醒；精确权限拒绝能降级；Doze/权限测试结果与 UI 说明一致；无一分钟后台轮询 |
 | D. AI | DeepSeek SSE、密钥设置、最小化上下文、消息持久化、提案卡片、逐条幂等执行 | 无 Key/离线不影响核心功能；任何未点确认的提案不改数据；并发双击/重复请求只执行一次；目标过期会阻止写入 |
 | E. Widget 与发布验收 | Glance 组件、数据变更刷新、可访问性/性能/升级检查、发布签名与隐私说明 | Widget 离线可读并明确更新时点；主流目标 Android 版本、通知/精确闹钟授权路径全测；恢复备份与升级路径通过 |
@@ -240,7 +276,7 @@ Android 工作量需在阶段 A 的工具链/原型确认后估算，不直接�
 
 已经明确：本地 Room 是唯一业务读源；首发无账号、无服务端同步；AI 可联网但必须 BYOK 且逐条确认；移动端不执行任意 JS；导入导出基于版本化文件；后续同步不得破坏 public UUID。
 
-开始第一版实现前需要冻结的实现参数：最低 Android 版本/实际用户设备范围、applicationId、目标分发渠道、精确提醒默认项、时区策略默认选项、是否首发读取当前桌面版数据文件，以及 AI 历史是否默认纳入备份。本文对这些点给出可执行建议，但它们不是当前已验证发布承诺。除“首发必须支持手动完整备份与恢复”外，桌面直读适配属于首发可选范围。
+已明确的导入导出目标是 Android 完整备份/恢复和版本化交换文件。当前桌面版没有同格式交换实现，因此桌面↔Android 互通必须作为桌面侧导入/导出配套改造跟踪；迁移使用文件桥接，不直接解析 H2 或让手机连接服务器。首发实现排期前仍需冻结：最低 Android 版本/实际用户设备范围、applicationId、分发渠道、精确提醒默认项、时区策略默认选项、桌面适配器是否与 Android 首发同批交付，以及 AI 历史是否默认纳入备份。其余实现参数依照本文建议推进。
 
 ## 14. 官方 Android 资料
 
