@@ -29,3 +29,18 @@ docs/CREDENTIALS.md
 
 # 内部整改文档（不对外发布）
 docs/OPEN_SOURCE_PREP.md
+
+# Current workspace: local settings, intermediate files and credentials
+work/
+.env.*
+!.env.example
+*.local.yml
+*.local.yaml
+**/CREDENTIALS.md
+**/OPEN_SOURCE_PREP.md
+*.pem
+*.key
+*.p12
+*.pfx
+*.dump
+*.sql.gz

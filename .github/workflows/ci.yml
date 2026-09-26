@@ -15,9 +15,9 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-          cache-dependency-path: backend/pom.xml
+          cache-dependency-path: src/backend/pom.xml
       - name: Test and build backend
-        working-directory: backend
+        working-directory: src/backend
         run: ./mvnw -B package
 
   frontend:
@@ -28,16 +28,16 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: src/frontend/package-lock.json
       - name: Install dependencies
-        working-directory: frontend
+        working-directory: src/frontend
         run: npm ci
       - name: Typecheck
-        working-directory: frontend
+        working-directory: src/frontend
         run: npm run typecheck
       - name: Lint
-        working-directory: frontend
+        working-directory: src/frontend
         run: npm run lint
       - name: Build
-        working-directory: frontend
+        working-directory: src/frontend
         run: npm run build

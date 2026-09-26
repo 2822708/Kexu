@@ -1,161 +1,49 @@
-# 大切课程表（Tangent Timetable）
+# Tangent-Timetable 项目空间
 
-面向大学生的**课程表 + 待办事项**一站式日程管理工具。以 AI 降低课表录入与维护成本，
-以实时倒计时、循环待办、考试管理覆盖整个学期的日程。
+大学生课程表、考试、待办与 AI 助手。此目录是后续开发使用的独立项目，文档与源码由同一个 Git 仓库管理。
 
-- 前端：Vite + React + TypeScript + Ant Design
-- 后端：Spring Boot 3 + MyBatis-Plus + MySQL
-- AI：DeepSeek（自然语言增删改查、HTML 课表解析、多轮对话、流式输出）
+## 目录
 
-## 功能特性
-
-- **课表管理**：多课表、周次与单双周、跨节课程、可视化 7×12 网格、冲突提示。
-- **待办事项**：秒级 DDL 倒计时、完成状态标记；考试关联待办在考试结束后自动完成。
-- **循环待办**：每日 / 每周 / 每月规则自动生成；支持用 JavaScript 编写
-  `shouldTrigger(ctx)` 自定义规则（Rhino 沙箱隔离：ClassShutter + 关闭正则与动态代码 + 指令计数 / 栈深 / 内存 / 并发上限）。
-- **考试记录**：直接输入日期与起止时间，课表内以红色块展示，自动生成关联待办，
-  考试结束后自动完成。
-- **AI 助手**：粘贴教务 HTML 自动解析导入；用自然语言增删改课表、待办、考试、循环规则；
-  多轮对话、SSE 流式输出；所有写操作以「提案卡片」形式逐条确认后执行，
-  并有工作空间隔离与提案失效机制防止数据错乱。
-- **体验**：深浅色主题、全局与课表字体缩放、响应式布局（移动端自适应）。
-- **移动端 WebView 承载（附加）**：桌面小组件（iPad / Android）加载只读 `/widget` 展示页，
-  经 RESTful 接口每 60 秒刷新；全屏应用直接打开正常首页，响应式布局适配窄屏、功能完整。
-
-## 技术栈
-
-| 层 | 技术 |
-|----|------|
-| 后端 | Java 17、Spring Boot 3.2、MyBatis-Plus 3.5、MySQL 8 |
-| 认证 | `X-API-Key` 请求头 + 拦截器 |
-| AI | DeepSeek API（JSON Mode + SSE 流式） |
-| 脚本沙箱 | Mozilla Rhino 1.7.14（自定义循环规则） |
-| 前端 | Vite 5、React 18、TypeScript 5、Ant Design 5 |
-
-## 目录结构
-
-```
+```text
 Tangent-Timetable/
-├── backend/                 # Spring Boot 后端
-│   ├── mvnw / .mvn/         # Maven Wrapper（无需另装 Maven）
-│   ├── pom.xml
-│   └── src/main/
-│       ├── java/com/timetable/
-│       │   ├── config/ controller/ dto/ entity/ mapper/
-│       │   ├── service/ service/impl/ interceptor/ exception/
-│       │   └── TimetableApplication.java
-│       └── resources/
-│           ├── application.yml
-│           └── db/schema.sql, db/data.sql
-├── frontend/                # React 前端
-│   └── src/{api,components,pages,store,utils,types}
-├── docs/                    # 项目文档
-│   ├── PRD.md               # 产品需求
-│   ├── ARCHITECTURE.md      # 架构说明
-│   ├── DEPLOYMENT.md        # 部署指南
-│   ├── USER_MANUAL.md       # 用户手册
-│   └── WEBVIEW_WIDGET.md    # WebView 小组件 / 全屏应用
-├── .github/workflows/ci.yml # GitHub Actions CI
-├── AGENTS.md                # 开发指南（含完整接口清单）
-├── README.md / LICENSE / CONTRIBUTING.md
-└── .editorconfig / .env.example / .gitattributes
+├── .git/                           # 独立 Git 对象库，保留上游历史
+├── .github/workflows/ci.yml         # 已适配 src 下的新路径
+├── AGENTS.md                       # 当前项目的开发约定
+├── README.md                       # 项目入口
+├── Tangent-Timetable.code-workspace # 编辑器工作区
+├── docs/
+│   ├── README.md                   # 文档导航
+│   ├── DEVELOPMENT.md              # 当前目录的开发和 Git 操作
+│   ├── WORKSPACE_SETUP.md          # 来源、迁移范围和验证结果
+│   ├── project/                    # 产品、架构、部署、手册等原项目文档
+│   ├── reviews/                    # 项目理解与当前问题清单
+│   └── archive/handoff-2026-09-26/  # 原交付包说明、会话、审查报告、补丁
+└── src/
+    ├── backend/                    # Java / Spring Boot 后端
+    └── frontend/                   # React / TypeScript 前端
 ```
 
-## 快速开始
+## 从哪里开始
 
-### 环境要求
+- [文档导航](docs/README.md)
+- [开发与 Git 使用](docs/DEVELOPMENT.md)
+- [项目理解](docs/reviews/PROJECT_UNDERSTANDING.md)
+- [当前问题清单](docs/reviews/CURRENT_ISSUES.md)
+- [项目建立记录](docs/WORKSPACE_SETUP.md)
 
-JDK 17+、MySQL 8、Node.js 18+。Maven 由项目自带的 `./mvnw` 提供。
+## Git 基线
 
-### 1. 启动后端
+- 日常主分支：`main`。
+- 原版标签：`baseline/upstream-57313b1`。
+- 修复版标签：`baseline/fixed-32de25c`。
+- 工作区建立标签：`workspace/initial-2026-09-26`。
 
-```bash
-cd backend
+原版和修复版可直接用标签比较，无需在日常目录内保存两套源码。历史提交仍使用原目录名 `backend/`、`frontend/`；工作区建立提交将它们迁入 `src/`。
 
-# 数据库密码（默认回退为 root，可用环境变量覆盖）
-export TANGENT_COMMON_PASSWORD=你的数据库密码
+新仓库仅建立本地版本管理，没有配置远程，也没有推送或部署。原交付目录保持原状。
 
-# 可选：配置后才启用 AI 功能
-export DEEPSEEK_API_KEY=sk-xxx
+## 本轮范围
 
-./mvnw spring-boot:run
-```
+本轮完成项目归档、目录分离、CI 路径调整和 Git 基线建立。业务源码、依赖锁文件、数据库脚本内容保持修复版基线；已知问题列在 reviews 中，尚未在本轮修复。
 
-默认连接 `jdbc:mysql://localhost:3306/timetable`（不存在会自动建库），
-首次启动自动执行 `db/schema.sql` 与 `db/data.sql` 建表并写入作息时间种子数据。
-
-**账号**：应用没有注册页，账号就是 `api_key` 表里的一行。仓库不再内置演示 Key
-（公开仓库里的固定 Key 等于公开凭据）：`api_key` 表为空时，启动过程会自动创建首个账号，
-并把生成的 Key **只打印一次**到日志；也可以用下面的变量指定。
-
-```bash
-# 想让首个账号用你指定的 Key，就在启动前设置（不设则随机生成并打印到日志）
-export TANGENT_BOOTSTRAP_KEY=your-custom-key
-```
-
-后续新增账号见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)（`INSERT INTO api_key ...`）。
-
-### 2. 启动前端
-
-```bash
-cd frontend
-npm install
-npm run dev        # http://localhost:5173，/api 已代理到 :8080
-```
-
-浏览器打开后，在登录页输入上面那个 API Key 即可进入。
-
-> 更多开发命令、代码约定与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-## 配置
-
-| 环境变量 | 说明 | 默认值 |
-|----------|------|--------|
-| `TANGENT_COMMON_PASSWORD` | MySQL 密码 | `root` |
-| `DEEPSEEK_API_KEY` | DeepSeek 密钥；不配置则 AI 功能禁用 | 空 |
-| `DEEPSEEK_BASE_URL` | DeepSeek 接口地址 | `https://api.deepseek.com` |
-| `DEEPSEEK_MODEL` | 模型名（`deepseek-flash` = DeepSeek-V4.1-Flash） | `deepseek-flash` |
-| `CORS_ALLOWED_ORIGINS` | 允许跨域的来源（逗号分隔） | `*` |
-| `ADMIN_LABELS` | 可编辑全局作息表的账号 label（逗号分隔） | `Tangent0712` |
-| `TANGENT_BOOTSTRAP_KEY` | 首次启动且 `api_key` 表为空时，用它创建首个账号 | 空（随机生成并打印） |
-| `VITE_API_BASE`（前端） | 前端 API 基地址 | `/api` |
-| `VITE_ADMIN_LABELS`（前端） | 前端 UI 管理员判断（仅 UI，后端以 `ADMIN_LABELS` 为准） | `Tangent0712` |
-
-更多示例见根目录 `.env.example` 与 `frontend/.env.example`。**请勿提交任何真实密钥。**
-
-## API 概览
-
-所有接口（除 `/api/auth/verify` 与只读的 `/api/widget/**`）需携带请求头
-`X-API-Key: <your-key>`。统一响应格式：
-
-```json
-{ "code": 200, "message": "success", "data": {} }
-```
-
-| 分组 | 代表接口 |
-|------|----------|
-| 认证 | `GET /api/auth/verify` |
-| 课表 | `GET/POST /api/schedules`、`GET /api/schedules/{id}/courses` |
-| 课程 | `POST /api/schedules/{id}/courses`、`PUT/DELETE /api/courses/{id}` |
-| 待办 | `GET/POST /api/todos`、`PUT /api/todos/{id}/toggle` |
-| 循环待办 | `GET/POST /api/recurring-todos`、`POST /api/recurring-todos/{id}/trigger` |
-| 考试 | `GET/POST /api/schedules/{id}/exams`、`PUT/DELETE /api/exams/{id}` |
-| 作息 | `GET/PUT /api/period-config`（PUT 仅管理员） |
-| AI | `POST /api/ai/conversations/{id}/messages/stream`、`POST /api/ai/parse-html` |
-| 小组件 | `GET /api/widget/overview?scheduleId=`（需 `X-API-Key` 请求头） |
-
-完整接口清单与实现细节见 `AGENTS.md`，整体架构见 `docs/ARCHITECTURE.md`。
-
-## 相关文档
-
-- 产品需求：[docs/PRD.md](docs/PRD.md)
-- 架构说明：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- 部署指南：[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- 用户手册：[docs/USER_MANUAL.md](docs/USER_MANUAL.md)
-- WebView 小组件 / 全屏应用：[docs/WEBVIEW_WIDGET.md](docs/WEBVIEW_WIDGET.md)
-- 开发指南（含完整接口清单）：[AGENTS.md](AGENTS.md)
-- 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
-
-## License
-
-[MIT](LICENSE) © 2026 Tangent0712
+启动命令请使用 [DEVELOPMENT.md](docs/DEVELOPMENT.md)。`docs/project` 中保留了原项目文档的原始内容和路径示例，阅读时注意文档顶部的迁移说明。

@@ -4,6 +4,12 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 
+# Preserve the upstream CRLF blob without normalization-induced dirty status.
+src/backend/mvnw.cmd -text
+
+# Historical handoff files are retained byte-for-byte, including patch context.
+docs/archive/** -text
+
 # Shell / 包装脚本强制 LF
 *.sh text eol=lf
 mvnw text eol=lf
