@@ -1,0 +1,33 @@
+# 桌面/单机版配置（profile: standalone）
+#
+# 特点：不依赖外部 MySQL —— 用 H2 文件库，数据落在用户目录下；前端构建产物由本服务直接提供。
+# 启动方式见打包产物中的启动器，或：
+#   java -jar timetable-backend-1.0.0.jar --spring.profiles.active=standalone
+
+spring:
+  datasource:
+    # H2 文件库。~ 由 H2 展开为 user.home；启动器会传入 %LOCALAPPDATA% 下的绝对路径（正斜杠）。
+    # AUTO_SERVER 允许多个连接共享同一库，避免上次异常退出后残留锁文件导致「Database may be already in use」。
+    url: jdbc:h2:file:${app.data-dir}/timetable;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      # H2 与 MySQL 的三处语义差异见 schema-h2.sql 头部说明
+      schema-locations: classpath:db/schema-h2.sql
+      data-locations: classpath:db/data.sql
+
+# 本机专用端口：避开常见的 8080，减少与其它软件冲突的概率
+server:
+  port: ${TANGENT_PORT:17817}
+
+app:
+  # 数据目录（H2 库文件与本地设置都放这里）
+  data-dir: ${TANGENT_DATA_DIR:~/.tangent-timetable}
+  # 桌面版首次启动不写死任何账号，由 ApiKeyBootstrap 生成随机 Key 并打印
+
+logging:
+  file:
+    name: ${app.data-dir}/logs/timetable.log

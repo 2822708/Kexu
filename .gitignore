@@ -29,3 +29,7 @@ docs/CREDENTIALS.md
 
 # 内部整改文档（不对外发布）
 docs/OPEN_SOURCE_PREP.md
+
+# 桌面版构建产物（由 desktop/build-desktop.ps1 生成，体积大且可再生）
+desktop/app-image/
+

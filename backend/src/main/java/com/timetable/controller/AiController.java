@@ -10,6 +10,7 @@ import com.timetable.entity.AiConversation;
 import com.timetable.exception.BusinessException;
 import com.timetable.interceptor.RequestContext;
 import com.timetable.service.AiService;
+import com.timetable.service.impl.DeepSeekKeyStore;
 import jakarta.annotation.PreDestroy;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -40,6 +41,7 @@ public class AiController {
     private static final AtomicInteger STREAM_THREAD_SEQ = new AtomicInteger();
 
     private final AiService aiService;
+    private final DeepSeekKeyStore keyStore;
 
     /**
      * 流式任务执行器。
@@ -51,10 +53,11 @@ public class AiController {
      */
     private final ExecutorService streamExecutor;
 
-    public AiController(AiService aiService,
+    public AiController(AiService aiService, DeepSeekKeyStore keyStore,
                         @Value("${app.ai.stream.max-concurrency:16}") int maxConcurrency,
                         @Value("${app.ai.stream.queue-capacity:64}") int queueCapacity) {
         this.aiService = aiService;
+        this.keyStore = keyStore;
         int concurrency = Math.max(1, maxConcurrency);
         ThreadPoolExecutor executor = new ThreadPoolExecutor(
                 concurrency, concurrency, 60L, TimeUnit.SECONDS,
@@ -79,6 +82,48 @@ public class AiController {
         Map<String, Object> data = new HashMap<>();
         data.put("enabled", aiService.isEnabled());
         return ApiResponse.success(data);
+    }
+
+    /**
+     * 读取 AI 配置。只返回掩码后的 Key，绝不回显完整 Key。
+     */
+    @GetMapping("/config")
+    public ApiResponse<Map<String, Object>> getConfig() {
+        return ApiResponse.success(configPayload());
+    }
+
+    /**
+     * 保存 DeepSeek Key 到本机数据目录（桌面版由用户在设置页填写）。
+     * 服务器部署仍可只用环境变量，两者互不影响。
+     */
+    @PutMapping("/config")
+    public ApiResponse<Map<String, Object>> saveConfig(@RequestBody(required = false) Map<String, String> body) {
+        String key = body == null ? null : body.get("key");
+        if (key == null || key.isBlank()) {
+            throw new BusinessException(400, "API Key 不能为空");
+        }
+        if (key.trim().length() < 8 || key.trim().length() > 200) {
+            throw new BusinessException(400, "API Key 长度不合法");
+        }
+        keyStore.save(key.trim());
+        log.info("DeepSeek API key updated from the settings page (source=local)");
+        return ApiResponse.success(configPayload());
+    }
+
+    /** 清除本机保存的 Key（回退到环境变量/配置文件） */
+    @DeleteMapping("/config")
+    public ApiResponse<Map<String, Object>> clearConfig() {
+        keyStore.clear();
+        log.info("DeepSeek API key cleared from local settings");
+        return ApiResponse.success(configPayload());
+    }
+
+    private Map<String, Object> configPayload() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("configured", keyStore.isConfigured());
+        data.put("source", keyStore.source());
+        data.put("keyMasked", keyStore.masked());
+        return data;
     }
 
     @GetMapping("/conversations")

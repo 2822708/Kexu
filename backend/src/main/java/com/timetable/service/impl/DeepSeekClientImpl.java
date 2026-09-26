@@ -27,11 +27,14 @@ public class DeepSeekClientImpl implements DeepSeekClient {
     private static final Logger log = LoggerFactory.getLogger(DeepSeekClientImpl.class);
 
     private final DeepSeekProperties properties;
+    private final DeepSeekKeyStore keyStore;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-    public DeepSeekClientImpl(DeepSeekProperties properties, ObjectMapper objectMapper) {
+    public DeepSeekClientImpl(DeepSeekProperties properties, DeepSeekKeyStore keyStore,
+                              ObjectMapper objectMapper) {
         this.properties = properties;
+        this.keyStore = keyStore;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(15))
@@ -40,8 +43,7 @@ public class DeepSeekClientImpl implements DeepSeekClient {
 
     @Override
     public boolean isConfigured() {
-        String key = properties.getKey();
-        return key != null && !key.isBlank() && !"your-deepseek-api-key".equals(key);
+        return keyStore.isConfigured();
     }
 
     @Override
@@ -97,7 +99,7 @@ public class DeepSeekClientImpl implements DeepSeekClient {
                     .uri(URI.create(properties.getBaseUrl() + "/chat/completions"))
                     .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
                     .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + properties.getKey())
+                    .header("Authorization", "Bearer " + keyStore.effectiveKey())
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body), StandardCharsets.UTF_8))
                     .build();
 

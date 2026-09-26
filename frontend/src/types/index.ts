@@ -149,6 +149,14 @@ export interface AiConversation {
   updatedAt?: string
 }
 
+/** AI（DeepSeek）配置状态。后端只返回掩码后的 Key，绝不返回完整 Key。 */
+export interface AiConfig {
+  configured: boolean
+  /** 取值来源：local（界面填入）/ config（环境变量或配置文件）/ none */
+  source: 'local' | 'config' | 'none'
+  keyMasked: string
+}
+
 export interface ParsedCourse {
   name: string | null
   location: string | null
