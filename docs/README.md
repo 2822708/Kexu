@@ -10,6 +10,7 @@
 | [releases/windows-2026-09-26.json](releases/windows-2026-09-26.json) | 纳入的桌面成品逐文件 SHA-256 清单 |
 | [reviews/PROJECT_UNDERSTANDING.md](reviews/PROJECT_UNDERSTANDING.md) | 项目结构、数据关系、AI 和循环机制 |
 | [reviews/CURRENT_ISSUES.md](reviews/CURRENT_ISSUES.md) | 当前仍需处理的问题和验证边界 |
+| [reviews/OPTIMIZATION_PROPOSAL.md](reviews/OPTIMIZATION_PROPOSAL.md) | 工程架构分析、缺陷风险和分阶段优化方案 |
 
 ## 原项目资料
 
