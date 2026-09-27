@@ -48,13 +48,13 @@ interface FormValues {
 
 const TIME_FORMAT = 'HH:mm'
 const DEFAULT_SCRIPT = `// 返回 true 表示此刻应该触发，生成一条待办
-// 系统每分钟检查一次；同一分钟内只会触发一次
+// 系统按分钟检查，延迟时最多补查最近 10 分钟；同一分钟只触发一次
 function shouldTrigger(ctx) {
   // 可用字段：
   //   ctx.year / ctx.month / ctx.day
   //   ctx.dayOfWeek        1=周一 ... 7=周日
   //   ctx.hour / ctx.minute
-  //   ctx.weekOfYear       ISO 周序号
+  //   ctx.weekOfYear       ISO 周序号（不是学期教学周）
   //   ctx.dayOfYear / ctx.daysInMonth
   //   ctx.isLastDayOfMonth / ctx.isWeekend
   //   ctx.daysSinceLastTrigger   距上次触发天数（从未触发为 -1）
@@ -291,8 +291,9 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
             extra={
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 用 JavaScript 编写 <code>shouldTrigger(ctx)</code> 函数，返回 <code>true</code>{' '}
-                表示此刻触发。系统每分钟执行一次，只能用纯 JS， 不能访问 Java /
-                IO。下方「测试脚本」可校验语法并查看此刻是否会触发。
+                表示触发。系统使用上海时间，延迟或重启时最多补查最近 10 分钟。
+                weekOfYear 是 ISO 年内周数，不是学期教学周。只能用纯 JS，不能访问 Java / IO。
+                下方「测试脚本」可校验语法并查看此刻是否会触发。
               </Typography.Text>
             }
           >

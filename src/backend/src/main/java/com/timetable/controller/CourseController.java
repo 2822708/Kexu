@@ -29,7 +29,7 @@ public class CourseController {
     public ApiResponse<Course> create(@PathVariable Long scheduleId, @Valid @RequestBody CourseRequest request) {
         String apiKey = RequestContext.getApiKey();
         Course course = courseService.create(scheduleId, request, apiKey);
-        aiService.invalidateProposalsOnDataChange(apiKey, AiServiceImpl.SCOPE_COURSE);
+        aiService.invalidateProposalsOnDataChange(apiKey, AiServiceImpl.SCOPE_COURSE, scheduleId);
         return ApiResponse.success(course);
     }
 
@@ -37,7 +37,7 @@ public class CourseController {
     public ApiResponse<List<Course>> batchCreate(@PathVariable Long scheduleId, @Valid @RequestBody BatchCourseRequest request) {
         String apiKey = RequestContext.getApiKey();
         List<Course> courses = courseService.batchCreate(scheduleId, request, apiKey);
-        aiService.invalidateProposalsOnDataChange(apiKey, AiServiceImpl.SCOPE_COURSE);
+        aiService.invalidateProposalsOnDataChange(apiKey, AiServiceImpl.SCOPE_COURSE, scheduleId);
         return ApiResponse.success(courses);
     }
 
@@ -45,15 +45,16 @@ public class CourseController {
     public ApiResponse<Course> update(@PathVariable Long id, @Valid @RequestBody CourseRequest request) {
         String apiKey = RequestContext.getApiKey();
         Course course = courseService.update(id, request, apiKey);
-        aiService.invalidateProposalsOnDataChange(apiKey, AiServiceImpl.SCOPE_COURSE);
+        aiService.invalidateProposalsOnDataChange(apiKey, AiServiceImpl.SCOPE_COURSE, course.getScheduleId());
         return ApiResponse.success(course);
     }
 
     @DeleteMapping("/courses/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         String apiKey = RequestContext.getApiKey();
+        Long scheduleId = courseService.getScheduleId(id, apiKey);
         courseService.delete(id, apiKey);
-        aiService.invalidateProposalsOnDataChange(apiKey, AiServiceImpl.SCOPE_COURSE);
+        aiService.invalidateProposalsOnDataChange(apiKey, AiServiceImpl.SCOPE_COURSE, scheduleId);
         return ApiResponse.success(null);
     }
 }

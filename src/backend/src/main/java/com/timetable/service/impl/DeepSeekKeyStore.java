@@ -2,6 +2,7 @@ package com.timetable.service.impl;
 
 import com.timetable.config.DeepSeekProperties;
 import com.timetable.config.LocalSettings;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,15 +23,18 @@ public class DeepSeekKeyStore {
 
     private final DeepSeekProperties properties;
     private final LocalSettings settings;
+    private final boolean localSettingsEnabled;
 
-    public DeepSeekKeyStore(DeepSeekProperties properties, LocalSettings settings) {
+    public DeepSeekKeyStore(DeepSeekProperties properties, LocalSettings settings,
+                            @Value("${app.security.allow-local-ai-key-settings:false}") boolean localSettingsEnabled) {
         this.properties = properties;
         this.settings = settings;
+        this.localSettingsEnabled = localSettingsEnabled;
     }
 
     /** 当前生效的 Key（可能为空字符串） */
     public String effectiveKey() {
-        String local = settings.get(SETTING_KEY);
+        String local = localSettingsEnabled ? settings.get(SETTING_KEY) : null;
         if (local != null && !local.isBlank()) {
             return local.trim();
         }
@@ -45,7 +49,7 @@ public class DeepSeekKeyStore {
 
     /** 取值来源：{@code local}（界面填入）/ {@code config}（环境变量或配置文件）/ {@code none} */
     public String source() {
-        String local = settings.get(SETTING_KEY);
+        String local = localSettingsEnabled ? settings.get(SETTING_KEY) : null;
         if (local != null && !local.isBlank()) {
             return "local";
         }
@@ -66,10 +70,16 @@ public class DeepSeekKeyStore {
     }
 
     public void save(String key) {
+        if (!localSettingsEnabled) {
+            throw new IllegalStateException("Server-side AI keys are managed by deployment configuration");
+        }
         settings.set(SETTING_KEY, key);
     }
 
     public void clear() {
+        if (!localSettingsEnabled) {
+            throw new IllegalStateException("Server-side AI keys are managed by deployment configuration");
+        }
         settings.set(SETTING_KEY, null);
     }
 }

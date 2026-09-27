@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.List;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
@@ -21,10 +23,12 @@ public class RecurringTodoController {
 
     private final RecurringTodoService recurringTodoService;
     private final AiService aiService;
+    private final Clock clock;
 
-    public RecurringTodoController(RecurringTodoService recurringTodoService, AiService aiService) {
+    public RecurringTodoController(RecurringTodoService recurringTodoService, AiService aiService, Clock clock) {
         this.recurringTodoService = recurringTodoService;
         this.aiService = aiService;
+        this.clock = clock;
     }
 
     @GetMapping
@@ -72,7 +76,7 @@ public class RecurringTodoController {
         data.put("template", RecurringScriptEvaluator.SCRIPT_TEMPLATE);
         data.put("maxLength", RecurringScriptEvaluator.MAX_SCRIPT_LENGTH);
         data.put("context", RecurringScriptEvaluator.buildContext(
-                java.time.LocalDateTime.now(), null));
+                LocalDateTime.now(clock), null));
         return ApiResponse.success(data);
     }
 

@@ -7,11 +7,15 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.timetable.config.DeepSeekProperties;
 import com.timetable.exception.BusinessException;
 import com.timetable.service.DeepSeekClient;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,16 +24,30 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 
 @Service
 public class DeepSeekClientImpl implements DeepSeekClient {
 
     private static final Logger log = LoggerFactory.getLogger(DeepSeekClientImpl.class);
+    private static final int MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
     private final DeepSeekProperties properties;
     private final DeepSeekKeyStore keyStore;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final ScheduledExecutorService requestWatchdog = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread = new Thread(r, "deepseek-request-watchdog");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     public DeepSeekClientImpl(DeepSeekProperties properties, DeepSeekKeyStore keyStore,
                               ObjectMapper objectMapper) {
@@ -44,6 +62,11 @@ public class DeepSeekClientImpl implements DeepSeekClient {
     @Override
     public boolean isConfigured() {
         return keyStore.isConfigured();
+    }
+
+    @PreDestroy
+    public void shutdownWatchdog() {
+        requestWatchdog.shutdownNow();
     }
 
     @Override
@@ -70,7 +93,18 @@ public class DeepSeekClientImpl implements DeepSeekClient {
         for (Message m : messages) {
             ObjectNode node = arr.addObject();
             node.put("role", m.getRole());
-            node.put("content", m.getContent());
+            if (m.getImageDataUrl() == null) {
+                node.put("content", m.getContent());
+            } else {
+                if (!"user".equals(m.getRole())) {
+                    throw new IllegalArgumentException("Image input is only allowed in user messages");
+                }
+                ArrayNode parts = node.putArray("content");
+                parts.addObject().put("type", "text").put("text", m.getContent());
+                ObjectNode image = parts.addObject().put("type", "image_url").putObject("image_url");
+                image.put("url", m.getImageDataUrl());
+                image.put("detail", "high");
+            }
         }
         body.putObject("response_format").put("type", "json_object");
         body.put("max_tokens", properties.getMaxTokens());
@@ -84,7 +118,7 @@ public class DeepSeekClientImpl implements DeepSeekClient {
     }
 
     private String execute(List<Message> messages, StreamListener listener,
-                           java.util.function.BooleanSupplier cancelled) {
+                           BooleanSupplier cancelled) {
         if (!isConfigured()) {
             throw new BusinessException(503, "未配置 DeepSeek API Key，AI 功能不可用");
         }
@@ -96,44 +130,86 @@ public class DeepSeekClientImpl implements DeepSeekClient {
                 throw new BusinessException(499, "客户端已断开，未发起 AI 请求");
             }
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(properties.getBaseUrl() + "/chat/completions"))
-                    .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
+                    .uri(URI.create(properties.getBaseUrl().replaceAll("/+$", "") + "/chat/completions"))
+                    .timeout(Duration.ofSeconds(Math.max(1, properties.getTimeoutSeconds())))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + keyStore.effectiveKey())
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body), StandardCharsets.UTF_8))
                     .build();
 
-            if (!stream) {
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    log.error("DeepSeek API error {}: {}", response.statusCode(), response.body());
-                    throw new BusinessException(502, "AI 服务调用失败: HTTP " + response.statusCode());
+            CompletableFuture<HttpResponse<InputStream>> pending =
+                    httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream());
+            try (CallGuard guard = new CallGuard(pending, cancelled,
+                    Math.max(1, properties.getTimeoutSeconds()),
+                    Math.max(1, properties.getIdleTimeoutSeconds()))) {
+                try {
+                    HttpResponse<InputStream> response = guard.awaitResponse();
+                    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                        try (InputStream errorBody = guard.boundedBody()) {
+                            errorBody.readNBytes(4096);
+                        }
+                        log.warn("DeepSeek API returned HTTP {}", response.statusCode());
+                        throw new BusinessException(502, "AI 服务调用失败: HTTP " + response.statusCode());
+                    }
+                    String result = stream
+                            ? readStream(guard, listener)
+                            : readJsonResponse(guard);
+                    guard.check();
+                    return result;
+                } catch (Exception failure) {
+                    guard.check();
+                    throw failure;
                 }
-                JsonNode root = objectMapper.readTree(response.body());
-                JsonNode content = root.path("choices").path(0).path("message").path("content");
-                if (content.isMissingNode() || content.isNull()) {
-                    throw new BusinessException(502, "AI 服务返回内容为空");
-                }
-                return content.asText();
             }
+        } catch (BusinessException e) {
+            throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(502, "AI 服务调用被中断");
+        } catch (ExecutionException e) {
+            log.warn("DeepSeek API request failed: {}", e.getCause().getClass().getSimpleName());
+            throw new BusinessException(502, "AI 服务调用失败，请重试");
+        } catch (Exception e) {
+            log.warn("DeepSeek API request failed: {}", e.getClass().getSimpleName());
+            throw new BusinessException(502, "AI 服务调用失败，请重试");
+        }
+    }
 
-            HttpResponse<java.io.InputStream> response =
-                    httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new BusinessException(502, "AI 服务调用失败: HTTP " + response.statusCode());
-            }
+    private String readJsonResponse(CallGuard guard) throws IOException {
+        byte[] body;
+        try (InputStream stream = guard.boundedBody()) {
+            body = stream.readAllBytes();
+        }
+        guard.check();
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(body);
+        } catch (Exception malformed) {
+            throw new BusinessException(502, "AI 服务返回内容格式有误");
+        }
+        JsonNode choice = root.path("choices").path(0);
+        String finishReason = choice.path("finish_reason").asText();
+        if ("length".equals(finishReason)) {
+            throw new BusinessException(502, "AI 回复达到长度上限，未保存不完整的操作建议");
+        }
+        if (!"stop".equals(finishReason)) {
+            throw new BusinessException(502, "AI 回复未正常结束，回复未保存");
+        }
+        JsonNode content = choice.path("message").path("content");
+        if (!content.isTextual() || content.asText().isBlank()) {
+            throw new BusinessException(502, "AI 服务返回内容为空");
+        }
+        return content.asText();
+    }
 
+    private String readStream(CallGuard guard, StreamListener listener) throws IOException {
             StringBuilder full = new StringBuilder();
             String finishReason = null;
             try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+                    new InputStreamReader(guard.boundedBody(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    // 每个数据块前检查一次：客户端断开后立即退出循环，
-                    // try-with-resources 会关闭响应流，从而中断上游请求并释放连接
-                    if (cancelled.getAsBoolean()) {
-                        throw new BusinessException(499, "客户端已断开，已停止本次流式请求");
-                    }
+                    guard.check();
                     if (!line.startsWith("data:")) {
                         continue;
                     }
@@ -145,7 +221,7 @@ public class DeepSeekClientImpl implements DeepSeekClient {
                     try {
                         chunk = objectMapper.readTree(payload);
                     } catch (Exception e) {
-                        continue;
+                        throw new BusinessException(502, "AI 流式数据格式有误，回复未保存");
                     }
                     JsonNode choice = chunk.path("choices").path(0);
                     JsonNode delta = choice.path("delta");
@@ -163,23 +239,113 @@ public class DeepSeekClientImpl implements DeepSeekClient {
                     }
                 }
             }
+            guard.check();
+            if ("length".equals(finishReason)) {
+                throw new BusinessException(502,
+                        "AI 回复达到长度上限，未保存不完整的操作建议，请缩小请求范围后重试");
+            }
             if (full.length() == 0) {
                 log.error("DeepSeek returned no content, finish_reason={}", finishReason);
-                if ("length".equals(finishReason)) {
-                    throw new BusinessException(502,
-                            "AI 思考过长导致未能给出结论，请把指令拆分得更简单一些再试");
-                }
                 throw new BusinessException(502, "AI 服务返回内容为空，请重试");
             }
+            if (!"stop".equals(finishReason)) {
+                throw new BusinessException(502, "AI 流式回复未正常结束，回复未保存");
+            }
             return full.toString();
-        } catch (BusinessException e) {
-            throw e;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(502, "AI 服务调用被中断");
-        } catch (Exception e) {
-            log.error("DeepSeek API request failed", e);
-            throw new BusinessException(502, "AI 服务调用失败: " + e.getMessage());
+    }
+
+    /** The async response is closed even while the caller is blocked inside readLine(). */
+    private final class CallGuard implements AutoCloseable {
+        private final CompletableFuture<HttpResponse<InputStream>> pending;
+        private final BooleanSupplier cancelled;
+        private final long startedAt = System.nanoTime();
+        private final long totalNanos;
+        private final long idleNanos;
+        private final AtomicReference<BusinessException> aborted = new AtomicReference<>();
+        private final AtomicReference<InputStream> body = new AtomicReference<>();
+        private final ScheduledFuture<?> watcher;
+        private volatile long lastReadAt = 0;
+
+        private CallGuard(CompletableFuture<HttpResponse<InputStream>> pending, BooleanSupplier cancelled,
+                          int totalSeconds, int idleSeconds) {
+            this.pending = pending;
+            this.cancelled = cancelled;
+            this.totalNanos = TimeUnit.SECONDS.toNanos(totalSeconds);
+            this.idleNanos = TimeUnit.SECONDS.toNanos(idleSeconds);
+            this.watcher = requestWatchdog.scheduleAtFixedRate(this::checkTimeouts,
+                    100, 100, TimeUnit.MILLISECONDS);
+        }
+
+        private void checkTimeouts() {
+            long now = System.nanoTime();
+            if (cancelled.getAsBoolean()) {
+                abort(new BusinessException(499, "客户端已断开，已停止本次请求"));
+            } else if (now - startedAt > totalNanos) {
+                abort(new BusinessException(504, "AI 请求超时，请缩小范围后重试"));
+            } else if (lastReadAt != 0 && now - lastReadAt > idleNanos) {
+                abort(new BusinessException(504, "AI 长时间没有返回数据，请重试"));
+            }
+        }
+
+        private void abort(BusinessException reason) {
+            if (aborted.compareAndSet(null, reason)) {
+                pending.cancel(true);
+                InputStream current = body.get();
+                if (current != null) {
+                    try { current.close(); } catch (IOException ignored) { /* already cancelled */ }
+                }
+            }
+        }
+
+        private HttpResponse<InputStream> awaitResponse() throws InterruptedException, ExecutionException {
+            HttpResponse<InputStream> response = pending.get();
+            body.set(response.body());
+            lastReadAt = System.nanoTime();
+            check();
+            return response;
+        }
+
+        private InputStream boundedBody() {
+            InputStream current = body.get();
+            if (current == null) throw new IllegalStateException("AI response body unavailable");
+            return new FilterInputStream(current) {
+                private int bytes;
+                @Override public int read() throws IOException {
+                    int value = super.read();
+                    if (value != -1) { record(1); }
+                    return value;
+                }
+                @Override public int read(byte[] buffer, int offset, int length) throws IOException {
+                    int count = super.read(buffer, offset, length);
+                    if (count > 0) { record(count); }
+                    return count;
+                }
+                private void record(int count) throws IOException {
+                    bytes += count;
+                    lastReadAt = System.nanoTime();
+                    if (bytes > MAX_RESPONSE_BYTES) {
+                        throw new IOException("AI response exceeds size limit");
+                    }
+                }
+            };
+        }
+
+        private void check() {
+            BusinessException reason = aborted.get();
+            if (reason != null) throw reason;
+            if (cancelled.getAsBoolean()) {
+                abort(new BusinessException(499, "客户端已断开，已停止本次请求"));
+                throw aborted.get();
+            }
+        }
+
+        @Override public void close() {
+            watcher.cancel(false);
+            pending.cancel(true);
+            InputStream current = body.getAndSet(null);
+            if (current != null) {
+                try { current.close(); } catch (IOException ignored) { /* connection already closed */ }
+            }
         }
     }
 }

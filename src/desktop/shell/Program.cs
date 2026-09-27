@@ -7,9 +7,8 @@
 //   4. 用 WebView2 打开界面（无地址栏，就是桌面应用的样子）
 //   5. 关窗时结束后端进程；并用 Job Object 保证外壳异常退出时子进程也被系统回收
 //
-// 为什么外壳要管账号：应用本身没有注册页，账号是 api_key 表里的一行，服务端在表为空时
-// 会随机生成并只打印到日志 —— 桌面用户看不到日志。所以外壳自己生成 Key、持久化、并注入
-// WebView 的 localStorage 实现自动登录；首次运行时把 Key 显示出来，便于在其它设备使用。
+// 外壳生成并用当前 Windows 用户的 DPAPI 保护本机凭据，通过子进程环境交给后端。
+// 自动登录仅在已确认归属于该后端的精确 loopback origin 顶层文档中执行。
 //
 // 编译：csc /target:winexe /platform:x64（见 build-desktop.ps1）
 // 注意：本文件必须保持 C# 5 语法 —— 只能用 .NET Framework 自带的 csc（它不认 C# 6+）。
@@ -23,6 +22,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Net.Sockets;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -72,8 +72,17 @@ namespace TangentTimetable
         }
 
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
+            string isolatedDataDir = null;
+            bool smokeTest = false;
+            foreach (string arg in args)
+            {
+                if (arg.StartsWith("--data-dir=", StringComparison.Ordinal)) isolatedDataDir = Path.GetFullPath(arg.Substring(11));
+                else if (arg == "--smoke-test") smokeTest = true;
+                else throw new ArgumentException("Unknown desktop argument");
+            }
+            if (smokeTest && isolatedDataDir == null) throw new ArgumentException("Smoke tests require --data-dir");
             EnableDpiAwareness();
             bool createdNew;
             using (Mutex mutex = new Mutex(true, MutexName, out createdNew))
@@ -86,7 +95,7 @@ namespace TangentTimetable
                 }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm());
+                Application.Run(new MainForm(isolatedDataDir, smokeTest));
                 GC.KeepAlive(mutex);
             }
         }
@@ -96,16 +105,20 @@ namespace TangentTimetable
     {
         private readonly WebView2 webView = new WebView2();
         private readonly string dataDir;
-        private string keyFile;
+        private readonly bool smokeTest;
+        private readonly System.Windows.Forms.Timer trustMonitor = new System.Windows.Forms.Timer();
+        private bool closing;
         private string accountKey;
         private bool freshAccount;
         private Process backend;
         private bool ownsBackend;
         private JobObject job;
 
-        internal MainForm()
+        internal MainForm(string isolatedDataDir, bool smokeTest)
         {
+            this.smokeTest = smokeTest;
             this.Text = "大切课程表";
+            if (smokeTest) { this.ShowInTaskbar = false; this.Opacity = 0; }
 
             // 窗口内容只有一个 Dock 填充的 WebView2，不需要 WinForms 自动缩放布局；
             // 尺寸在 OnLoad 里按窗口实际 DPI 换算，避免与 AutoScaleMode 重复缩放。
@@ -115,7 +128,7 @@ namespace TangentTimetable
             this.webView.Dock = DockStyle.Fill;
             this.Controls.Add(this.webView);
 
-            this.dataDir = Path.Combine(
+            this.dataDir = isolatedDataDir ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "TangentTimetable");
         }
@@ -161,14 +174,14 @@ namespace TangentTimetable
             try
             {
                 Directory.CreateDirectory(dataDir);
+                if (File.Exists(Path.Combine(dataDir, ".restore-in-progress")))
+                    throw new InvalidOperationException("本机数据正在恢复或上次恢复尚未完成。请完成恢复工具的操作后再启动课程表；不要直接删除恢复标记。");
                 EnsureAccountKey();
                 StartBackendIfNeeded();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "大切课程表 - 启动失败",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                Close();
+                ReportFailure(ex);
                 return;
             }
             InitWebView();
@@ -181,42 +194,13 @@ namespace TangentTimetable
         /// </summary>
         private void EnsureAccountKey()
         {
-            keyFile = Path.Combine(dataDir, "desktop-key.txt");
-            if (File.Exists(keyFile))
-            {
-                accountKey = File.ReadAllText(keyFile).Trim();
-            }
-            if (accountKey == null || accountKey.Length == 0)
-            {
-                accountKey = GenerateKey();
-                freshAccount = true;
-                File.WriteAllText(keyFile, accountKey);
-            }
+            accountKey = AccountKeyStore.LoadOrCreate(dataDir, out freshAccount);
         }
 
-        private static string GenerateKey()
-        {
-            byte[] bytes = new byte[32];
-            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
-            {
-                rng.GetBytes(bytes);
-            }
-            StringBuilder sb = new StringBuilder(64);
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                sb.Append(bytes[i].ToString("x2"));
-            }
-            return sb.ToString();
-        }
-
-        /// <summary>端口上已有服务就直接复用；否则启动内置后端并等它就绪。</summary>
+        /// <summary>拒绝复用未知本机服务；桌面外壳只连接自己启动的后端。</summary>
         private void StartBackendIfNeeded()
         {
-            if (IsServerUp())
-            {
-                ownsBackend = false;
-                return;
-            }
+            DesktopSecurity.EnsurePortAvailable(Program.Port);
 
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string java = Path.Combine(baseDir, Path.Combine("runtime", Path.Combine("bin", "javaw.exe")));
@@ -231,13 +215,16 @@ namespace TangentTimetable
             string args = "-jar \"" + jar + "\""
                 + " --spring.profiles.active=standalone"
                 + " --app.data-dir=\"" + dataDir.Replace('\\', '/') + "\""
-                + " --app.bootstrap-key=" + accountKey
+                + " --server.address=127.0.0.1"
                 + " --server.port=" + Program.Port;
 
             ProcessStartInfo psi = new ProcessStartInfo(java, args);
             psi.UseShellExecute = false;
             psi.CreateNoWindow = true;
             psi.WorkingDirectory = baseDir;
+            // 环境变量避免把 API Key 暴露在 Java 进程命令行和进程列表中。
+            psi.EnvironmentVariables["TANGENT_BOOTSTRAP_KEY"] = accountKey;
+            psi.EnvironmentVariables["TANGENT_SETTINGS_ENCRYPTION_KEY"] = accountKey;
 
             backend = Process.Start(psi);
             ownsBackend = true;
@@ -246,6 +233,23 @@ namespace TangentTimetable
             job.AddProcess(backend.Handle);
 
             WaitForServer();
+            trustMonitor.Interval = 500;
+            trustMonitor.Tick += delegate
+            {
+                if (!closing && !HasOwnedBackend())
+                {
+                    if (webView.CoreWebView2 != null) webView.CoreWebView2.Stop();
+                    webView.Dispose();
+                    ReportFailure(new InvalidOperationException("本机后端连接已中断，请重新启动课程表。"));
+                }
+            };
+            trustMonitor.Start();
+        }
+
+        private bool HasOwnedBackend()
+        {
+            return backend != null && !backend.HasExited
+                && DesktopSecurity.IsOwnedLoopbackListener(Program.Port, backend.Id);
         }
 
         private void WaitForServer()
@@ -259,7 +263,7 @@ namespace TangentTimetable
                         "后端进程意外退出（退出码 " + backend.ExitCode + "）。\r\n日志："
                         + Path.Combine(dataDir, Path.Combine("logs", "timetable.log")));
                 }
-                if (IsServerUp())
+                if (HasOwnedBackend() && IsServerUp())
                 {
                     return;
                 }
@@ -269,22 +273,33 @@ namespace TangentTimetable
                 "后端启动超时。\r\n日志：" + Path.Combine(dataDir, Path.Combine("logs", "timetable.log")));
         }
 
-        /// <summary>能拿到任何 HTTP 响应（含 401/404）都说明服务已监听。</summary>
-        private static bool IsServerUp()
+        /// <summary>进程所有权已验证后，确认本机账号可用，避免把未完成 bootstrap 的服务当作就绪。</summary>
+        private bool IsServerUp()
         {
             try
             {
-                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + Program.Port + "/");
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + Program.Port + "/api/auth/verify");
                 req.Method = "GET";
+                req.AllowAutoRedirect = false;
+                req.Proxy = null;
                 req.Timeout = 2000;
+                req.ReadWriteTimeout = 2000;
+                req.Headers["X-API-Key"] = accountKey;
                 using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
                 {
-                    return true;
+                    using (StreamReader reader = new StreamReader(resp.GetResponseStream()))
+                    {
+                        char[] buffer = new char[4096];
+                        int count = reader.Read(buffer, 0, buffer.Length);
+                        return resp.StatusCode == HttpStatusCode.OK
+                            && System.Text.RegularExpressions.Regex.IsMatch(new string(buffer, 0, count), "\"valid\"\\s*:\\s*true");
+                    }
                 }
             }
             catch (WebException ex)
             {
-                return ex.Response != null;
+                if (ex.Response != null) ex.Response.Close();
+                return false;
             }
             catch (Exception)
             {
@@ -299,31 +314,115 @@ namespace TangentTimetable
                 string userDataFolder = Path.Combine(dataDir, "webview2");
                 Directory.CreateDirectory(userDataFolder);
                 CoreWebView2Environment env =
-                    await CoreWebView2Environment.CreateAsync(null, userDataFolder, null);
+                    await CoreWebView2Environment.CreateAsync(
+                        Directory.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "webview2-runtime"))
+                            ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "webview2-runtime") : null,
+                        userDataFolder, null);
                 await this.webView.EnsureCoreWebView2Async(env);
 
                 CoreWebView2Settings settings = this.webView.CoreWebView2.Settings;
                 settings.AreDefaultContextMenusEnabled = false;
                 settings.IsStatusBarEnabled = false;
                 settings.IsZoomControlEnabled = true;
+                settings.AreDevToolsEnabled = false;
+                settings.AreHostObjectsAllowed = false;
+                this.webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
+                this.webView.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
+                this.webView.CoreWebView2.FrameNavigationStarting += OnFrameNavigationStarting;
+                this.webView.CoreWebView2.PermissionRequested += delegate(object sender, CoreWebView2PermissionRequestedEventArgs e)
+                {
+                    bool allowMicrophone = e.PermissionKind == CoreWebView2PermissionKind.Microphone
+                        && e.IsUserInitiated
+                        && DesktopSecurity.IsTrustedOrigin(e.Uri, Program.Port)
+                        && HasOwnedBackend();
+                    e.State = allowMicrophone
+                        ? CoreWebView2PermissionState.Allow
+                        : CoreWebView2PermissionState.Deny;
+                };
+                this.webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
+                this.webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+                this.webView.CoreWebView2.WebResourceRequested += delegate(object sender, CoreWebView2WebResourceRequestedEventArgs request)
+                {
+                    if (!DesktopSecurity.IsTrustedOrigin(request.Request.Uri, Program.Port) || !HasOwnedBackend())
+                        request.Response = env.CreateWebResourceResponse(null, 403, "Untrusted origin or backend", "");
+                };
 
-                // 自动登录：在文档创建前写入前端读取的那两个 localStorage 键
-                string script =
-                    "try{"
-                    + "localStorage.setItem('timetable.apiKey','" + accountKey + "');"
-                    + "localStorage.setItem('timetable.apiLabel','管理员');"
-                    + "}catch(e){}";
-                await this.webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(script);
+                // Keep the key out of subframes and escape legacy keys as JavaScript data.
+                await this.webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
+                    DesktopSecurity.LoginScript(accountKey, Program.Port));
+                if (!HasOwnedBackend()) throw new InvalidOperationException("后端进程所有权校验失败。");
 
                 this.webView.Source = new Uri("http://127.0.0.1:" + Program.Port + "/");
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "无法初始化 WebView2 组件：\r\n\r\n" + ex.Message
-                    + "\r\n\r\n请先安装 Microsoft Edge WebView2 Runtime（Win10/11 通常已自带）。",
-                    "大切课程表", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ReportFailure(new InvalidOperationException("无法初始化 WebView2 组件，请确认 WebView2 Runtime 可用。\r\n" + ex.Message, ex));
+            }
+        }
+
+        private void OnNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
+        {
+            if (DesktopSecurity.IsTrustedOrigin(e.Uri, Program.Port) && HasOwnedBackend()) return;
+            e.Cancel = true;
+            if (e.IsUserInitiated)
+            {
+                OpenExternalUrl(e.Uri);
+            }
+        }
+
+        private void OnNewWindowRequested(object sender, CoreWebView2NewWindowRequestedEventArgs e)
+        {
+            e.Handled = true;
+            if (e.IsUserInitiated) OpenExternalUrl(e.Uri);
+        }
+
+        private void OnFrameNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
+        {
+            // The product has no embedded remote documents. Block all frame navigations.
+            e.Cancel = true;
+        }
+
+        private async void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (!smokeTest || closing) return;
+            try
+            {
+                if (!e.IsSuccess || !HasOwnedBackend()) throw new InvalidOperationException("Desktop navigation failed");
+                string ok = await webView.CoreWebView2.ExecuteScriptAsync("Boolean(document.getElementById('root') && localStorage.getItem('timetable.apiKey'))");
+                if (ok != "true") throw new InvalidOperationException("Desktop document or auto-login missing");
+                File.WriteAllText(Path.Combine(dataDir, "desktop-smoke-result.txt"),
+                    "PASS: owned loopback backend, WebView document and auto-login\r\nWebView2 Runtime: "
+                    + webView.CoreWebView2.Environment.BrowserVersionString + "\r\nBackend PID: " + backend.Id);
                 Close();
+            }
+            catch (Exception ex) { ReportFailure(ex); }
+        }
+
+        private void ReportFailure(Exception ex)
+        {
+            if (closing) return;
+            if (smokeTest)
+            {
+                File.WriteAllText(Path.Combine(dataDir, "desktop-smoke-result.txt"), "FAIL: " + ex.Message);
+                Environment.ExitCode = 1;
+            }
+            else MessageBox.Show(ex.Message, "大切课程表 - 启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Close();
+        }
+
+        private static void OpenExternalUrl(string value)
+        {
+            if (!DesktopSecurity.IsExternalWebUrl(value)) return;
+            Uri target = new Uri(value);
+            try
+            {
+                ProcessStartInfo start = new ProcessStartInfo(target.AbsoluteUri);
+                start.UseShellExecute = true;
+                Process.Start(start);
+            }
+            catch (Exception)
+            {
+                // 外部浏览器不可用时保持桌面应用在可信本机页面。
             }
         }
 
@@ -333,31 +432,23 @@ namespace TangentTimetable
             base.OnShown(e);
             // 放在 OnShown 而不是 OnLoad：WinForms 首次显示时会再缩放一次窗口尺寸
             ApplyPhysicalWindowSize();
-            if (!freshAccount)
+            if (smokeTest || !freshAccount)
             {
                 return;
             }
-            bool copied = false;
-            try
-            {
-                Clipboard.SetText(accountKey);
-                copied = true;
-            }
-            catch (Exception)
-            {
-                // 剪贴板被其它程序占用时不阻断启动
-            }
             MessageBox.Show(
                 "已为你创建本机账号，并已自动登录，无需手动输入。\r\n\r\n"
-                + "如需在其它设备（iPad/手机小组件、其它浏览器）使用，API Key 为：\r\n\r\n"
+                + "账号恢复凭据如下，请保存在你的密码管理器中。本机服务只供当前电脑访问：\r\n\r\n"
                 + accountKey
-                + (copied ? "\r\n\r\n（已复制到剪贴板）" : "")
-                + "\r\n\r\n该 Key 也保存在：" + keyFile,
+                + "\r\n\r\n该 Key 已通过 Windows DPAPI 保护后保存在本机用户数据目录。",
                 "大切课程表 - 首次运行", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            closing = true;
+            trustMonitor.Stop();
+            trustMonitor.Dispose();
             try
             {
                 if (ownsBackend && backend != null && !backend.HasExited)
@@ -388,10 +479,10 @@ namespace TangentTimetable
         private const int JobObjectExtendedLimitInformation = 9;
         private const uint JobObjectLimitKillOnJobClose = 0x2000;
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern IntPtr CreateJobObject(IntPtr attributes, string name);
 
-        [DllImport("kernel32.dll")]
+        [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool SetInformationJobObject(IntPtr job, int infoType, IntPtr info, uint length);
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -443,7 +534,7 @@ namespace TangentTimetable
             handle = CreateJobObject(IntPtr.Zero, null);
             if (handle == IntPtr.Zero)
             {
-                return;
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Cannot create backend process job");
             }
             ExtendedLimitInformation info = new ExtendedLimitInformation();
             info.BasicLimitInformation.LimitFlags = JobObjectLimitKillOnJobClose;
@@ -452,7 +543,12 @@ namespace TangentTimetable
             try
             {
                 Marshal.StructureToPtr(info, buffer, false);
-                SetInformationJobObject(handle, JobObjectExtendedLimitInformation, buffer, (uint)size);
+                if (!SetInformationJobObject(handle, JobObjectExtendedLimitInformation, buffer, (uint)size))
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    Dispose();
+                    throw new System.ComponentModel.Win32Exception(error, "Cannot configure backend process cleanup");
+                }
             }
             finally
             {
@@ -464,7 +560,8 @@ namespace TangentTimetable
         {
             if (handle != IntPtr.Zero && processHandle != IntPtr.Zero)
             {
-                AssignProcessToJobObject(handle, processHandle);
+                if (!AssignProcessToJobObject(handle, processHandle))
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Cannot attach backend to process job");
             }
         }
 

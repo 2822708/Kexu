@@ -1,12 +1,16 @@
 package com.timetable.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.timetable.dto.TodoRequest;
 import com.timetable.entity.Todo;
 import com.timetable.exception.BusinessException;
 import com.timetable.mapper.TodoMapper;
 import com.timetable.service.TodoService;
+import com.timetable.service.RecurringTodoService;
+import com.timetable.service.RequestValidationService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -14,9 +18,14 @@ import java.util.List;
 public class TodoServiceImpl implements TodoService {
 
     private final TodoMapper todoMapper;
+    private final RecurringTodoService recurringTodoService;
+    private final RequestValidationService requestValidation;
 
-    public TodoServiceImpl(TodoMapper todoMapper) {
+    public TodoServiceImpl(TodoMapper todoMapper, RecurringTodoService recurringTodoService,
+                           RequestValidationService requestValidation) {
         this.todoMapper = todoMapper;
+        this.recurringTodoService = recurringTodoService;
+        this.requestValidation = requestValidation;
     }
 
     @Override
@@ -27,18 +36,30 @@ public class TodoServiceImpl implements TodoService {
     }
 
     @Override
+    public Todo getById(Long id, String apiKey) {
+        Todo todo = todoMapper.selectById(id);
+        if (todo == null || !apiKey.equals(todo.getApiKey())) {
+            throw new BusinessException(404, "待办不存在");
+        }
+        return todo;
+    }
+
+    @Override
     public Todo create(TodoRequest request, String apiKey) {
+        requestValidation.requireValid(request);
         Todo todo = new Todo();
         todo.setApiKey(apiKey);
         todo.setTitle(request.getTitle());
         todo.setDdl(request.getDdl());
         todo.setCompleted(false);
+        todo.setChainGenerated(false);
         todoMapper.insert(todo);
         return todo;
     }
 
     @Override
     public Todo update(Long id, TodoRequest request, String apiKey) {
+        requestValidation.requireValid(request);
         Todo todo = todoMapper.selectById(id);
         if (todo == null || !todo.getApiKey().equals(apiKey)) {
             throw new BusinessException(404, "待办不存在");
@@ -59,13 +80,33 @@ public class TodoServiceImpl implements TodoService {
     }
 
     @Override
+    @Transactional
     public Todo toggleComplete(Long id, String apiKey) {
         Todo todo = todoMapper.selectById(id);
         if (todo == null || !todo.getApiKey().equals(apiKey)) {
             throw new BusinessException(404, "待办不存在");
         }
-        todo.setCompleted(!Boolean.TRUE.equals(todo.getCompleted()));
-        todoMapper.updateById(todo);
+        boolean completed = Boolean.TRUE.equals(todo.getCompleted());
+        boolean next = !completed;
+        boolean spawnNext = next && todo.getRecurringId() != null
+                && !Boolean.TRUE.equals(todo.getChainGenerated());
+        var update = Wrappers.<Todo>lambdaUpdate()
+                .eq(Todo::getId, id)
+                .eq(Todo::getApiKey, apiKey)
+                .eq(Todo::getCompleted, completed)
+                .set(Todo::getCompleted, next);
+        if (spawnNext) {
+            update.eq(Todo::getChainGenerated, false)
+                    .set(Todo::getChainGenerated, true);
+        }
+        int updated = todoMapper.update(null, update);
+        if (updated != 1) {
+            throw new BusinessException(409, "待办状态已被其它请求修改，请刷新后重试");
+        }
+        todo.setCompleted(next);
+        if (spawnNext) {
+            recurringTodoService.onTodoCompleted(todo.getRecurringId(), apiKey);
+        }
         return todo;
     }
 
@@ -76,6 +117,7 @@ public class TodoServiceImpl implements TodoService {
         todo.setTitle(title);
         todo.setDdl(ddl);
         todo.setCompleted(false);
+        todo.setChainGenerated(false);
         todo.setExamId(examId);
         todoMapper.insert(todo);
         return todo;

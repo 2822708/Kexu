@@ -27,6 +27,7 @@ interface Props {
   onExecute: () => void
   onReject: () => void
   disabled?: boolean
+  scheduleName?: string | null
 }
 
 type Dict = Record<string, unknown>
@@ -39,16 +40,20 @@ interface DiffRow {
   changed: boolean
 }
 
-export default function AiActionCard({ action, executing, onExecute, onReject, disabled }: Props) {
+export default function AiActionCard({ action, executing, onExecute, onReject, disabled, scheduleName }: Props) {
   const data = (action.data ?? {}) as Dict
   const pending = action.status === 'PENDING'
   const stale = action.status === 'STALE'
+  const affected = ['courses', 'todos', 'rules', 'exams', 'courseIds', 'todoIds', 'recurringIds', 'examIds']
+    .map((key) => data[key]).find(Array.isArray) as unknown[] | undefined
 
   const statusTag =
     action.status === 'EXECUTED' ? (
       <Tag color="green">已执行</Tag>
     ) : action.status === 'REJECTED' ? (
       <Tag>已取消</Tag>
+    ) : action.status === 'EXECUTING' ? (
+      <Tag color="processing">执行中</Tag>
     ) : stale ? (
       <Tooltip title="相关数据已变化，或已有更新的提案，此提案不能再执行">
         <Tag color="default">已失效</Tag>
@@ -82,18 +87,25 @@ export default function AiActionCard({ action, executing, onExecute, onReject, d
               size="small"
               type="primary"
               loading={executing}
-              disabled={disabled}
+              disabled={disabled || executing}
               onClick={onExecute}
             >
               确认执行
             </Button>
-            <Button size="small" disabled={disabled} onClick={onReject}>
+            <Button size="small" disabled={disabled || executing} onClick={onReject}>
               取消
             </Button>
           </Space>
         )
       }
     >
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
+        {action.scope === 'COURSE'
+          ? `目标课表：${scheduleName ?? (action.scheduleId ? `课表 #${action.scheduleId}（已删除或不可用）` : '未绑定')}`
+          : '作用范围：当前账号的待办（所有课表共用）'}
+        {' · '}影响 {affected?.length ?? 0} 条记录
+        {action.type === 'DELETE_EXAM' && '；对应考试待办也会删除'}
+      </Typography.Paragraph>
       {renderBody(action.type, data)}
       {stale && (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>

@@ -27,6 +27,7 @@ interface AppState {
   ready: boolean
   authed: boolean
   label: string
+  isAdmin: boolean
   avatarUrl: string | null
   schedules: Schedule[]
   activeScheduleId: number | null
@@ -55,6 +56,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [authed, setAuthed] = useState(false)
   const [label, setLabel] = useState(getLabel())
+  const [isAdmin, setIsAdmin] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(getAvatarUrl())
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [activeScheduleId, setActiveScheduleIdState] = useState<number | null>(() => {
@@ -70,8 +72,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const activeIdRef = useRef(activeScheduleId)
   activeIdRef.current = activeScheduleId
+  const schedulesRequestSeq = useRef(0)
+  const coursesRequestSeq = useRef(0)
+  const examsRequestSeq = useRef(0)
 
   const setActiveScheduleId = useCallback((id: number | null) => {
+    activeIdRef.current = id
     setActiveScheduleIdState(id)
     if (id === null) localStorage.removeItem(ACTIVE_SCHEDULE_STORAGE)
     else localStorage.setItem(ACTIVE_SCHEDULE_STORAGE, String(id))
@@ -81,6 +87,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearApiKey()
     setAuthed(false)
     setLabel('')
+    setIsAdmin(false)
     setAvatarUrl(null)
     setSchedules([])
     setCourses([])
@@ -99,7 +106,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [doLogout])
 
   const refreshSchedules = useCallback(async () => {
+    const requestSeq = ++schedulesRequestSeq.current
     const list = await scheduleApi.list()
+    if (requestSeq !== schedulesRequestSeq.current) return list
     setSchedules(list)
     const currentId = activeIdRef.current
     if (list.length === 0) {
@@ -113,19 +122,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshCourses = useCallback(async () => {
     const id = activeIdRef.current
     if (id === null) {
-      setCourses([])
+      if (activeIdRef.current === null) setCourses([])
       return
     }
-    setCourses(await courseApi.listBySchedule(id))
+    const requestSeq = ++coursesRequestSeq.current
+    const result = await courseApi.listBySchedule(id)
+    if (requestSeq === coursesRequestSeq.current && activeIdRef.current === id) {
+      setCourses(result)
+    }
   }, [])
 
   const refreshExams = useCallback(async () => {
     const id = activeIdRef.current
     if (id === null) {
-      setExams([])
+      if (activeIdRef.current === null) setExams([])
       return
     }
-    setExams(await examApi.listBySchedule(id))
+    const requestSeq = ++examsRequestSeq.current
+    const result = await examApi.listBySchedule(id)
+    if (requestSeq === examsRequestSeq.current && activeIdRef.current === id) {
+      setExams(result)
+    }
   }, [])
 
   const refreshTodos = useCallback(async () => {
@@ -168,6 +185,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!result.valid) throw new Error('API Key 无效')
     persistApiKey(key, result.label, result.avatarUrl)
     setLabel(result.label)
+    setIsAdmin(result.role === 'ADMIN')
     setAvatarUrl(result.avatarUrl ?? null)
     setAuthed(true)
   }, [])
@@ -184,6 +202,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (res.valid) {
           setAuthed(true)
           setLabel(res.label)
+          setIsAdmin(res.role === 'ADMIN')
           setAvatarUrl(res.avatarUrl ?? null)
         } else {
           clearApiKey()
@@ -224,6 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ready,
     authed,
     label,
+    isAdmin,
     avatarUrl,
     schedules,
     activeScheduleId,

@@ -7,15 +7,17 @@ public class AiActionDto {
     private String type;
     private String status;
     private String scope;
+    private Long scheduleId;
     private JsonNode data;
 
     public AiActionDto() {}
 
-    public AiActionDto(Long actionId, String type, String status, String scope, JsonNode data) {
+    public AiActionDto(Long actionId, String type, String status, String scope, Long scheduleId, JsonNode data) {
         this.actionId = actionId;
         this.type = type;
         this.status = status;
         this.scope = scope;
+        this.scheduleId = scheduleId;
         this.data = data;
     }
 
@@ -27,6 +29,8 @@ public class AiActionDto {
     public void setStatus(String status) { this.status = status; }
     public String getScope() { return scope; }
     public void setScope(String scope) { this.scope = scope; }
+    public Long getScheduleId() { return scheduleId; }
+    public void setScheduleId(Long scheduleId) { this.scheduleId = scheduleId; }
     public JsonNode getData() { return data; }
     public void setData(JsonNode data) { this.data = data; }
 }

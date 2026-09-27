@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Clock;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -37,22 +38,25 @@ public class WidgetServiceImpl implements WidgetService {
     private final TodoService todoService;
     private final ExamService examService;
     private final PeriodConfigService periodConfigService;
+    private final Clock clock;
 
     public WidgetServiceImpl(ScheduleService scheduleService,
                              CourseService courseService,
                              TodoService todoService,
                              ExamService examService,
-                             PeriodConfigService periodConfigService) {
+                             PeriodConfigService periodConfigService,
+                             Clock clock) {
         this.scheduleService = scheduleService;
         this.courseService = courseService;
         this.todoService = todoService;
         this.examService = examService;
         this.periodConfigService = periodConfigService;
+        this.clock = clock;
     }
 
     @Override
     public Map<String, Object> overview(String apiKey, Long scheduleId) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
 
         // 1. 选定课表

@@ -3,6 +3,7 @@ package com.timetable.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -17,6 +18,7 @@ import java.time.LocalTime;
 public class RecurringTodo {
     @TableId(type = IdType.AUTO)
     private Long id;
+    @JsonIgnore
     private String apiKey;
     private String title;
     /** DAILY / WEEKLY / MONTHLY / CUSTOM */
@@ -35,6 +37,7 @@ public class RecurringTodo {
     /** 为 true 时，用户完成当期待办后立即生成下一期；为 false 时只按触发时间生成 */
     private Boolean chainAfterComplete;
     private LocalDateTime lastTriggeredAt;
+    private LocalDateTime lastEvaluatedAt;
     private LocalDateTime nextTriggerAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -63,6 +66,8 @@ public class RecurringTodo {
     public void setChainAfterComplete(Boolean chainAfterComplete) { this.chainAfterComplete = chainAfterComplete; }
     public LocalDateTime getLastTriggeredAt() { return lastTriggeredAt; }
     public void setLastTriggeredAt(LocalDateTime lastTriggeredAt) { this.lastTriggeredAt = lastTriggeredAt; }
+    public LocalDateTime getLastEvaluatedAt() { return lastEvaluatedAt; }
+    public void setLastEvaluatedAt(LocalDateTime lastEvaluatedAt) { this.lastEvaluatedAt = lastEvaluatedAt; }
     public LocalDateTime getNextTriggerAt() { return nextTriggerAt; }
     public void setNextTriggerAt(LocalDateTime nextTriggerAt) { this.nextTriggerAt = nextTriggerAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }

@@ -3,6 +3,7 @@ package com.timetable.service;
 import com.timetable.dto.AiConversationRequest;
 import com.timetable.dto.AiMessageRequest;
 import com.timetable.dto.AiMessageResponse;
+import com.timetable.dto.CursorPage;
 import com.timetable.entity.AiConversation;
 
 import java.util.List;
@@ -16,9 +17,13 @@ public interface AiService {
 
     List<AiConversation> listConversations(String apiKey);
 
+    CursorPage<AiConversation> pageConversations(String cursor, int pageSize, String apiKey);
+
     void deleteConversation(Long conversationId, String apiKey);
 
     List<AiMessageResponse> listMessages(Long conversationId, String apiKey);
+
+    CursorPage<AiMessageResponse> pageMessages(Long conversationId, Long beforeId, int pageSize, String apiKey);
 
     AiMessageResponse sendMessage(Long conversationId, AiMessageRequest request, String apiKey);
 
@@ -56,11 +61,15 @@ public interface AiService {
      * scope 为 COURSE 或 TODO，两者互不影响。
      */
     void invalidateProposalsOnDataChange(String apiKey, String scope);
+    void invalidateProposalsOnDataChange(String apiKey, String scope, Long scheduleId);
 
     /**
      * 解析教务系统 HTML，返回 {"courses": [...]} 结构供前端预览。
      */
     Map<String, Object> parseHtml(String html, Long scheduleId, String apiKey);
+
+    /** Transcribes one ephemeral image; the image is never persisted by the application. */
+    String parseImageText(String imageDataUrl);
 
     boolean isEnabled();
 }

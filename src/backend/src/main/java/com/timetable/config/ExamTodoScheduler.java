@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.List;
 
 /**
@@ -28,10 +29,12 @@ public class ExamTodoScheduler {
 
     private final ExamMapper examMapper;
     private final TodoService todoService;
+    private final Clock clock;
 
-    public ExamTodoScheduler(ExamMapper examMapper, TodoService todoService) {
+    public ExamTodoScheduler(ExamMapper examMapper, TodoService todoService, Clock clock) {
         this.examMapper = examMapper;
         this.todoService = todoService;
+        this.clock = clock;
     }
 
     @Scheduled(fixedDelay = 60_000L)
@@ -56,7 +59,7 @@ public class ExamTodoScheduler {
     }
 
     private int completeFinishedExams() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         // 只取日期不晚于今天的考试，避免全表扫描
         LambdaQueryWrapper<Exam> wrapper = new LambdaQueryWrapper<>();
         wrapper.le(Exam::getExamDate, now.toLocalDate());

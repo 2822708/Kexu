@@ -21,17 +21,12 @@ import { useApp } from '../store/AppContext'
 import { useFont } from '../store/FontContext'
 import type { AiConfig, PeriodCategory, PeriodConfig } from '../types'
 import { dayjs } from '../utils/schedule'
+import BackupSettings from '../components/BackupSettings'
 
 const TIME_FORMAT = 'HH:mm'
 
 /** 小组件展示页基于当前站点地址生成，随部署环境自动适配 */
 const WIDGET_API_BASE = window.location.origin
-
-/** 可编辑全局作息时间表的账号 label（前端仅做 UI 限制，后端同样校验） */
-const ADMIN_LABELS = (import.meta.env.VITE_ADMIN_LABELS ?? 'Tangent0712')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean)
 
 const CATEGORY_OPTIONS: { value: PeriodCategory; label: string }[] = [
   { value: 'MORNING', label: '上午' },
@@ -43,7 +38,7 @@ export default function SettingsPage() {
   const {
     periods,
     refreshPeriods,
-    label,
+    isAdmin,
     schedules,
     activeScheduleId,
     activeSchedule,
@@ -69,6 +64,7 @@ export default function SettingsPage() {
   }, [])
 
   const saveAiKey = async () => {
+    if (!aiConfig?.canEdit) return
     const key = aiKeyInput.trim()
     if (!key) {
       message.warning('请先填写 DeepSeek API Key')
@@ -87,6 +83,7 @@ export default function SettingsPage() {
   }
 
   const clearAiKey = async () => {
+    if (!aiConfig?.canEdit) return
     setSavingKey(true)
     try {
       setAiConfig(await aiApi.clearConfig())
@@ -118,7 +115,7 @@ export default function SettingsPage() {
   }
 
   // 作息时间表仅管理员账号可编辑，其余用户只读
-  const canEdit = ADMIN_LABELS.includes(label)
+  const canEdit = isAdmin
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
 
@@ -283,10 +280,12 @@ export default function SettingsPage() {
                 ? `AI 功能已启用（来源：${
                     aiConfig.source === 'local' ? '本机设置' : '环境变量 / 配置文件'
                   }${aiConfig.keyMasked ? `，Key：${aiConfig.keyMasked}` : ''}）`
-                : 'AI 功能未启用：填入 DeepSeek API Key 后即可使用自然语言增删改与 HTML 课表导入'
+                : aiConfig?.canEdit
+                  ? 'AI 功能未启用：填入 DeepSeek API Key 后即可使用自然语言增删改与 HTML 课表导入'
+                  : 'AI 功能尚未配置，请由管理员完成服务设置'
             }
           />
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {aiConfig?.canEdit && <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <Input.Password
               style={{ minWidth: 280, flex: 1 }}
               placeholder="sk-..."
@@ -305,13 +304,16 @@ export default function SettingsPage() {
             >
               清除本机 Key
             </Button>
-          </div>
+          </div>}
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Key 只保存在本机数据目录（settings.properties），不会上传；接口也只会返回掩码形式。
-            若已通过环境变量 DEEPSEEK_API_KEY 配置，这里可以留空。
+            {aiConfig?.canEdit
+              ? '桌面版将 Key 加密保存在本机配置中，并在请求 AI 服务时发送给所配置的服务提供方。请勿分享数据目录中的凭据文件。'
+              : '此部署的 AI 服务配置由管理员管理；Web 部署通过服务器环境变量设置服务密钥。'}
           </Typography.Text>
         </Space>
       </Card>
+
+      {isAdmin && <BackupSettings />}
 
       <Card
         title="字体大小"

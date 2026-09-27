@@ -35,7 +35,7 @@ const FAQ = [
     key: 'ai',
     label: 'AI 会乱改数据吗？',
     children:
-      '不会。AI 只会生成「提案卡片」，必须你每条点「确认执行」才会真正改动，不点就什么都不变。',
+      'AI 先生成「提案卡片」，每条都要你点「确认执行」才会写入。请核对目标课表、影响数量和字段变化；AI 的理解可能有误，不合适时取消或重新生成。',
   },
   {
     key: 'mobile',
@@ -163,9 +163,27 @@ export default function UserManualPage() {
             <ul>
               <li>新建待办：写标题 + 选截止时间。</li>
               <li>勾选左边方框 = 标记完成。</li>
-              <li>每条待办显示倒计时，快到期变色提醒。</li>
-              <li>「循环任务」标签页可建每周/每月重复的提醒（进阶功能）。</li>
+              <li>每条待办显示页面内倒计时，快到期变色；当前版本不会发送系统通知，关闭页面后不会弹窗。</li>
+              <li>「循环任务」标签页可按每周/每月规则自动创建待办；这不等于后台通知。</li>
             </ul>
+          </section>
+
+          <Divider />
+
+          <section>
+            <Title level={4}>快速导入截图、文件和语音</Title>
+            <Paragraph>
+              页面右下角的导入按钮可接收 TXT、Markdown、CSV、ICS、HTML、PDF、DOCX 和截图。文本文件在本机提取；PDF 最多 12 页；DOCX 最多 5 MiB。扫描版 PDF 没有文本层时，请截取要导入的页面。
+            </Paragraph>
+            <Paragraph>
+              截图最多 4 MiB。点击「将截图发送给 AI 识别文字」后，图片会转发到已配置的 DeepSeek 服务识别，不会存入应用数据库。识别出的文字可在文本框检查和修正。
+            </Paragraph>
+            <Paragraph>
+              语音输入会调用当前浏览器的识别服务；部分浏览器可能把录音发送到在线服务。勾选说明后再点击开始，转写结果仍可编辑；不支持时可以手动输入。
+            </Paragraph>
+            <Paragraph>
+              点击「转交 AI 助手」会创建绑定当前课表的新会话，并把可编辑提示放进输入框。AI 解析日期后只生成操作提案；发送消息后仍需逐项核对并点「确认执行」，不会在导入时自动写入。
+            </Paragraph>
           </section>
 
           <Divider />
@@ -193,6 +211,11 @@ export default function UserManualPage() {
             </ol>
             <Paragraph type="secondary">
               每次对话都绑定一个课表（工作空间）。切到别的课表时输入和操作会锁定，防止改错地方。
+            </Paragraph>
+            <Paragraph type="secondary">
+              提案会显示目标课表和影响数量。失效提案需要重新生成。发送后可点「停止」，
+              切换对话或离开页面也会停止生成。请求会向 AI 服务发送有限的相关课表、待办和对话上下文，
+              请勿在消息中填写密码或其它无需处理的敏感信息。
             </Paragraph>
           </section>
 

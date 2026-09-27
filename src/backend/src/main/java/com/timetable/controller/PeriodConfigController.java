@@ -5,6 +5,7 @@ import com.timetable.dto.PeriodConfigRequest;
 import com.timetable.entity.PeriodConfig;
 import com.timetable.interceptor.RequestContext;
 import com.timetable.service.PeriodConfigService;
+import com.timetable.security.AdminAuthorizationService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,9 +16,12 @@ import java.util.List;
 public class PeriodConfigController {
 
     private final PeriodConfigService periodConfigService;
+    private final AdminAuthorizationService adminAuthorizationService;
 
-    public PeriodConfigController(PeriodConfigService periodConfigService) {
+    public PeriodConfigController(PeriodConfigService periodConfigService,
+                                  AdminAuthorizationService adminAuthorizationService) {
         this.periodConfigService = periodConfigService;
+        this.adminAuthorizationService = adminAuthorizationService;
     }
 
     @GetMapping
@@ -27,6 +31,8 @@ public class PeriodConfigController {
 
     @PutMapping
     public ApiResponse<List<PeriodConfig>> update(@Valid @RequestBody PeriodConfigRequest request) {
-        return ApiResponse.success(periodConfigService.update(request, RequestContext.getApiKey()));
+        String apiKey = RequestContext.getApiKey();
+        adminAuthorizationService.requireAdmin(apiKey);
+        return ApiResponse.success(periodConfigService.update(request, apiKey));
     }
 }

@@ -1,5 +1,7 @@
 # Tangent-Timetable 工程与架构分析及优化方案
 
+> 方案提出于 2026-09-26。主要实现已完成；当前代码状态、测试结果和未完成的真实部署验证见 [优化实施状态](OPTIMIZATION_STATUS.md)。本文件保留风险分析和推荐路径，不代表表中每项现象仍然存在。
+
 ## 1. 结论
 
 当前工程由 Spring Boot / MyBatis-Plus 后端、React 前端，以及 WinForms + WebView2 桌面壳组成。Web 版使用 MySQL；桌面版启动本机后端并使用 H2 文件数据库。Web 和桌面复用同一套前端与业务 API，AI SSE、AI 操作预览确认和循环待办是主要的跨层功能。

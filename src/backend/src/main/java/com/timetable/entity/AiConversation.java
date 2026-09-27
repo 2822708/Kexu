@@ -3,6 +3,7 @@ package com.timetable.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 public class AiConversation {
     @TableId(type = IdType.AUTO)
     private Long id;
+    @JsonIgnore
     private String apiKey;
     private Long scheduleId;
     private String title;

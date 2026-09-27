@@ -4,13 +4,16 @@ import com.timetable.dto.AiConversationRequest;
 import com.timetable.dto.AiMessageRequest;
 import com.timetable.dto.AiMessageResponse;
 import com.timetable.dto.AiParseHtmlRequest;
+import com.timetable.dto.AiParseImageRequest;
 import com.timetable.dto.AiRenameRequest;
 import com.timetable.dto.ApiResponse;
+import com.timetable.dto.CursorPage;
 import com.timetable.entity.AiConversation;
 import com.timetable.exception.BusinessException;
 import com.timetable.interceptor.RequestContext;
 import com.timetable.service.AiService;
 import com.timetable.service.impl.DeepSeekKeyStore;
+import com.timetable.security.AdminAuthorizationService;
 import jakarta.annotation.PreDestroy;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -42,6 +45,8 @@ public class AiController {
 
     private final AiService aiService;
     private final DeepSeekKeyStore keyStore;
+    private final AdminAuthorizationService adminAuthorizationService;
+    private final boolean allowLocalAiKeySettings;
 
     /**
      * 流式任务执行器。
@@ -54,10 +59,14 @@ public class AiController {
     private final ExecutorService streamExecutor;
 
     public AiController(AiService aiService, DeepSeekKeyStore keyStore,
+                        AdminAuthorizationService adminAuthorizationService,
+                        @Value("${app.security.allow-local-ai-key-settings:false}") boolean allowLocalAiKeySettings,
                         @Value("${app.ai.stream.max-concurrency:16}") int maxConcurrency,
                         @Value("${app.ai.stream.queue-capacity:64}") int queueCapacity) {
         this.aiService = aiService;
         this.keyStore = keyStore;
+        this.adminAuthorizationService = adminAuthorizationService;
+        this.allowLocalAiKeySettings = allowLocalAiKeySettings;
         int concurrency = Math.max(1, maxConcurrency);
         ThreadPoolExecutor executor = new ThreadPoolExecutor(
                 concurrency, concurrency, 60L, TimeUnit.SECONDS,
@@ -98,6 +107,8 @@ public class AiController {
      */
     @PutMapping("/config")
     public ApiResponse<Map<String, Object>> saveConfig(@RequestBody(required = false) Map<String, String> body) {
+        adminAuthorizationService.requireAdmin(RequestContext.getApiKey());
+        requireLocalSettings();
         String key = body == null ? null : body.get("key");
         if (key == null || key.isBlank()) {
             throw new BusinessException(400, "API Key 不能为空");
@@ -113,9 +124,17 @@ public class AiController {
     /** 清除本机保存的 Key（回退到环境变量/配置文件） */
     @DeleteMapping("/config")
     public ApiResponse<Map<String, Object>> clearConfig() {
+        adminAuthorizationService.requireAdmin(RequestContext.getApiKey());
+        requireLocalSettings();
         keyStore.clear();
         log.info("DeepSeek API key cleared from local settings");
         return ApiResponse.success(configPayload());
+    }
+
+    private void requireLocalSettings() {
+        if (!allowLocalAiKeySettings) {
+            throw new BusinessException(403, "服务器 AI 密钥由部署环境管理");
+        }
     }
 
     private Map<String, Object> configPayload() {
@@ -123,12 +142,21 @@ public class AiController {
         data.put("configured", keyStore.isConfigured());
         data.put("source", keyStore.source());
         data.put("keyMasked", keyStore.masked());
+        data.put("localSettingsEnabled", allowLocalAiKeySettings);
+        data.put("canEdit", allowLocalAiKeySettings && adminAuthorizationService.isAdmin(RequestContext.getApiKey()));
         return data;
     }
 
     @GetMapping("/conversations")
     public ApiResponse<List<AiConversation>> listConversations() {
         return ApiResponse.success(aiService.listConversations(RequestContext.getApiKey()));
+    }
+
+    @GetMapping("/conversations/page")
+    public ApiResponse<CursorPage<AiConversation>> pageConversations(
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "30") int pageSize) {
+        return ApiResponse.success(aiService.pageConversations(cursor, pageSize, RequestContext.getApiKey()));
     }
 
     @PostMapping("/conversations")
@@ -152,6 +180,13 @@ public class AiController {
     @GetMapping("/conversations/{id}/messages")
     public ApiResponse<List<AiMessageResponse>> listMessages(@PathVariable Long id) {
         return ApiResponse.success(aiService.listMessages(id, RequestContext.getApiKey()));
+    }
+
+    @GetMapping("/conversations/{id}/messages/page")
+    public ApiResponse<CursorPage<AiMessageResponse>> pageMessages(
+            @PathVariable Long id, @RequestParam(required = false) Long beforeId,
+            @RequestParam(defaultValue = "40") int pageSize) {
+        return ApiResponse.success(aiService.pageMessages(id, beforeId, pageSize, RequestContext.getApiKey()));
     }
 
     @PostMapping("/conversations/{id}/messages")
@@ -250,5 +285,10 @@ public class AiController {
     public ApiResponse<Map<String, Object>> parseHtml(@Valid @RequestBody AiParseHtmlRequest request,
                                                      @RequestParam(required = false) Long scheduleId) {
         return ApiResponse.success(aiService.parseHtml(request.getHtml(), scheduleId, RequestContext.getApiKey()));
+    }
+
+    @PostMapping("/parse-image")
+    public ApiResponse<Map<String, String>> parseImage(@Valid @RequestBody AiParseImageRequest request) {
+        return ApiResponse.success(Map.of("text", aiService.parseImageText(request.getImageDataUrl())));
     }
 }

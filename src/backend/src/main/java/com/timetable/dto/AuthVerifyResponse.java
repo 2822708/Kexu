@@ -4,6 +4,7 @@ public class AuthVerifyResponse {
     private boolean valid;
     private String label;
     private String avatarUrl;
+    private String role;
 
     public AuthVerifyResponse() {}
 
@@ -18,10 +19,17 @@ public class AuthVerifyResponse {
         this.avatarUrl = avatarUrl;
     }
 
+    public AuthVerifyResponse(boolean valid, String label, String avatarUrl, String role) {
+        this(valid, label, avatarUrl);
+        this.role = role;
+    }
+
     public boolean isValid() { return valid; }
     public void setValid(boolean valid) { this.valid = valid; }
     public String getLabel() { return label; }
     public void setLabel(String label) { this.label = label; }
     public String getAvatarUrl() { return avatarUrl; }
     public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
 }

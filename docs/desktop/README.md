@@ -1,57 +1,39 @@
 # Windows 桌面版
 
-纳入版本：`8f4f686`。它在 Web 修复版 `32de25c` 之后增加两个提交：
+桌面版由 WinForms + WebView2 外壳、嵌入 React 前端的 Spring Boot 独立包组成，使用本地 H2 数据库；默认监听 `127.0.0.1:17817`。当前构建与安全实现说明见 [优化说明](OPTIMIZATION.md)，完整工程优化状态见 [优化实施状态](../reviews/OPTIMIZATION_STATUS.md)。
 
-- `fb93164`：Windows 免安装桌面版、H2 单机存储、界面配置 AI Key。
-- `8f4f686`：高 DPI 窗口与 WebView 显示修复。
+## 本地构建
 
-## 当前文件位置
-
-| 内容 | 路径 |
-|---|---|
-| 桌面外壳 | `src/desktop/shell/Program.cs` |
-| 图标和 DPI 配置 | `src/desktop/shell/app.ico`、`app.manifest`、`TangentTimetable.exe.config` |
-| 打包脚本 | `src/desktop/build-desktop.ps1` |
-| 后端单机配置 | `src/backend/src/main/resources/application-standalone.yml` |
-| H2 表结构 | `src/backend/src/main/resources/db/schema-h2.sql` |
-| Maven standalone 构建配置 | `src/backend/pom.xml` |
-| 本轮拷入的可运行目录 | `releases/windows/TangentTimetable` |
-| 可执行文件 | `releases/windows/TangentTimetable/TangentTimetable.exe` |
-| 成品校验清单 | [windows-2026-09-26.json](../releases/windows-2026-09-26.json) |
-
-## 它如何运行
-
-WinForms 外壳通过 WebView2 展示共享 React 前端，启动随包的裁剪 Java 运行时和后端 JAR。后端启用 standalone profile，前端静态文件包含在 JAR 中，数据使用本机 H2 文件库；默认端口为 17817。
-
-外壳负责单实例、本机账号与自动登录、窗口关闭时结束内置后端，并使用 Windows Job Object 管理子进程。高 DPI 修复包括 manifest、exe.config 和外壳 DPI 处理。
-
-本轮保留已有成品，未重新构建或启动。已有成品来自用户指定目录；源码基线与成品的对应关系依据交付记录，未通过重构建作二进制可复现验证。
-
-## 运行与用户数据
-
-双击 `releases/windows/TangentTimetable/TangentTimetable.exe`。复制给其它机器时需要复制整个 TangentTimetable 目录，不能只复制 EXE。
-
-包中携带 Java 运行时及后端，因此目标机不需要另装 Java、Node 或 MySQL。外壳仍依赖 Windows x64 环境、.NET Framework 和 Microsoft Edge WebView2 Runtime；随包的 SDK DLL 不等于已安装 WebView2 Runtime。
-
-用户数据库、账号文件、日志和 WebView 数据位于 `%LOCALAPPDATA%\TangentTimetable`。本轮没有读取、复制或修改该目录。AI 配置可在设置页保存到本机数据目录，也可以回退使用后端环境配置；本地设置优先。
-
-## 从源码打包
-
-脚本原有路径算法以 desktop 的父目录寻找 backend/frontend。当前三者同在 src 下，相邻关系保持不变；Maven 的 `../frontend/dist` 同样有效。
+在项目根目录执行。构建机需使用 `src/desktop/toolchain.json` 指定的 JDK、Node/npm、C# 编译器和 .NET Framework。发行构建还需提供对应版本且有 Microsoft 签名的 Windows x64 WebView2 Fixed Version Runtime 文件夹。
 
 ```powershell
 Set-Location -LiteralPath 'E:\codex work\projects\Tangent-Timetable'
-powershell -ExecutionPolicy Bypass -File .\src\desktop\build-desktop.ps1
+powershell -ExecutionPolicy Bypass -File .\src\desktop\build-desktop.ps1 `
+  -FixedWebView2RuntimeDir 'E:\tools\Microsoft.WebView2.FixedVersionRuntime.153.0.4234.48.x64' `
+  -OutputDir '.\releases\windows-optimized'
 ```
 
-默认输出：`src/desktop/app-image/TangentTimetable`，该目录已被 Git 忽略。
+脚本运行 `npm ci`、前端类型检查/lint/构建、standalone Maven verify、jlink、桌面外壳编译和隔离冒烟，然后才移动到新输出目录。它保留已有包，不会清理 `work/` 以外的文件，也不会访问 `%LOCALAPPDATA%\TangentTimetable` 中的真实数据。工具下载缓存和中间文件保存在仓库忽略的 `work/`。
 
-需要完整 JDK/jlink、满足前端依赖要求的 Node/npm、Windows .NET Framework csc 编译器。脚本会构建前端、打包 standalone 后端、生成裁剪运行时、准备 WebView2 SDK、编译外壳，最后启动桌面冒烟。它可能下载依赖，并会清理指定输出目录中的 TangentTimetable 子目录，执行前需检查 OutputDir。
+没有 Fixed Runtime 时，可使用 `-AllowEvergreenRuntime` 构建开发包；清单会将其标为非发行验证。`-SkipSmokeTest` 也会将清单标为未验证。不要把这两种构建作为已验证发行版。输出目录已存在时脚本会拒绝覆盖，请为每次构建选择新的 `-OutputDir`。
 
-脚本沿用来源实现，本轮只做 PowerShell 语法解析和路径核对。脚本声明的 JDK 17+ 与实际 jlink 参数兼容范围尚未重新验证；来源脚本会选择最新稳定 WebView2 SDK，并非完整锁定的可复现构建。
+检查包内清单和文件哈希：
 
-## 文档与版本边界
+```powershell
+powershell -ExecutionPolicy Bypass -File .\src\desktop\verify-package.ps1 `
+  -PackageDir '.\releases\windows-optimized\TangentTimetable' -RequireRelease
+```
 
-原项目使用手册和业务规则仍适用；数据库配置与部署方式需区分默认 MySQL 模式和桌面 standalone/H2 模式。原审查清单针对 `32de25c`，未覆盖全部新增桌面代码。
+## 安全、账户和备份
 
-历史桌面构建记录见 [完整交付会话](../archive/handoff-2026-09-26/01-全对话记录.md)，对应补丁见 [桌面补丁](../archive/handoff-2026-09-26/04-桌面版补丁.patch)。补丁已经合入，不能再次应用到当前源码。
+桌面 Key 使用 Windows DPAPI `CurrentUser` 加密存储。旧版 `desktop-key.txt` 在迁移成功后移除；安装程序不会把 Key 放进 Java 进程命令行。桌面账号在首次空库初始化时通过本地引导流程建立为管理员，Web 部署共享配置仍由服务端角色控制。
+
+WebView2 只访问准确的本地应用 origin。外部 HTTP(S) 链接交给系统浏览器；未授权的导航、iframe、新窗口和不属于本程序后端进程的本地监听都会被阻止。安全实现细节、边界和测试入口见 [优化说明](OPTIMIZATION.md)。
+
+桌面设置页提供管理员备份、列表、下载和恢复前预览。归档中包含 H2 数据库与校验清单，不包含 DPAPI Key 文件。需要离线恢复时，先关闭桌面应用，再运行随包附带的 `tools/Restore-DesktopBackup.ps1`；预览确认后用归档显示的 SHA-256 作为 `-ExpectedSha256`，再显式传入 `-Apply`。请只对副本演练，恢复会替换当前数据库并保留替换前副本。
+
+应用数据位于 `%LOCALAPPDATA%\TangentTimetable`。DPAPI 凭据绑定原 Windows 用户；换电脑或 Windows 账号时需重新建立凭据。不要把真实用户目录、账号文件、数据库或密钥提交到 Git。
+
+## 验证边界
+
+当前代码变更有后端 H2 回归测试、前端检查，以及桌面安全断言的既有通过记录。当前环境没有准备锁定版本的 Fixed Runtime，因此尚未生成或验收最终 Windows 发行包；也尚未在真实 MariaDB 部署或真实 DeepSeek 服务上做联调。具体状态以 [优化实施状态](../reviews/OPTIMIZATION_STATUS.md) 为准。

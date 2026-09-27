@@ -36,7 +36,7 @@ import { dayjs, formatCountdown } from '../utils/schedule'
 type Filter = 'active' | 'completed' | 'all'
 
 export default function TodosPage() {
-  const { todos, recurringTodos, refreshTodos } = useApp()
+  const { todos, recurringTodos, refreshTodos, refreshRecurring } = useApp()
   const [filter, setFilter] = useState<Filter>('active')
   const [tick, setTick] = useState(0)
   const [modal, setModal] = useState<{ open: boolean; todo: Todo | null }>({
@@ -109,7 +109,7 @@ export default function TodosPage() {
   const toggle = async (todo: Todo) => {
     try {
       await todoApi.toggle(todo.id)
-      await refreshTodos()
+      await Promise.all([refreshTodos(), refreshRecurring()])
     } catch (e) {
       message.error(e instanceof Error ? e.message : '操作失败')
     }
@@ -157,6 +157,9 @@ export default function TodosPage() {
         </Space>
       </div>
 
+      <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+        倒计时仅在页面内显示；当前版本不会发送系统通知，关闭页面后也不会弹窗提醒。
+      </Typography.Paragraph>
       <Card style={{ marginTop: 16 }} styles={{ body: { padding: '4px 12px' } }}>
         <List
           dataSource={visible}

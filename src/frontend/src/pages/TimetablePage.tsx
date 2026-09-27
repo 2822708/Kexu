@@ -303,12 +303,16 @@ export default function TimetablePage() {
       />
 
       <ImportHtmlModal
+        key={activeScheduleId}
         open={importOpen}
         aiEnabled={aiEnabled}
+        scheduleName={activeSchedule?.name ?? '未选择课表'}
+        totalWeeks={total}
+        periodNumbers={periods.map((p) => p.periodNumber)}
+        existingCourses={courses}
         onCancel={() => setImportOpen(false)}
         onParse={async (html) => {
-          const res = await aiApi.parseHtml(html, activeScheduleId)
-          return res.courses
+          return aiApi.parseHtml(html, activeScheduleId)
         }}
         onImport={async (list) => {
           if (!activeScheduleId) throw new Error('请先选择课表')

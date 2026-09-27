@@ -7,6 +7,7 @@ import type {
   AuthVerifyResponse,
   Course,
   CoursePayload,
+  CursorPage,
   Exam,
   ExamPayload,
   ParseHtmlResult,
@@ -98,6 +99,8 @@ export const aiApi = {
   /** 清除本机保存的 Key，回退到环境变量/配置文件 */
   clearConfig: () => request<AiConfig>('/ai/config', { method: 'DELETE' }),
   listConversations: () => request<AiConversation[]>('/ai/conversations'),
+  pageConversations: (cursor: string | null = null) =>
+    request<CursorPage<AiConversation>>(`/ai/conversations/page?pageSize=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
   createConversation: (scheduleId: number | null) =>
     request<AiConversation>('/ai/conversations', {
       method: 'POST',
@@ -111,6 +114,8 @@ export const aiApi = {
       body: { title },
     }),
   listMessages: (id: number) => request<AiMessage[]>(`/ai/conversations/${id}/messages`),
+  pageMessages: (id: number, beforeId: string | null = null) =>
+    request<CursorPage<AiMessage>>(`/ai/conversations/${id}/messages/page?pageSize=40${beforeId ? `&beforeId=${encodeURIComponent(beforeId)}` : ''}`),
   sendMessageStream: streamMessage,
   execute: (id: number, actionId: number) =>
     request<AiMessage>(`/ai/conversations/${id}/actions/${actionId}/execute`, {
@@ -124,5 +129,10 @@ export const aiApi = {
     request<ParseHtmlResult>(`/ai/parse-html${scheduleId ? `?scheduleId=${scheduleId}` : ''}`, {
       method: 'POST',
       body: { html },
+    }),
+  parseImageText: (imageDataUrl: string) =>
+    request<{ text: string }>('/ai/parse-image', {
+      method: 'POST',
+      body: { imageDataUrl },
     }),
 }

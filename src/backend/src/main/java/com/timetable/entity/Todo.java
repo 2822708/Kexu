@@ -3,6 +3,7 @@ package com.timetable.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 
@@ -10,10 +11,13 @@ import java.time.LocalDateTime;
 public class Todo {
     @TableId(type = IdType.AUTO)
     private Long id;
+    @JsonIgnore
     private String apiKey;
     private String title;
     private LocalDateTime ddl;
     private Boolean completed;
+    @JsonIgnore
+    private Boolean chainGenerated;
     private Long recurringId;
     /** 非空表示由某条考试自动关联生成的待办（ddl=考试开始，考试结束后自动完成） */
     private Long examId;
@@ -30,6 +34,8 @@ public class Todo {
     public void setDdl(LocalDateTime ddl) { this.ddl = ddl; }
     public Boolean getCompleted() { return completed; }
     public void setCompleted(Boolean completed) { this.completed = completed; }
+    public Boolean getChainGenerated() { return chainGenerated; }
+    public void setChainGenerated(Boolean chainGenerated) { this.chainGenerated = chainGenerated; }
     public Long getRecurringId() { return recurringId; }
     public void setRecurringId(Long recurringId) { this.recurringId = recurringId; }
     public Long getExamId() { return examId; }

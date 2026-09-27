@@ -14,6 +14,7 @@ import {
 import { useApp } from '../store/AppContext'
 import { useTheme } from '../theme'
 import { formatWeekInfo } from '../utils/schedule'
+import QuickImportWidget from './QuickImportWidget'
 
 const NAV_ITEMS = [
   { key: '/timetable', icon: <CalendarOutlined />, label: '课表' },
@@ -186,6 +187,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <span className="app-footer-text">© 2026 大切课程表 | 正切的课程表</span>
         <span className="app-footer-text">˶ˊᜊˋ˶</span>
       </footer>
+      <QuickImportWidget />
     </div>
   )
 }

@@ -4,10 +4,17 @@ export interface ApiResponse<T> {
   data: T
 }
 
+export interface CursorPage<T> {
+  items: T[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+
 export interface AuthVerifyResponse {
   valid: boolean
   label: string
   avatarUrl: string | null
+  role: 'ADMIN' | 'USER'
 }
 
 export interface Schedule {
@@ -123,13 +130,14 @@ export type AiActionType =
   | 'UPDATE_EXAM'
   | 'DELETE_EXAM'
 
-export type AiActionStatus = 'PENDING' | 'EXECUTED' | 'REJECTED' | 'STALE'
+export type AiActionStatus = 'PENDING' | 'EXECUTING' | 'EXECUTED' | 'REJECTED' | 'STALE'
 
 export interface AiAction {
   actionId: number
   type: AiActionType
   status: AiActionStatus
   scope: 'COURSE' | 'TODO'
+  scheduleId?: number | null
   data: Record<string, unknown> | null
 }
 
@@ -152,6 +160,8 @@ export interface AiConversation {
 /** AI（DeepSeek）配置状态。后端只返回掩码后的 Key，绝不返回完整 Key。 */
 export interface AiConfig {
   configured: boolean
+  canEdit: boolean
+  localSettingsEnabled: boolean
   /** 取值来源：local（界面填入）/ config（环境变量或配置文件）/ none */
   source: 'local' | 'config' | 'none'
   keyMasked: string
@@ -170,4 +180,5 @@ export interface ParsedCourse {
 export interface ParseHtmlResult {
   courses: ParsedCourse[]
   note: string
+  diagnostics?: { row: number; message: string }[]
 }

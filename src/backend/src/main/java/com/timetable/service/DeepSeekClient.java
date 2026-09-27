@@ -7,14 +7,21 @@ public interface DeepSeekClient {
     class Message {
         private final String role;
         private final String content;
+        private final String imageDataUrl;
 
         public Message(String role, String content) {
+            this(role, content, null);
+        }
+
+        public Message(String role, String content, String imageDataUrl) {
             this.role = role;
             this.content = content;
+            this.imageDataUrl = imageDataUrl;
         }
 
         public String getRole() { return role; }
         public String getContent() { return content; }
+        public String getImageDataUrl() { return imageDataUrl; }
     }
 
     /**

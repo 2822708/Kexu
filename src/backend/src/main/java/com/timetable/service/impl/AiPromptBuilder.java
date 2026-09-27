@@ -18,6 +18,14 @@ import java.util.List;
  */
 public final class AiPromptBuilder {
 
+    private static final int MAX_COURSES = 100;
+    private static final int MAX_EXAMS = 100;
+    private static final int MAX_TODOS = 100;
+    private static final int MAX_RECURRING_RULES = 50;
+    public static final int MAX_SYSTEM_PROMPT_CHARS = 40000;
+    private static final int MAX_SECTION_CHARS = 7000;
+    private static final int MAX_SCRIPT_CHARS = 2000;
+
     private static final String[] WEEK_NAMES = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -46,6 +54,15 @@ public final class AiPromptBuilder {
                                                List<RecurringTodo> recurringTodos,
                                                List<PeriodConfig> periods,
                                                LocalDate today) {
+        int courseCount = courses == null ? 0 : courses.size();
+        int examCount = exams == null ? 0 : exams.size();
+        int todoCount = todos == null ? 0 : todos.size();
+        int recurringCount = recurringTodos == null ? 0 : recurringTodos.size();
+        courses = bounded(courses, MAX_COURSES);
+        exams = bounded(exams, MAX_EXAMS);
+        todos = bounded(todos, MAX_TODOS);
+        recurringTodos = bounded(recurringTodos, MAX_RECURRING_RULES);
+        periods = bounded(periods, 12);
         StringBuilder sb = new StringBuilder();
         sb.append("你是一个大学生课程表与待办事项管理助手。你需要理解用户的自然语言指令，")
                 .append("并输出严格的 JSON（不要包含 markdown 代码块），结构如下：\n")
@@ -111,11 +128,11 @@ public final class AiPromptBuilder {
                 .append("    ctx.year / ctx.month / ctx.day（年月日）\n")
                 .append("    ctx.dayOfWeek（1=周一...7=周日）/ ctx.dayOfYear\n")
                 .append("    ctx.hour / ctx.minute（时、分）\n")
-                .append("    ctx.weekOfYear（ISO 周序号，可用 % 2 判断单双周）\n")
+                .append("    ctx.weekOfYear（ISO 年内周序号，不是学期教学周）\n")
                 .append("    ctx.daysInMonth / ctx.isLastDayOfMonth / ctx.isWeekend\n")
                 .append("    ctx.daysSinceLastTrigger（距上次触发天数，从未触发为 -1）\n")
                 .append("    ctx.neverTriggered（是否从未触发过）\n")
-                .append("- 系统每分钟执行一次脚本，同一分钟内只触发一次\n")
+                .append("- 系统按上海时间每分钟检查，延迟时最多补查最近 10 分钟，同一分钟只触发一次\n")
                 .append("- 示例「每逢双周的周五 12:00」：\n")
                 .append("    frequency=\"CUSTOM\", script=\"function shouldTrigger(ctx){return ctx.dayOfWeek===5 && ctx.hour===12 && ctx.minute===0 && ctx.weekOfYear%2===0;}\"\n")
                 .append("- 脚本会保存前试运行校验，语法错误或不返回布尔值会被拒绝入库\n\n");
@@ -131,13 +148,14 @@ public final class AiPromptBuilder {
                 .append("- 保持回复简短。不要复述完整课表，不要输出冗长的推理过程。\n\n");
 
         sb.append("## 数据权威性（严禁编造限制）\n")
-                .append("- 下面「已有课程」「已有待办」「已有考试」列出的是**数据库当前的真实全量数据**，每轮对话都会重新查询。")
+                .append("- 下面列表是每轮重新查询的当前数据摘要，有条数和字符上限，不保证全量。")
                 .append("其中每条记录都带有真实 id，你可以直接使用这些 id 做修改和删除。\n")
                 .append("- 严禁声称「未记录 id」「无法获取 id」「不知道 id」「无法撤销」这类不存在的限制。")
                 .append("只要目标记录出现在下面的列表里，你就有它的 id，就能操作它。\n")
                 .append("- 判断一条记录是否存在，**只看下面的列表**，不要依据历史对话推测。")
                 .append("历史里提到过的记录可能已被删除；历史里没提过的记录也可能已存在。\n")
-                .append("- 如果列表里确实没有目标记录，就说明它已不存在，不要说自己「没有能力」。\n\n");
+                .append("- 如果列表里没有目标，可能是上下文省略，不可断言已不存在。请用户明确记录或在页面查询。")
+                .append("省略的字段或脚本不可猜测；修改 CUSTOM 规则需要完整脚本，否则请用户在循环任务页修改。\n\n");
 
         sb.append("## 撤销 / 回退操作\n")
                 .append("用户说「撤销」「回退」「我操作错了」「恢复」时，按下面的规则处理：\n")
@@ -145,8 +163,8 @@ public final class AiPromptBuilder {
                 .append("- 撤销「添加」→ 用 DELETE_* 删除它。该记录现在一定在下面的列表里，用列表中的真实 id。\n")
                 .append("- 撤销「删除」→ 用 CREATE_* 按历史提案 data._before 里的原始字段重新创建（id 由系统重新分配，不要自己填 id）。\n")
                 .append("- 撤销「修改」→ 用 UPDATE_* 把字段改回 data._before 里的原值，id 用列表中的真实 id。\n")
-                .append("- 用户说「撤销所有操作」时，把本次会话中所有 EXECUTED 的提案都反向操作，")
-                .append("一次性返回多个 action，不要遗漏，也不要说自己做不到。\n\n");
+                .append("- 用户说「撤销所有操作」时，只能对上下文中有完整原始数据的已执行提案生成反向操作，")
+                .append("历史不完整时明确说明范围并让用户核对，不要承诺全量回退。\n\n");
 
         sb.append("## 语义约定\n")
                 .append("- \"下周一\" = 下一周的那个周一（只有那一周，weeks 只含一个周次）\n")
@@ -166,7 +184,7 @@ public final class AiPromptBuilder {
         if (schedule != null) {
             int currentWeek = weekOf(schedule.getPeriodStartDate(), today);
             int totalWeeks = weekOf(schedule.getPeriodStartDate(), schedule.getPeriodEndDate());
-            sb.append("当前课表：").append(schedule.getName())
+            sb.append("当前课表：").append(brief(schedule.getName(), 200))
                     .append("，学期范围 ").append(schedule.getPeriodStartDate().format(DATE_FMT))
                     .append(" ~ ").append(schedule.getPeriodEndDate().format(DATE_FMT))
                     .append("，共 ").append(totalWeeks).append(" 周。\n");
@@ -202,11 +220,16 @@ public final class AiPromptBuilder {
         }
 
         sb.append("### 已有课程\n");
+        int sectionStart = sb.length();
         if (courses == null || courses.isEmpty()) {
             sb.append("（无）\n");
         } else {
+            if (courseCount > MAX_COURSES) {
+                sb.append("当前仅提供前 ").append(MAX_COURSES).append(" 条，共 ")
+                        .append(courseCount).append(" 条。\n");
+            }
             for (Course c : courses) {
-                sb.append("id=").append(c.getId())
+                StringBuilder record = new StringBuilder("id=").append(c.getId())
                         .append(" 名称=").append(c.getName())
                         .append(" ").append(weekDayName(c.getDayOfWeek()))
                         .append(" 第").append(c.getStartPeriod()).append("-").append(c.getEndPeriod()).append("节")
@@ -214,64 +237,107 @@ public final class AiPromptBuilder {
                         .append(" 地点=").append(c.getLocation() == null ? "未指定" : c.getLocation())
                         .append(" 教师=").append(c.getTeacher() == null ? "未指定" : c.getTeacher())
                         .append("\n");
+                if (!appendContextRecord(sb, record, sectionStart)) break;
             }
         }
         sb.append("\n### 已有考试\n");
+        sectionStart = sb.length();
         if (exams == null || exams.isEmpty()) {
             sb.append("（无）\n");
         } else {
+            if (examCount > MAX_EXAMS) {
+                sb.append("当前仅提供前 ").append(MAX_EXAMS).append(" 条，共 ")
+                        .append(examCount).append(" 条。\n");
+            }
             for (Exam e : exams) {
-                sb.append("id=").append(e.getId())
+                StringBuilder record = new StringBuilder("id=").append(e.getId())
                         .append(" 考试名=").append(e.getName())
                         .append(" 日期=").append(e.getExamDate())
                         .append(" 时间=").append(e.getStartTime()).append("-").append(e.getEndTime())
                         .append(" 地点=").append(e.getLocation() == null ? "未指定" : e.getLocation())
                         .append("\n");
+                if (!appendContextRecord(sb, record, sectionStart)) break;
             }
         }
 
         sb.append("\n### 已有待办\n");
+        sectionStart = sb.length();
         if (todos == null || todos.isEmpty()) {
             sb.append("（无）\n");
         } else {
+            if (todoCount > MAX_TODOS) {
+                sb.append("当前仅提供前 ").append(MAX_TODOS).append(" 条，共 ")
+                        .append(todoCount).append(" 条。\n");
+            }
             for (Todo t : todos) {
-                sb.append("id=").append(t.getId())
+                StringBuilder record = new StringBuilder("id=").append(t.getId())
                         .append(" 标题=").append(t.getTitle())
                         .append(" 截止=").append(t.getDdl())
                         .append(" 已完成=").append(Boolean.TRUE.equals(t.getCompleted()) ? "是" : "否");
                 if (t.getRecurringId() != null) {
-                    sb.append(" 来源=循环规则").append(t.getRecurringId());
+                    record.append(" 来源=循环规则").append(t.getRecurringId());
                 }
-                sb.append("\n");
+                record.append("\n");
+                if (!appendContextRecord(sb, record, sectionStart)) break;
             }
         }
 
         sb.append("\n### 已有循环待办规则\n");
+        sectionStart = sb.length();
         if (recurringTodos == null || recurringTodos.isEmpty()) {
             sb.append("（无）\n");
         } else {
+            if (recurringCount > MAX_RECURRING_RULES) {
+                sb.append("当前仅提供前 ").append(MAX_RECURRING_RULES).append(" 条，共 ")
+                        .append(recurringCount).append(" 条。\n");
+            }
             for (RecurringTodo r : recurringTodos) {
-                sb.append("id=").append(r.getId())
+                StringBuilder record = new StringBuilder("id=").append(r.getId())
                         .append(" 标题=").append(r.getTitle())
                         .append(" 频率=").append(r.getFrequency());
                 if (r.getDayOfWeek() != null) {
-                    sb.append("(").append(weekDayName(r.getDayOfWeek())).append(")");
+                    record.append("(").append(weekDayName(r.getDayOfWeek())).append(")");
                 }
                 if (r.getDayOfMonth() != null) {
-                    sb.append("(每月").append(r.getDayOfMonth()).append("日)");
+                    record.append("(每月").append(r.getDayOfMonth()).append("日)");
                 }
-                sb.append(" 触发时刻=").append(r.getTriggerTime())
+                record.append(" 触发时刻=").append(r.getTriggerTime())
                         .append(" 截止偏移=").append(r.getDdlOffsetMinutes()).append("分钟")
                         .append(" 状态=").append(Boolean.TRUE.equals(r.getEnabled()) ? "启用" : "已停用")
                         .append(" 完成后接下一期=").append(Boolean.TRUE.equals(r.getChainAfterComplete()) ? "是" : "否")
                         .append(" 下次触发=").append(r.getNextTriggerAt());
                 if (r.getScript() != null && !r.getScript().isBlank()) {
-                    sb.append(" 脚本=").append(r.getScript());
+                    record.append(" 脚本=").append(r.getScript().length() <= MAX_SCRIPT_CHARS
+                            ? r.getScript() : "[脚本过长已省略，请在循环任务页查看和修改]");
                 }
-                sb.append("\n");
+                record.append("\n");
+                if (!appendContextRecord(sb, record, sectionStart)) break;
             }
         }
         return sb.toString();
+    }
+
+    private static boolean appendContextRecord(StringBuilder target, StringBuilder record, int sectionStart) {
+        // Omit whole records, preserving the validity of dates, IDs and executable scripts.
+        if (target.length() - sectionStart + record.length() > MAX_SECTION_CHARS
+                || target.length() + record.length() > MAX_SYSTEM_PROMPT_CHARS - 1000) {
+            target.append("（本节其余记录因上下文长度限制已省略，不代表不存在。）\n");
+            return false;
+        }
+        target.append(record);
+        return true;
+    }
+
+    private static String brief(String value, int limit) {
+        if (value == null) return "";
+        return value.length() <= limit ? value : value.substring(0, limit) + "[省略]";
+    }
+
+    private static <T> List<T> bounded(List<T> values, int limit) {
+        if (values == null || values.size() <= limit) {
+            return values;
+        }
+        return values.subList(0, limit);
     }
 
     public static String buildParseHtmlSystemPrompt(Schedule schedule, List<PeriodConfig> periods) {

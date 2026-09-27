@@ -3,6 +3,7 @@ package com.timetable.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 
@@ -11,8 +12,10 @@ public class AiAction {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long messageId;
+    @JsonIgnore
     private String apiKey;
     private String scope;
+    private Long scheduleId;
     private String actionType;
     private String actionStatus;
     private String actionData;
@@ -28,6 +31,8 @@ public class AiAction {
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
     public String getScope() { return scope; }
     public void setScope(String scope) { this.scope = scope; }
+    public Long getScheduleId() { return scheduleId; }
+    public void setScheduleId(Long scheduleId) { this.scheduleId = scheduleId; }
     public String getActionType() { return actionType; }
     public void setActionType(String actionType) { this.actionType = actionType; }
     public String getActionStatus() { return actionStatus; }

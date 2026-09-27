@@ -14,19 +14,24 @@ spring:
     password: ""
   sql:
     init:
-      mode: always
+      mode: never
       # H2 与 MySQL 的三处语义差异见 schema-h2.sql 头部说明
       schema-locations: classpath:db/schema-h2.sql
       data-locations: classpath:db/data.sql
 
+  flyway:
+    locations: classpath:db/migration/h2
+
 # 本机专用端口：避开常见的 8080，减少与其它软件冲突的概率
 server:
   port: ${TANGENT_PORT:17817}
+  address: 127.0.0.1
 
 app:
   # 数据目录（H2 库文件与本地设置都放这里）
   data-dir: ${TANGENT_DATA_DIR:~/.tangent-timetable}
-  # 桌面版首次启动不写死任何账号，由 ApiKeyBootstrap 生成随机 Key 并打印
+  security:
+    allow-local-ai-key-settings: true
 
 logging:
   file:

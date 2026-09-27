@@ -8,6 +8,7 @@ import com.timetable.exception.BusinessException;
 import com.timetable.mapper.ExamMapper;
 import com.timetable.mapper.ScheduleMapper;
 import com.timetable.service.ExamService;
+import com.timetable.service.RequestValidationService;
 import com.timetable.service.TodoService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +22,15 @@ public class ExamServiceImpl implements ExamService {
     private final ExamMapper examMapper;
     private final ScheduleMapper scheduleMapper;
     private final TodoService todoService;
+    private final RequestValidationService requestValidation;
 
     public ExamServiceImpl(ExamMapper examMapper,
-                           ScheduleMapper scheduleMapper, TodoService todoService) {
+                           ScheduleMapper scheduleMapper, TodoService todoService,
+                           RequestValidationService requestValidation) {
         this.examMapper = examMapper;
         this.scheduleMapper = scheduleMapper;
         this.todoService = todoService;
+        this.requestValidation = requestValidation;
     }
 
     private void verifyScheduleOwnership(Long scheduleId, String apiKey) {
@@ -37,8 +41,8 @@ public class ExamServiceImpl implements ExamService {
     }
 
     private void validateTimes(ExamRequest request) {
-        if (request.getEndTime().isBefore(request.getStartTime())) {
-            throw new BusinessException(400, "结束时间不能早于开始时间");
+        if (!request.getEndTime().isAfter(request.getStartTime())) {
+            throw new BusinessException(400, "结束时间必须晚于开始时间");
         }
     }
 
@@ -60,8 +64,19 @@ public class ExamServiceImpl implements ExamService {
     }
 
     @Override
+    public Long getScheduleId(Long id, String apiKey) {
+        Exam exam = examMapper.selectById(id);
+        if (exam == null) {
+            throw new BusinessException(404, "考试记录不存在");
+        }
+        verifyScheduleOwnership(exam.getScheduleId(), apiKey);
+        return exam.getScheduleId();
+    }
+
+    @Override
     @Transactional
     public Exam create(Long scheduleId, ExamRequest request, String apiKey) {
+        requestValidation.requireValid(request);
         verifyScheduleOwnership(scheduleId, apiKey);
         validateTimes(request);
         Exam exam = new Exam();
@@ -77,11 +92,21 @@ public class ExamServiceImpl implements ExamService {
     @Override
     @Transactional
     public Exam update(Long id, ExamRequest request, String apiKey) {
+        return update(id, null, request, apiKey);
+    }
+
+    @Override
+    @Transactional
+    public Exam update(Long id, Long expectedScheduleId, ExamRequest request, String apiKey) {
+        requestValidation.requireValid(request);
         Exam exam = examMapper.selectById(id);
         if (exam == null) {
             throw new BusinessException(404, "考试记录不存在");
         }
         verifyScheduleOwnership(exam.getScheduleId(), apiKey);
+        if (expectedScheduleId != null && !expectedScheduleId.equals(exam.getScheduleId())) {
+            throw new BusinessException(404, "考试记录不属于当前课表");
+        }
         validateTimes(request);
         apply(exam, request);
         examMapper.updateById(exam);
@@ -94,11 +119,20 @@ public class ExamServiceImpl implements ExamService {
     @Override
     @Transactional
     public void delete(Long id, String apiKey) {
+        delete(id, null, apiKey);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id, Long expectedScheduleId, String apiKey) {
         Exam exam = examMapper.selectById(id);
         if (exam == null) {
             throw new BusinessException(404, "考试记录不存在");
         }
         verifyScheduleOwnership(exam.getScheduleId(), apiKey);
+        if (expectedScheduleId != null && !expectedScheduleId.equals(exam.getScheduleId())) {
+            throw new BusinessException(404, "考试记录不属于当前课表");
+        }
         // 删除考试时一并清理其自动关联的待办
         todoService.deleteByExamId(exam.getId(), apiKey);
         examMapper.deleteById(id);

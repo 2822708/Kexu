@@ -2,14 +2,18 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/timetable?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
     username: root
-    password: ${TANGENT_COMMON_PASSWORD:root}
+    password: ${TANGENT_COMMON_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   sql:
     init:
-      mode: always
+      mode: never
       schema-locations: classpath:db/schema.sql
       data-locations: classpath:db/data.sql
+
+  flyway:
+    locations: classpath:db/migration/{vendor}
+    baseline-version: 1
 
 mybatis-plus:
   configuration:
@@ -25,9 +29,9 @@ app:
   cors:
     # 允许的跨域来源（逗号分隔）。默认 *；认证走请求头而非 Cookie，故不开启凭据。
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:*}
-  # 可编辑全局作息时间表的账号 label（逗号分隔）
-  admin-labels: ${ADMIN_LABELS:Tangent0712}
-  # 首次启动且 api_key 表为空时，用它创建首个管理员账号；留空则随机生成并打印到日志
+  # 可选的管理员 API Key 列表（逗号分隔）；优先使用数据库 account_role=ADMIN
+  admin-api-keys: ${ADMIN_API_KEYS:}
+  # 首次启动且 api_key 表为空时，必须提供首次管理员 Key；不会生成或记录明文凭据
   bootstrap-key: ${TANGENT_BOOTSTRAP_KEY:}
 
 deepseek:

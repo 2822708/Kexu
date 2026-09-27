@@ -7,7 +7,10 @@ import java.util.List;
 
 public interface ExamService {
     List<Exam> listByScheduleId(Long scheduleId, String apiKey);
+    Long getScheduleId(Long id, String apiKey);
     Exam create(Long scheduleId, ExamRequest request, String apiKey);
     Exam update(Long id, ExamRequest request, String apiKey);
+    Exam update(Long id, Long expectedScheduleId, ExamRequest request, String apiKey);
     void delete(Long id, String apiKey);
+    void delete(Long id, Long expectedScheduleId, String apiKey);
 }
