@@ -1,6 +1,6 @@
 # Android 移动端实施架构方案
 
-> 状态：实施前设计；本文定义首版产品边界、技术架构、数据契约、后台行为和验收口径，不代表 Android 源码或 APK 已完成。
+> 状态：实施基线；Android 首个离线业务切片已有源码，尚未在 Android SDK 环境完成构建。已落地与未落地范围见[实施状态](ANDROID_IMPLEMENTATION_STATUS.md)。
 > 基线：独立项目空间内桌面版 `8f4f686`；Web/后端现状以[项目理解](../reviews/PROJECT_UNDERSTANDING.md)、[当前问题清单](../reviews/CURRENT_ISSUES.md)及 `src/` 当前代码为准。
 > 日期：2026-09-27。本文细化并取代归档版[安卓离线单机版方案](../archive/handoff-2026-09-26/05-安卓离线单机版方案.md)；归档原文保留作历史记录。
 
@@ -93,6 +93,8 @@ src/android/
 ```
 
 推荐 Kotlin、Jetpack Compose、Navigation（优先采用项目启动时稳定的官方导航组件）、Coroutines/Flow、Room、DataStore、Hilt、OkHttp（SSE）、WorkManager 与 Glance。使用 Gradle Version Catalog 锁定依赖版本；实施启动时核实 Android Gradle Plugin、Compose、Room 和 Glance 的兼容稳定版本，不在本设计文档锁死可能过期的版本号。建议 `minSdk 26` 作为首个提案，发布时将 `targetSdk` 设为当时平台与分发要求；`applicationId` 暂定 `com.tangent.timetable.android`，首个对外发布前冻结。统一以 Java 17 工具链构建，桌面端当前技术栈不随此变更。
+
+工程首期已固定 AGP 8.13.2、Gradle 8.13、Kotlin 2.3.20、Room 2.8.5、Compose BOM 2026.09.00 与 Navigation 2.9.8，最低 API 26、目标 API 36。首期采用手动依赖装配，等边界稳定再评估 Hilt；依赖变更仍需对照官方兼容要求并实际构建验证。
 
 ## 4. 页面、状态和主要交互
 

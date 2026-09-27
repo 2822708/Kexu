@@ -8,6 +8,8 @@
 | [WORKSPACE_SETUP.md](WORKSPACE_SETUP.md) | 项目来源、整理范围、基线及验证 |
 | [desktop/README.md](desktop/README.md) | 桌面版运行、结构、数据目录与构建说明 |
 | [android/ANDROID_IMPLEMENTATION_PLAN.md](android/ANDROID_IMPLEMENTATION_PLAN.md) | Android 离线单机版实施架构、数据模型、提醒、AI、导入导出与验收计划 |
+| [android/ANDROID_IMPLEMENTATION_STATUS.md](android/ANDROID_IMPLEMENTATION_STATUS.md) | Android 源码已落地部分、未完成范围与构建验证边界 |
+| [android/EXCHANGE_FORMAT_V1.md](android/EXCHANGE_FORMAT_V1.md) | Android/桌面文件交换 JSON v1 结构与导入语义 |
 | [releases/windows-2026-09-26.json](releases/windows-2026-09-26.json) | 纳入的桌面成品逐文件 SHA-256 清单 |
 | [reviews/PROJECT_UNDERSTANDING.md](reviews/PROJECT_UNDERSTANDING.md) | 项目结构、数据关系、AI 和循环机制 |
 | [reviews/CURRENT_ISSUES.md](reviews/CURRENT_ISSUES.md) | 当前仍需处理的问题和验证边界 |
@@ -37,4 +39,4 @@
 - [桌面版补丁](archive/handoff-2026-09-26/04-桌面版补丁.patch)
 - [安卓离线版方案（设计资料）](archive/handoff-2026-09-26/05-安卓离线单机版方案.md)
 
-历史审查报告的顶部是修复状态更新，正文主要保留修复前描述；两份补丁均已包含在当前源码基线，不要再次应用。归档中的安卓方案是历史设计稿，已由当前项目中的 [Android 实施架构方案](android/ANDROID_IMPLEMENTATION_PLAN.md) 细化取代；当前尚无 Android 源码或成品。当前项目没有复制 original/fixed 两套目录，版本对比使用 Git 标签。
+历史审查报告的顶部是修复状态更新，正文主要保留修复前描述；两份补丁均已包含在当前源码基线，不要再次应用。归档中的安卓方案是历史设计稿，已由当前项目中的 [Android 实施架构方案](android/ANDROID_IMPLEMENTATION_PLAN.md) 细化取代；Android 首个离线业务切片已有源码，但当前没有经过构建验证的成品。当前项目没有复制 original/fixed 两套目录，版本对比使用 Git 标签。

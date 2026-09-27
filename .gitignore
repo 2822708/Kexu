@@ -51,3 +51,13 @@ releases/
 *.trace.db
 settings.properties
 account.key
+
+# Android local toolchain, generated outputs and signing material
+**/.gradle/
+**/build/
+src/android/local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+!src/android/gradle/wrapper/gradle-wrapper.jar

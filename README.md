@@ -22,6 +22,7 @@ Tangent-Timetable/
 │   ├── releases/                   # 成品文件校验清单（纳入 Git）
 │   └── archive/handoff-2026-09-26/  # 原交付包说明、会话、审查报告、补丁
 ├── src/
+│   ├── android/                    # Android 原生离线单机版 Kotlin/Compose 工程
 │   ├── backend/                    # 共享后端，MySQL 与 standalone/H2 两种配置
 │   ├── frontend/                   # Web 与桌面版共享 React 前端
 │   └── desktop/                    # WinForms/WebView2 外壳和打包脚本
@@ -37,6 +38,8 @@ Tangent-Timetable/
 - [项目建立记录](docs/WORKSPACE_SETUP.md)
 - [桌面版说明](docs/desktop/README.md)
 - [Android 移动端实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)
+- [Android 实施状态](docs/android/ANDROID_IMPLEMENTATION_STATUS.md)
+- [Android/桌面交换 JSON v1](docs/android/EXCHANGE_FORMAT_V1.md)
 
 ## Git 基线
 
@@ -52,7 +55,7 @@ Tangent-Timetable/
 
 ## Android 移动端规划
 
-首版方案按离线单机、本地 Room 数据、手动导入导出、联网 AI 和后续同步设计。具体实现边界、数据表、提醒限制、提案执行和阶段验收见 [Android 实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)；该方案是设计文档，尚不表示 Android 工程或 APK 已建立。
+Android 原生工程及首个离线业务切片已建立在 src/android/，包括课表/考试/待办本地功能和 JSON 文件交换。当前没有可验证的 APK；工具链限制及后续待办见 [Android 实施状态](docs/android/ANDROID_IMPLEMENTATION_STATUS.md)。完整产品边界、AI/提醒/小组件架构仍见 [Android 实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)。
 
 ## 本轮范围
 
