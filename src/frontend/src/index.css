@@ -506,6 +506,73 @@ body {
   padding-top: 12px;
   flex-shrink: 0;
 }
+.ai-chat-composer-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  background: var(--bg-card);
+}
+.ai-chat-composer-field:focus-within,
+.ai-chat-composer-field.is-dragging {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.ai-chat-composer-field.is-disabled {
+  opacity: 0.65;
+}
+.ai-chat-composer-field .ai-chat-composer-text {
+  padding: 6px 40px 6px 10px;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent;
+  resize: none;
+}
+.ai-chat-composer-field .ai-chat-composer-mic {
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  width: 26px;
+  height: 26px;
+}
+.ai-chat-composer-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px 0;
+}
+.ai-chat-composer-image {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding-left: 6px;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.ai-chat-composer-image-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-chat-composer-image .ant-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+.ai-chat-composer-status {
+  display: block;
+  padding: 2px 40px 6px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.ai-chat-composer-consent {
+  display: inline-block;
+  max-width: min(240px, calc(100vw - 80px));
+}
 
 /* 推荐示例：只读、不可点击，避免误触 */
 .example-chip {
@@ -1054,6 +1121,10 @@ body {
   }
   .chat-input-bar .ant-btn {
     align-self: flex-end;
+  }
+  .chat-input-bar.ai-chat-composer {
+    flex-direction: row;
+    align-items: flex-end;
   }
 
   .login-wrapper {

@@ -18,11 +18,10 @@ import {
   EditOutlined,
   MenuOutlined,
   PlusOutlined,
-  SendOutlined,
-  StopOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AiActionCard from '../components/AiActionCard'
+import AiChatComposer from '../components/AiChatComposer'
 import { aiApi } from '../api'
 import { useApp } from '../store/AppContext'
 import type { AiConversation, AiMessage } from '../types'
@@ -347,8 +346,8 @@ export default function AiChatPage() {
     setDeleteSelected([])
   }
 
-  const send = async () => {
-    const content = input.trim()
+  const send = async (draft: string = input) => {
+    const content = draft.trim()
     if (!content || sending || activeAbortRef.current) return
     if (workspaceMismatch) {
       message.warning('该对话属于另一个课表，请切换到对应课表后再继续，或新建对话')
@@ -753,36 +752,16 @@ export default function AiChatPage() {
             <div ref={bottomRef} />
           </div>
 
-          <div className="chat-input-bar">
-            <Input.TextArea
-              value={input}
-              maxLength={20000}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="输入自然语言指令，可一次说多件事（Enter 发送，Shift+Enter 换行）"
-              autoSize={{ minRows: 1, maxRows: 4 }}
-              disabled={enabled === false || workspaceMismatch}
-              onPressEnter={(e) => {
-                if (!e.shiftKey) {
-                  e.preventDefault()
-                  if (!sending) send()
-                }
-              }}
-            />
-            {sending ? (
-              <Button danger icon={<StopOutlined />} onClick={stopSending}>
-                停止
-              </Button>
-            ) : (
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                disabled={enabled === false || workspaceMismatch || !input.trim()}
-                onClick={send}
-              >
-                发送
-              </Button>
-            )}
-          </div>
+          <AiChatComposer
+            value={input}
+            onChange={setInput}
+            onSend={send}
+            onStop={stopSending}
+            sending={sending}
+            disabled={workspaceMismatch}
+            sendDisabled={enabled !== true}
+            scopeKey={`${currentId ?? 'new'}:${activeScheduleId ?? 'none'}`}
+          />
         </div>
       </Card>
     </div>
