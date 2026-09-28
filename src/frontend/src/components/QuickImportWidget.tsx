@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Checkbox, FloatButton, Input, Modal, Space, Typography, Upload, message } from 'antd'
+import { Alert, Button, Checkbox, Collapse, FloatButton, Input, Modal, Space, Typography, Upload, message } from 'antd'
 import type { UploadProps } from 'antd'
 import { AudioOutlined, FileImageOutlined, ImportOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -33,6 +33,7 @@ export default function QuickImportWidget() {
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [recording, setRecording] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
   const [speechConsent, setSpeechConsent] = useState(false)
   const [error, setError] = useState('')
   const recognitionRef = useRef<TangentSpeechRecognition | null>(null)
@@ -51,6 +52,7 @@ export default function QuickImportWidget() {
     setSourceName('手动输入')
     setImageFile(null)
     setSpeechConsent(false)
+    setVoiceOpen(false)
     setError('')
   }
 
@@ -171,19 +173,24 @@ export default function QuickImportWidget() {
         onClick={() => setOpen(true)}
       />
       <Modal
+        className="quick-import-modal"
         title="快速导入到 AI 助手"
         open={open}
         onCancel={close}
-        footer={null}
-        width={700}
+        footer={
+          <Button type="primary" loading={busy} disabled={!text.trim() || !!imageFile} onClick={sendToAi}>
+            转交 AI 助手（先生成提案）
+          </Button>
+        }
+        width={560}
+        centered
+        styles={{ body: { maxHeight: 'min(66vh, 560px)', overflowY: 'auto', paddingRight: 4 } }}
         destroyOnClose
       >
-        <Space direction="vertical" size="middle" style={{ display: 'flex' }}>
-          <Alert
-            type="info"
-            showIcon
-            message={`材料会先显示在这里供你编辑，再交给 AI 生成待确认提案。当前课表：${activeSchedule?.name ?? '未选择'}。`}
-          />
+        <Space direction="vertical" size={10} style={{ display: 'flex' }}>
+          <Typography.Paragraph type="secondary" className="quick-import-context">
+            先检查材料，再由 AI 生成待确认提案。当前课表：{activeSchedule?.name ?? '未选择'}
+          </Typography.Paragraph>
           <Dragger
             accept=".txt,.md,.csv,.ics,.html,.htm,.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif"
             multiple={false}
@@ -191,14 +198,20 @@ export default function QuickImportWidget() {
             beforeUpload={beforeUpload}
             disabled={busy}
           >
-            <p className="ant-upload-drag-icon"><FileImageOutlined /></p>
-            <p className="ant-upload-text">点击选择文件，或把截图/文件拖到这里</p>
-            <p className="ant-upload-hint">支持 TXT、CSV、ICS、HTML、PDF、DOCX 和截图；文件在本机提取，截图识别需点击按钮。</p>
+            <div className="quick-import-dropzone">
+              <FileImageOutlined className="quick-import-drop-icon" />
+              <div>
+                <div>点击选择，或拖入截图 / 文件</div>
+                <Typography.Text type="secondary" className="quick-import-hint">
+                  TXT、MD、CSV、ICS、HTML、PDF、DOCX；截图需手动开始识别
+                </Typography.Text>
+              </div>
+            </div>
           </Dragger>
 
           {imagePreview && (
             <Space direction="vertical" style={{ display: 'flex' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                 <img src={imagePreview} alt="待识别截图" style={{ maxWidth: 160, maxHeight: 110, objectFit: 'contain' }} />
                 <Button icon={<FileImageOutlined />} onClick={transcribeImage} loading={busy}>
                   将截图发送给 AI 识别文字
@@ -216,36 +229,40 @@ export default function QuickImportWidget() {
           <Input.TextArea
             value={text}
             onChange={(event) => setText(event.target.value)}
-            rows={8}
+            autoSize={{ minRows: 3, maxRows: 6 }}
             maxLength={MAX_IMPORT_TEXT_CHARS}
             showCount
             placeholder="你也可以直接粘贴通知或课程安排。请检查识别结果，并修正日期和时间。"
             disabled={busy}
           />
 
-          <Alert
-            type="warning"
-            showIcon
-            message="语音说明"
-            description="浏览器语音识别能力因环境而异，部分实现会将音频发送给在线识别服务。点击开始前请勾选确认；录音只在你点击后启动。"
+          <Collapse
+            ghost
+            size="small"
+            activeKey={voiceOpen || recording ? ['voice'] : []}
+            onChange={(keys) => setVoiceOpen(keys.includes('voice'))}
+            items={[{
+              key: 'voice',
+              label: <Space size={6}><AudioOutlined />{recording ? '正在录音' : '语音输入（可选）'}</Space>,
+              children: (
+                <Space direction="vertical" size={8} style={{ display: 'flex' }}>
+                  <Typography.Text type="secondary" className="quick-import-hint">
+                    浏览器可能把音频发送给在线识别服务；仅在你同意并点击开始后录音。
+                  </Typography.Text>
+                  <Checkbox checked={speechConsent} onChange={(event) => setSpeechConsent(event.target.checked)}>
+                    我已了解语音可能由浏览器在线服务处理
+                  </Checkbox>
+                  {recording ? (
+                    <Button icon={<StopOutlined />} onClick={() => recognitionRef.current?.stop()}>停止录音</Button>
+                  ) : (
+                    <Button icon={<AudioOutlined />} onClick={startVoice} disabled={busy || !speechConsent}>开始语音输入</Button>
+                  )}
+                </Space>
+              ),
+            }]}
           />
-          <Space wrap>
-            <Checkbox checked={speechConsent} onChange={(event) => setSpeechConsent(event.target.checked)}>
-              我已了解语音可能由浏览器在线服务处理
-            </Checkbox>
-            {recording ? (
-              <Button icon={<StopOutlined />} onClick={() => recognitionRef.current?.stop()}>停止录音</Button>
-            ) : (
-              <Button icon={<AudioOutlined />} onClick={startVoice} disabled={busy}>开始语音输入</Button>
-            )}
-          </Space>
 
           {error && <Alert type="error" showIcon message={error} />}
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button type="primary" loading={busy} disabled={!text.trim() || !!imageFile} onClick={sendToAi}>
-              转交 AI 助手（先生成提案）
-            </Button>
-          </div>
         </Space>
       </Modal>
     </>

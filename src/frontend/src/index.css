@@ -618,6 +618,40 @@ body {
   margin-top: 6px;
 }
 
+/* ==================== 快速导入 ==================== */
+.quick-import-modal .ant-modal-content {
+  padding: 18px;
+}
+.quick-import-modal .quick-import-context {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.quick-import-modal .ant-upload-wrapper .ant-upload-drag .ant-upload-btn {
+  padding: 12px;
+}
+.quick-import-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  line-height: 1.5;
+}
+.quick-import-drop-icon {
+  flex-shrink: 0;
+  font-size: 26px;
+  color: var(--accent);
+}
+.quick-import-hint {
+  font-size: 12px;
+}
+.quick-import-modal .ant-collapse-header {
+  padding: 6px 0 !important;
+}
+.quick-import-modal .ant-collapse-content-box {
+  padding: 6px 0 !important;
+}
+
 /* ==================== 用户手册 ==================== */
 .manual-page {
   flex: 1;
