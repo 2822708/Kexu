@@ -55,3 +55,5 @@ H2 自动备份带校验和与迁移版本；管理员可列出、下载和预�
 ## 当前工程边界
 
 后端分页目录 API 和 AI 会话游标 API 已实现，旧全量列表接口仍为兼容性保留；当前主界面仍使用部分全量列表。H2 测试已覆盖迁移、权限、跨课表、AI 提案、备份恢复及循环规则，前端 typecheck/lint/build 通过。真实 MariaDB 升级、真实 DeepSeek 联调和固定 WebView2 Runtime 发行构建尚未完成，具体验证边界以 [优化实施状态](OPTIMIZATION_STATUS.md) 为准。
+
+未来 Android/Windows 统一账号、离线同步、旧数据迁移及服务器上线见 [账号与云同步上线方案](ACCOUNT_SYNC_ROLLOUT_PLAN.md)。该文是规划，当前设备自动登录尚不提供跨设备账号同步。
