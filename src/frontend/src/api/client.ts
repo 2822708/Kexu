@@ -47,35 +47,59 @@ type Options = {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   body?: unknown
   apiKey?: string
+  notifyUnauthorized?: boolean
+  timeoutMs?: number
 }
 
-let unauthorizedHandler: (() => void) | null = null
+let unauthorizedHandler: ((key: string | null) => void) | null = null
+let sessionRevision = 0
 
-export function onUnauthorized(handler: () => void) {
+export function invalidateSessionRequests() {
+  sessionRevision += 1
+}
+
+export function createUnauthorizedNotifier(key: string | null) {
+  const revision = sessionRevision
+  return () => {
+    if (revision === sessionRevision) unauthorizedHandler?.(key)
+  }
+}
+
+export function onUnauthorized(handler: (key: string | null) => void) {
   unauthorizedHandler = handler
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null
+  }
 }
 
 export async function request<T>(path: string, options: Options = {}): Promise<T> {
-  const { method = 'GET', body, apiKey } = options
+  const { method = 'GET', body, apiKey, notifyUnauthorized = true, timeoutMs } = options
   const key = apiKey ?? getApiKey()
+  const notify = createUnauthorizedNotifier(key)
 
   const headers: Record<string, string> = {}
   if (key) headers['X-API-Key'] = key
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   let res: Response
+  let text: string
+  const controller = timeoutMs ? new AbortController() : undefined
+  const timer = timeoutMs ? window.setTimeout(() => controller?.abort(), timeoutMs) : undefined
   try {
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller?.signal,
     })
+    text = await res.text()
   } catch {
-    throw new ApiError(0, '网络请求失败，请检查后端服务是否启动')
+    throw new ApiError(0, '连接服务失败或等待超时，请检查网络和后端服务后重试。')
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer)
   }
 
   let payload: ApiResponse<T> | null = null
-  const text = await res.text()
   if (text) {
     try {
       payload = JSON.parse(text) as ApiResponse<T>
@@ -84,14 +108,15 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
     }
   }
 
+  if (notifyUnauthorized && (res.status === 401 || payload?.code === 401)) {
+    notify()
+  }
+
   if (payload === null) {
     throw new ApiError(res.status, `请求失败 (HTTP ${res.status})`)
   }
 
   if (payload.code !== 200) {
-    if (payload.code === 401 && unauthorizedHandler) {
-      unauthorizedHandler()
-    }
     throw new ApiError(payload.code, payload.message || '请求失败')
   }
 

@@ -9,15 +9,9 @@ import {
   type ReactNode,
 } from 'react'
 import { message } from 'antd'
-import {
-  clearApiKey,
-  getApiKey,
-  getAvatarUrl,
-  getLabel,
-  onUnauthorized,
-  setApiKey as persistApiKey,
-} from '../api/client'
-import { authApi, courseApi, examApi, periodApi, recurringApi, scheduleApi, todoApi } from '../api'
+import { getApiKey, invalidateSessionRequests, onUnauthorized } from '../api/client'
+import { connectDevice, DEVICE_KEY_STORAGE } from '../api/deviceSession'
+import { courseApi, examApi, periodApi, recurringApi, scheduleApi, todoApi } from '../api'
 import type { Course, Exam, PeriodConfig, RecurringTodo, Schedule, Todo } from '../types'
 
 const ACTIVE_SCHEDULE_STORAGE = 'timetable.activeScheduleId'
@@ -26,6 +20,8 @@ const SYNC_INTERVAL_MS = 30_000
 interface AppState {
   ready: boolean
   authed: boolean
+  connectionError: string | null
+  reconnect: () => Promise<void>
   label: string
   isAdmin: boolean
   avatarUrl: string | null
@@ -38,8 +34,6 @@ interface AppState {
   recurringTodos: RecurringTodo[]
   periods: PeriodConfig[]
   loading: boolean
-  login: (key: string) => Promise<void>
-  logout: () => void
   setActiveScheduleId: (id: number | null) => void
   refreshSchedules: () => Promise<Schedule[]>
   refreshCourses: () => Promise<void>
@@ -52,17 +46,25 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null)
 
+function readActiveSchedule(): number | null {
+  try {
+    const stored = localStorage.getItem(ACTIVE_SCHEDULE_STORAGE)
+    const id = stored ? Number(stored) : NaN
+    return Number.isFinite(id) ? id : null
+  } catch {
+    return null
+  }
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [authed, setAuthed] = useState(false)
-  const [label, setLabel] = useState(getLabel())
+  const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [label, setLabel] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(getAvatarUrl())
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [schedules, setSchedules] = useState<Schedule[]>([])
-  const [activeScheduleId, setActiveScheduleIdState] = useState<number | null>(() => {
-    const stored = localStorage.getItem(ACTIVE_SCHEDULE_STORAGE)
-    return stored ? Number(stored) : null
-  })
+  const [activeScheduleId, setActiveScheduleIdState] = useState<number | null>(readActiveSchedule)
   const [courses, setCourses] = useState<Course[]>([])
   const [exams, setExams] = useState<Exam[]>([])
   const [todos, setTodos] = useState<Todo[]>([])
@@ -72,9 +74,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const activeIdRef = useRef(activeScheduleId)
   activeIdRef.current = activeScheduleId
+  const authEpoch = useRef(0)
+  const sessionKey = useRef<string | null>(null)
   const schedulesRequestSeq = useRef(0)
   const coursesRequestSeq = useRef(0)
   const examsRequestSeq = useRef(0)
+  const todosRequestSeq = useRef(0)
+  const recurringRequestSeq = useRef(0)
+  const periodsRequestSeq = useRef(0)
+
+  const isCurrentSession = useCallback((epoch: number) => {
+    try {
+      return (
+        epoch === authEpoch.current &&
+        sessionKey.current !== null &&
+        sessionKey.current === getApiKey()
+      )
+    } catch {
+      return false
+    }
+  }, [])
 
   const setActiveScheduleId = useCallback((id: number | null) => {
     activeIdRef.current = id
@@ -83,8 +102,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else localStorage.setItem(ACTIVE_SCHEDULE_STORAGE, String(id))
   }, [])
 
-  const doLogout = useCallback(() => {
-    clearApiKey()
+  const clearSessionView = useCallback(() => {
+    invalidateSessionRequests()
+    authEpoch.current += 1
+    sessionKey.current = null
     setAuthed(false)
     setLabel('')
     setIsAdmin(false)
@@ -95,72 +116,150 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTodos([])
     setRecurringTodos([])
     setPeriods([])
-    setActiveScheduleId(null)
-  }, [setActiveScheduleId])
+    setLoading(false)
+    activeIdRef.current = null
+    setActiveScheduleIdState(null)
+  }, [])
+
+  const reconnect = useCallback(async () => {
+    clearSessionView()
+    const epoch = authEpoch.current
+    setReady(false)
+    setConnectionError(null)
+    try {
+      const result = await connectDevice()
+      if (epoch !== authEpoch.current) return
+      sessionKey.current = getApiKey()
+      activeIdRef.current = readActiveSchedule()
+      setActiveScheduleIdState(activeIdRef.current)
+      setLabel(result.label)
+      setIsAdmin(result.role === 'ADMIN')
+      setAvatarUrl(result.avatarUrl ?? null)
+      setAuthed(true)
+    } catch (error) {
+      if (epoch !== authEpoch.current) return
+      setConnectionError(error instanceof Error ? error.message : '设备连接失败，请重试。')
+    } finally {
+      if (epoch === authEpoch.current) setReady(true)
+    }
+  }, [clearSessionView])
+
+  useEffect(
+    () =>
+      onUnauthorized((key) => {
+        if (!key || key !== sessionKey.current || !isCurrentSession(authEpoch.current)) return
+        clearSessionView()
+        setReady(true)
+        setConnectionError(
+          '本机连接已失效，已保留原有连接信息。请重新连接；若账户已停用，请联系管理员恢复。',
+        )
+      }),
+    [clearSessionView, isCurrentSession],
+  )
 
   useEffect(() => {
-    onUnauthorized(() => {
-      doLogout()
-      message.error('API Key 已失效，请重新登录')
-    })
-  }, [doLogout])
+    void reconnect()
+    const onStorage = (event: StorageEvent) => {
+      if (!sessionKey.current) return
+      if (
+        event.key === null ||
+        event.key === 'timetable.apiKey' ||
+        event.key === DEVICE_KEY_STORAGE
+      ) {
+        void reconnect()
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => {
+      invalidateSessionRequests()
+      authEpoch.current += 1
+      sessionKey.current = null
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [reconnect])
 
   const refreshSchedules = useCallback(async () => {
+    const epoch = authEpoch.current
+    if (!isCurrentSession(epoch)) return []
     const requestSeq = ++schedulesRequestSeq.current
     const list = await scheduleApi.list()
-    if (requestSeq !== schedulesRequestSeq.current) return list
+    if (!isCurrentSession(epoch) || requestSeq !== schedulesRequestSeq.current) return list
     setSchedules(list)
     const currentId = activeIdRef.current
-    if (list.length === 0) {
-      setActiveScheduleId(null)
-    } else if (currentId === null || !list.some((s) => s.id === currentId)) {
+    if (list.length === 0) setActiveScheduleId(null)
+    else if (currentId === null || !list.some((s) => s.id === currentId))
       setActiveScheduleId(list[0].id)
-    }
     return list
-  }, [setActiveScheduleId])
+  }, [isCurrentSession, setActiveScheduleId])
 
   const refreshCourses = useCallback(async () => {
+    const epoch = authEpoch.current
+    if (!isCurrentSession(epoch)) return
     const id = activeIdRef.current
+    const requestSeq = ++coursesRequestSeq.current
     if (id === null) {
-      if (activeIdRef.current === null) setCourses([])
+      setCourses([])
       return
     }
-    const requestSeq = ++coursesRequestSeq.current
     const result = await courseApi.listBySchedule(id)
-    if (requestSeq === coursesRequestSeq.current && activeIdRef.current === id) {
+    if (
+      isCurrentSession(epoch) &&
+      requestSeq === coursesRequestSeq.current &&
+      activeIdRef.current === id
+    )
       setCourses(result)
-    }
-  }, [])
+  }, [isCurrentSession])
 
   const refreshExams = useCallback(async () => {
+    const epoch = authEpoch.current
+    if (!isCurrentSession(epoch)) return
     const id = activeIdRef.current
+    const requestSeq = ++examsRequestSeq.current
     if (id === null) {
-      if (activeIdRef.current === null) setExams([])
+      setExams([])
       return
     }
-    const requestSeq = ++examsRequestSeq.current
     const result = await examApi.listBySchedule(id)
-    if (requestSeq === examsRequestSeq.current && activeIdRef.current === id) {
+    if (
+      isCurrentSession(epoch) &&
+      requestSeq === examsRequestSeq.current &&
+      activeIdRef.current === id
+    )
       setExams(result)
-    }
-  }, [])
+  }, [isCurrentSession])
 
   const refreshTodos = useCallback(async () => {
-    setTodos(await todoApi.list())
-  }, [])
+    const epoch = authEpoch.current
+    if (!isCurrentSession(epoch)) return
+    const requestSeq = ++todosRequestSeq.current
+    const result = await todoApi.list()
+    if (isCurrentSession(epoch) && requestSeq === todosRequestSeq.current) setTodos(result)
+  }, [isCurrentSession])
 
   const refreshRecurring = useCallback(async () => {
-    setRecurringTodos(await recurringApi.list())
-  }, [])
+    const epoch = authEpoch.current
+    if (!isCurrentSession(epoch)) return
+    const requestSeq = ++recurringRequestSeq.current
+    const result = await recurringApi.list()
+    if (isCurrentSession(epoch) && requestSeq === recurringRequestSeq.current)
+      setRecurringTodos(result)
+  }, [isCurrentSession])
 
   const refreshPeriods = useCallback(async () => {
-    setPeriods(await periodApi.list())
-  }, [])
+    const epoch = authEpoch.current
+    if (!isCurrentSession(epoch)) return
+    const requestSeq = ++periodsRequestSeq.current
+    const result = await periodApi.list()
+    if (isCurrentSession(epoch) && requestSeq === periodsRequestSeq.current) setPeriods(result)
+  }, [isCurrentSession])
 
   const refreshAll = useCallback(async () => {
+    const epoch = authEpoch.current
+    if (!isCurrentSession(epoch)) return
     setLoading(true)
     try {
       await refreshSchedules()
+      if (!isCurrentSession(epoch)) return
       await Promise.all([
         refreshCourses(),
         refreshExams(),
@@ -169,9 +268,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         refreshPeriods(),
       ])
     } finally {
-      setLoading(false)
+      if (isCurrentSession(epoch)) setLoading(false)
     }
   }, [
+    isCurrentSession,
     refreshCourses,
     refreshExams,
     refreshPeriods,
@@ -179,38 +279,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshSchedules,
     refreshTodos,
   ])
-
-  const login = useCallback(async (key: string) => {
-    const result = await authApi.verify(key)
-    if (!result.valid) throw new Error('API Key 无效')
-    persistApiKey(key, result.label, result.avatarUrl)
-    setLabel(result.label)
-    setIsAdmin(result.role === 'ADMIN')
-    setAvatarUrl(result.avatarUrl ?? null)
-    setAuthed(true)
-  }, [])
-
-  useEffect(() => {
-    const key = getApiKey()
-    if (!key) {
-      setReady(true)
-      return
-    }
-    authApi
-      .verify(key)
-      .then((res) => {
-        if (res.valid) {
-          setAuthed(true)
-          setLabel(res.label)
-          setIsAdmin(res.role === 'ADMIN')
-          setAvatarUrl(res.avatarUrl ?? null)
-        } else {
-          clearApiKey()
-        }
-      })
-      .catch(() => clearApiKey())
-      .finally(() => setReady(true))
-  }, [])
 
   useEffect(() => {
     if (!authed) return
@@ -227,7 +295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const timer = window.setInterval(() => {
       Promise.all([refreshCourses(), refreshExams(), refreshTodos(), refreshRecurring()]).catch(
         () => {
-          /* 静默失败，下次轮询重试 */
+          // Background synchronization may retry at the next scheduled interval.
         },
       )
     }, SYNC_INTERVAL_MS)
@@ -242,6 +310,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppState = {
     ready,
     authed,
+    connectionError,
+    reconnect,
     label,
     isAdmin,
     avatarUrl,
@@ -254,8 +324,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     recurringTodos,
     periods,
     loading,
-    login,
-    logout: doLogout,
     setActiveScheduleId,
     refreshSchedules,
     refreshCourses,
@@ -265,7 +333,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshPeriods,
     refreshAll,
   }
-
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
 

@@ -1,4 +1,4 @@
-import { BASE_URL, getApiKey } from './client'
+import { BASE_URL, createUnauthorizedNotifier, getApiKey } from './client'
 import type { AiMessage } from '../types'
 
 export interface StreamHandlers {
@@ -19,6 +19,7 @@ export async function streamMessage(
   signal?: AbortSignal,
 ): Promise<AiMessage> {
   const key = getApiKey()
+  const notifyUnauthorized = createUnauthorizedNotifier(key)
   const res = await fetch(`${BASE_URL}/ai/conversations/${conversationId}/messages/stream`, {
     method: 'POST',
     headers: {
@@ -30,6 +31,7 @@ export async function streamMessage(
   })
 
   if (!res.ok || !res.body) {
+    if (res.status === 401) notifyUnauthorized()
     throw new Error(`请求失败 (HTTP ${res.status})`)
   }
 
@@ -85,7 +87,10 @@ export async function streamMessage(
     }
   }
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (error.code === 401) notifyUnauthorized()
+    throw new Error(error.message)
+  }
   if (!result) throw new Error('AI 未返回结果')
   return result
 }

@@ -1,11 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Dropdown, message, Select, Tag, Tooltip } from 'antd'
+import { message, Select, Tag, Tooltip } from 'antd'
 import {
   BookOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
-  LogoutOutlined,
+  DesktopOutlined,
   MenuOutlined,
   MessageOutlined,
   ReloadOutlined,
@@ -32,7 +32,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const {
     label,
     avatarUrl,
-    logout,
     schedules,
     activeScheduleId,
     activeSchedule,
@@ -89,26 +88,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               {mode === 'dark' ? '☀' : '☾'}
             </div>
           </Tooltip>
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'logout',
-                  icon: <LogoutOutlined />,
-                  label: '登出',
-                  danger: true,
-                  onClick: logout,
-                },
-              ],
-            }}
-          >
+          <Tooltip title="本机已自动连接；原有账户会继续使用。设备范围和连接说明见用户手册。">
             <div
               className="icon-btn-round"
               style={{ width: 'auto', padding: '0 12px', fontSize: 13 }}
             >
-              {label || '我'}
+              <DesktopOutlined /> {label || '本机空间'} · 已连接
             </div>
-          </Dropdown>
+          </Tooltip>
         </div>
       </div>
 

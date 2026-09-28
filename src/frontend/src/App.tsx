@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { Spin } from 'antd'
 import AppLayout from './components/AppLayout'
-import LoginPage from './pages/LoginPage'
+import DeviceConnectionPage from './pages/DeviceConnectionPage'
 import TimetablePage from './pages/TimetablePage'
 import TodosPage from './pages/TodosPage'
 import AiChatPage from './pages/AiChatPage'
@@ -13,21 +12,22 @@ import { useApp } from './store/AppContext'
 export default function App() {
   const { ready, authed } = useApp()
   const location = useLocation()
+  const widgetRoute = location.pathname.startsWith('/widget')
+  const explicitWidgetKey = (
+    new URLSearchParams(location.hash.replace(/^#/, '')).get('key') ??
+    new URLSearchParams(location.search).get('key')
+  )?.trim()
 
-  if (location.pathname.startsWith('/widget')) {
+  if (widgetRoute && explicitWidgetKey) {
     return <WidgetPreviewPage />
   }
 
-  if (!ready) {
-    return (
-      <div className="app-loading">
-        <Spin size="large" />
-      </div>
-    )
+  if (!ready || !authed) {
+    return <DeviceConnectionPage />
   }
 
-  if (!authed) {
-    return <LoginPage />
+  if (widgetRoute) {
+    return <WidgetPreviewPage />
   }
 
   return (

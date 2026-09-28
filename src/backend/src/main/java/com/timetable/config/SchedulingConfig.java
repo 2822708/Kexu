@@ -9,12 +9,6 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 @Configuration
 public class SchedulingConfig implements SchedulingConfigurer {
 
-    private final ThreadPoolTaskScheduler scheduler;
-
-    public SchedulingConfig(ThreadPoolTaskScheduler scheduler) {
-        this.scheduler = scheduler;
-    }
-
     @Bean
     public ThreadPoolTaskScheduler applicationTaskScheduler() {
         ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
@@ -28,6 +22,6 @@ public class SchedulingConfig implements SchedulingConfigurer {
 
     @Override
     public void configureTasks(ScheduledTaskRegistrar taskRegistrar) {
-        taskRegistrar.setTaskScheduler(scheduler);
+        taskRegistrar.setTaskScheduler(applicationTaskScheduler());
     }
 }

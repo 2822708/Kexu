@@ -2,6 +2,7 @@ package com.timetable.config;
 
 import com.timetable.entity.ApiKey;
 import com.timetable.mapper.ApiKeyMapper;
+import com.timetable.security.DeviceIdentity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -34,6 +35,10 @@ public class StandaloneAdminRoleUpgrade implements ApplicationRunner {
             return;
         }
         ApiKey account = accounts.get(0);
+        // A newly self-registered browser must not gain administrator access after a restart.
+        if (DeviceIdentity.isDeviceKey(account.getApiKey())) {
+            return;
+        }
         if (!"ADMIN".equalsIgnoreCase(account.getRole())) {
             account.setRole("ADMIN");
             apiKeyMapper.updateById(account);

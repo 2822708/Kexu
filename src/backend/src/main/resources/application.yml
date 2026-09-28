@@ -31,7 +31,7 @@ app:
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:*}
   # 可选的管理员 API Key 列表（逗号分隔）；优先使用数据库 account_role=ADMIN
   admin-api-keys: ${ADMIN_API_KEYS:}
-  # 首次启动且 api_key 表为空时，必须提供首次管理员 Key；不会生成或记录明文凭据
+  # 可选：空库的初始管理员凭据；未配置时由设备自动注册普通工作区
   bootstrap-key: ${TANGENT_BOOTSTRAP_KEY:}
 
 deepseek:

@@ -17,7 +17,9 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.mockito.ArgumentCaptor;
 
 import java.time.*;
@@ -32,6 +34,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 /** Real transactions, mappers, services and migrated H2; only the external AI provider is mocked. */
+@ActiveProfiles("optimization-regression")
 @SpringBootTest(classes = OptimizationRegressionTest.TestApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = {
         "spring.datasource.url=jdbc:h2:mem:optimization_regression;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=10000",
@@ -46,6 +49,7 @@ class OptimizationRegressionTest {
     private static final String OTHER = "regression-other";
 
     @Configuration(proxyBeanMethods = false)
+    @Profile("optimization-regression")
     @EnableAutoConfiguration
     @MapperScan("com.timetable.mapper")
     @Import({ValidatedFlywayMigration.class, AdminAuthorizationService.class,

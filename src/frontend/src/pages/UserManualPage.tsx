@@ -11,8 +11,9 @@ const { Title, Paragraph, Text } = Typography
 const FAQ = [
   {
     key: 'login',
-    label: '登录不进去 / 提示 Key 无效？',
-    children: '重新找管理员要一个有效 Key。',
+    label: '打开后提示无法连接怎么办？',
+    children:
+      '检查网络和后端服务，然后点击「重新连接」。连接失败会保留本机身份，不会创建替代账户；若提示原有账户失效，请联系管理员恢复原账户。不要通过清除浏览器数据解决连接问题。',
   },
   {
     key: 'conflict',
@@ -45,7 +46,8 @@ const FAQ = [
   {
     key: 'data',
     label: '数据安全吗？',
-    children: '每个账号数据互相独立，用自己的 Key 登录只能看到自己的东西。',
+    children:
+      '每个本机空间的数据互相独立。身份保存在当前浏览器配置中，同一浏览器配置的使用者会进入同一空间；更换设备或浏览器不会自动同步。已有登录会继续关联原数据。',
   },
 ]
 
@@ -75,20 +77,28 @@ export default function UserManualPage() {
           <Divider />
 
           <section>
-            <Title level={4}>登录</Title>
+            <Title level={4}>免登录，自动连接本机空间</Title>
             <Paragraph>
-              输入自己的 <Text strong>API Key</Text>（找管理员要，一串像{' '}
-              <Text code>tt_xxxxxxxx</Text> 的字符），点「登录」。一个 Key 就是一个独立账号，
-              每个人看到的课表、待办都是自己的，互不影响。登录后右上角会显示你的名字。
+              首次打开自动建立本机空间，以后打开自动进入课表，无需填写登录密钥。
+              如果你已登录过，网页或桌面端会优先保留原有账户和数据。右上角显示连接状态。
             </Paragraph>
-            <Paragraph type="secondary">忘了 Key？找管理员重新要一个，不影响已有数据。</Paragraph>
+            <Paragraph>
+              这里的「设备」指当前浏览器及其用户配置；不同浏览器、无痕窗口、不同访问地址会有各自的空间。
+              清除网站数据会丢失该浏览器的连接身份，下次进入新的空间，原数据不会自动迁移。
+              连接失败时请点「重新连接」，不要清除网站数据。
+            </Paragraph>
+            <Paragraph type="secondary">
+              自动连接只用于识别课程表空间。DeepSeek 服务密钥是独立的 AI
+              服务配置，仍需由管理员配置；免登录不会自动开通 AI 服务。
+              本机连接不会自动上传文件、截图或录音，导入和 AI 执行仍由你确认。
+            </Paragraph>
           </section>
 
           <Divider />
 
           <section>
             <Title level={4}>第一次进来先做什么</Title>
-            <Paragraph>登录后进入「课表」页，如果还没有课表，点「新建课表」：</Paragraph>
+            <Paragraph>自动进入「课表」页后，如果还没有课表，点「新建课表」：</Paragraph>
             <ul>
               <li>课表名称：随便起，比如「大三上学期」。</li>
               <li>开始/结束日期：填这学期第一周周一的日期，和学期最后一天。</li>
@@ -163,7 +173,9 @@ export default function UserManualPage() {
             <ul>
               <li>新建待办：写标题 + 选截止时间。</li>
               <li>勾选左边方框 = 标记完成。</li>
-              <li>每条待办显示页面内倒计时，快到期变色；当前版本不会发送系统通知，关闭页面后不会弹窗。</li>
+              <li>
+                每条待办显示页面内倒计时，快到期变色；当前版本不会发送系统通知，关闭页面后不会弹窗。
+              </li>
               <li>「循环任务」标签页可按每周/每月规则自动创建待办；这不等于后台通知。</li>
             </ul>
           </section>
@@ -173,16 +185,20 @@ export default function UserManualPage() {
           <section>
             <Title level={4}>快速导入截图、文件和语音</Title>
             <Paragraph>
-              页面右下角的导入按钮可接收 TXT、Markdown、CSV、ICS、HTML、PDF、DOCX 和截图。文本文件在本机提取；PDF 最多 12 页；DOCX 最多 5 MiB。扫描版 PDF 没有文本层时，请截取要导入的页面。
+              页面右下角的导入按钮可接收 TXT、Markdown、CSV、ICS、HTML、PDF、DOCX
+              和截图。文本文件在本机提取；PDF 最多 12 页；DOCX 最多 5 MiB。扫描版 PDF
+              没有文本层时，请截取要导入的页面。
             </Paragraph>
             <Paragraph>
-              截图最多 4 MiB。点击「将截图发送给 AI 识别文字」后，图片会转发到已配置的 DeepSeek 服务识别，不会存入应用数据库。识别出的文字可在文本框检查和修正。
+              截图最多 4 MiB。点击「将截图发送给 AI 识别文字」后，图片会转发到已配置的 DeepSeek
+              服务识别，不会存入应用数据库。识别出的文字可在文本框检查和修正。
             </Paragraph>
             <Paragraph>
               语音输入会调用当前浏览器的识别服务；部分浏览器可能把录音发送到在线服务。勾选说明后再点击开始，转写结果仍可编辑；不支持时可以手动输入。
             </Paragraph>
             <Paragraph>
-              点击「转交 AI 助手」会创建绑定当前课表的新会话，并把可编辑提示放进输入框。AI 解析日期后只生成操作提案；发送消息后仍需逐项核对并点「确认执行」，不会在导入时自动写入。
+              点击「转交 AI 助手」会创建绑定当前课表的新会话，并把可编辑提示放进输入框。AI
+              解析日期后只生成操作提案；发送消息后仍需逐项核对并点「确认执行」，不会在导入时自动写入。
             </Paragraph>
           </section>
 

@@ -41,7 +41,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleNotReadable(HttpMessageNotReadableException e) {
-        log.warn("Malformed request body: {}", e.getMessage());
+        // Parse errors can contain submitted credentials; never log the request body.
+        log.warn("Malformed request body");
         return ApiResponse.error(400, "请求参数格式有误，请检查日期等字段格式");
     }
 

@@ -21,7 +21,20 @@ import type {
 } from '../types'
 
 export const authApi = {
-  verify: (apiKey: string) => request<AuthVerifyResponse>('/auth/verify', { apiKey }),
+  verify: (apiKey: string) =>
+    request<AuthVerifyResponse>('/auth/verify', {
+      apiKey,
+      notifyUnauthorized: false,
+      timeoutMs: 20000,
+    }),
+  device: (deviceKey: string) =>
+    request<AuthVerifyResponse>('/auth/device', {
+      method: 'POST',
+      body: { deviceKey },
+      apiKey: '',
+      notifyUnauthorized: false,
+      timeoutMs: 20000,
+    }),
 }
 
 export const scheduleApi = {
@@ -94,13 +107,14 @@ export const aiApi = {
   /** 读取 AI 配置（只返回掩码后的 Key） */
   getConfig: () => request<AiConfig>('/ai/config'),
   /** 保存 DeepSeek Key 到本机（桌面版由用户在设置页填写） */
-  saveConfig: (key: string) =>
-    request<AiConfig>('/ai/config', { method: 'PUT', body: { key } }),
+  saveConfig: (key: string) => request<AiConfig>('/ai/config', { method: 'PUT', body: { key } }),
   /** 清除本机保存的 Key，回退到环境变量/配置文件 */
   clearConfig: () => request<AiConfig>('/ai/config', { method: 'DELETE' }),
   listConversations: () => request<AiConversation[]>('/ai/conversations'),
   pageConversations: (cursor: string | null = null) =>
-    request<CursorPage<AiConversation>>(`/ai/conversations/page?pageSize=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
+    request<CursorPage<AiConversation>>(
+      `/ai/conversations/page?pageSize=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+    ),
   createConversation: (scheduleId: number | null) =>
     request<AiConversation>('/ai/conversations', {
       method: 'POST',
@@ -115,7 +129,9 @@ export const aiApi = {
     }),
   listMessages: (id: number) => request<AiMessage[]>(`/ai/conversations/${id}/messages`),
   pageMessages: (id: number, beforeId: string | null = null) =>
-    request<CursorPage<AiMessage>>(`/ai/conversations/${id}/messages/page?pageSize=40${beforeId ? `&beforeId=${encodeURIComponent(beforeId)}` : ''}`),
+    request<CursorPage<AiMessage>>(
+      `/ai/conversations/${id}/messages/page?pageSize=40${beforeId ? `&beforeId=${encodeURIComponent(beforeId)}` : ''}`,
+    ),
   sendMessageStream: streamMessage,
   execute: (id: number, actionId: number) =>
     request<AiMessage>(`/ai/conversations/${id}/actions/${actionId}/execute`, {

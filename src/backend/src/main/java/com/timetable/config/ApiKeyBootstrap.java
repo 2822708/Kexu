@@ -31,9 +31,8 @@ public class ApiKeyBootstrap implements ApplicationRunner {
             return;
         }
         if (configuredKey == null || configuredKey.isBlank()) {
-            throw new IllegalStateException(
-                    "No account exists. Set TANGENT_BOOTSTRAP_KEY through a protected environment "
-                            + "or launch the desktop application to initialize the administrator account.");
+            log.info("No bootstrap account configured; devices can initialize their own workspaces on first connection.");
+            return;
         }
 
         ApiKey account = new ApiKey();
