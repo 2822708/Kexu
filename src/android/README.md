@@ -9,7 +9,9 @@ Native Kotlin/Compose app for offline-first course schedules, exams, todos, and 
 - Android Gradle Plugin 8.13.2 with Gradle 8.13.
 - Minimum Android API 26; target API 36.
 
-Open this directory as the Android Studio project root. If building from a command line, install Gradle 8.13 and run gradle :app:assembleDebug from this directory. The current handoff environment has no Android SDK, Android Studio, global Gradle installation, or Gradle wrapper bootstrap JAR, so it cannot produce or install an APK yet. Do not treat source presence as build verification. Add the Gradle wrapper scripts/JAR and generated Room schema JSON after the first SDK-equipped build.
+On Windows, run **Setup-Android.cmd** in a normal terminal with network access. It installs pinned, checksum-verified Studio/SDK/Gradle packages, asks you to review SDK licenses, generates the official wrapper, and runs unit tests plus a Debug build. Use **Open-AndroidStudio.cmd**, **Open-AndroidTerminal.cmd**, **Build-Android.cmd**, and **Start-AndroidEmulator.cmd** afterwards. See the [Windows setup guide](../../docs/android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md) for paths and options.
+
+Local SDK/JDK/IDE paths have been configured, but the current restricted execution environment cannot connect to the download sites. Android Studio, SDK and wrapper binaries are still missing. Neither an APK nor build/test success has been verified. Generated Room schema JSON and wrapper files must be reviewed and committed after the first successful build.
 
 ## Current first slice
 

@@ -6,14 +6,17 @@
 |---|---|
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 新目录下的开发命令和 Git 工作流 |
 | [WORKSPACE_SETUP.md](WORKSPACE_SETUP.md) | 项目来源、整理范围、基线及验证 |
-| [desktop/README.md](desktop/README.md) | 桌面版运行、结构、数据目录与构建说明 |
+| [desktop/README.md](desktop/README.md) | 桌面版安全、备份恢复和构建说明 |
 | [android/ANDROID_IMPLEMENTATION_PLAN.md](android/ANDROID_IMPLEMENTATION_PLAN.md) | Android 离线单机版实施架构、数据模型、提醒、AI、导入导出与验收计划 |
 | [android/ANDROID_IMPLEMENTATION_STATUS.md](android/ANDROID_IMPLEMENTATION_STATUS.md) | Android 源码已落地部分、未完成范围与构建验证边界 |
+| [android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md](android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md) | Windows 安卓环境安装入口、固定版本、SDK/IDE路径和当前验证状态 |
 | [android/EXCHANGE_FORMAT_V1.md](android/EXCHANGE_FORMAT_V1.md) | Android/桌面文件交换 JSON v1 结构与导入语义 |
 | [releases/windows-2026-09-26.json](releases/windows-2026-09-26.json) | 纳入的桌面成品逐文件 SHA-256 清单 |
-| [reviews/PROJECT_UNDERSTANDING.md](reviews/PROJECT_UNDERSTANDING.md) | 项目结构、数据关系、AI 和循环机制 |
-| [reviews/CURRENT_ISSUES.md](reviews/CURRENT_ISSUES.md) | 当前仍需处理的问题和验证边界 |
+| [reviews/PROJECT_UNDERSTANDING.md](reviews/PROJECT_UNDERSTANDING.md) | 当前项目结构、数据关系、AI 和循环机制 |
+| [reviews/CURRENT_ISSUES.md](reviews/CURRENT_ISSUES.md) | 原始问题处理状态和剩余验证边界 |
 | [reviews/OPTIMIZATION_PROPOSAL.md](reviews/OPTIMIZATION_PROPOSAL.md) | 工程架构分析、缺陷风险和分阶段优化方案 |
+| [reviews/OPTIMIZATION_STATUS.md](reviews/OPTIMIZATION_STATUS.md) | 优化实施结果、测试状态和部署前事项 |
+| [reviews/IMPORT_ASSISTANT_PLAN.md](reviews/IMPORT_ASSISTANT_PLAN.md) | 截图、文件、语音导入与 AI 提案流程设计 |
 
 ## 原项目资料
 

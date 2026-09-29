@@ -27,6 +27,8 @@ Scope: the first offline-first source slice in src/android.
 
 ## Verification boundary
 
+Windows environment bootstrap scripts and project-local SDK/JDK/IDE configuration are now present; see [Windows development environment](WINDOWS_DEVELOPMENT_ENVIRONMENT.md). Configure-only execution succeeds, but the current session cannot connect to the official download sites, so no missing software has been installed yet.
+
 The current Windows environment has Java 21 but no Android Studio, Android SDK, adb, global Gradle, Gradle wrapper JAR, or Kotlin compiler. The Gradle module and source tests are present, but this handoff has not run assembleDebug, unit tests, or instrumentation tests, and has not produced an APK. The wrapper distribution properties target Gradle 8.13; the wrapper JAR/scripts and Room schema JSON must be generated/added from an SDK-equipped Android build host.
 
 ## Next implementation order
