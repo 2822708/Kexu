@@ -1135,6 +1135,178 @@ body {
   }
 }
 
+/* ==================== Focus workspace ==================== */
+.focus-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.focus-page-header h2 {
+  font-size: 22px !important;
+}
+.focus-date-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.focus-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.8fr);
+  align-items: start;
+  gap: 16px;
+}
+.focus-task-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.focus-progress-card .ant-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.focus-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.focus-list-card .ant-card-head-title {
+  min-width: 0;
+}
+.focus-task-list {
+  display: flex;
+  flex-direction: column;
+}
+.focus-task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.focus-task-row:first-child {
+  padding-top: 2px;
+}
+.focus-task-row:last-child {
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+.focus-task-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.focus-task-copy > .ant-typography {
+  overflow-wrap: anywhere;
+}
+.focus-task-row.is-completed .focus-task-copy {
+  opacity: 0.68;
+}
+.focus-timer-card {
+  position: sticky;
+  top: 8px;
+}
+.focus-timer-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 20px;
+}
+.focus-timer-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 10px;
+  font-weight: 700;
+}
+.focus-timer-progress {
+  margin: 6px auto 0;
+}
+.focus-clock-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.focus-clock-time {
+  margin: 0 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+}
+.focus-current-task {
+  min-height: 24px;
+  max-width: 100%;
+  margin: 0 !important;
+  text-align: center;
+}
+.focus-timer-controls {
+  display: flex;
+  justify-content: center;
+  min-height: 40px;
+}
+.focus-paused-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
+}
+.focus-timer-hint {
+  text-align: center;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .focus-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .focus-timer-card {
+    position: static;
+    order: -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .focus-page-header {
+    align-items: flex-start;
+  }
+  .focus-page-header h2 {
+    font-size: 19px !important;
+  }
+  .focus-date-row {
+    align-items: flex-start;
+  }
+  .focus-progress-card .ant-card-body {
+    padding: 14px;
+  }
+  .focus-task-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .focus-task-row > .ant-space {
+    width: 100%;
+  }
+  .focus-timer-card .ant-card-body {
+    padding: 16px 12px;
+  }
+  .focus-timer-progress .ant-progress-inner {
+    width: 176px !important;
+    height: 176px !important;
+  }
+}
+
 /* ============ 小组件预览页 /widget（与前端暗夜模式保持一致的风格） ============ */
 /* 硬编码暗夜模式设计令牌，保证预览页始终与应用的深色 UI 一致 */
 .widget-page {

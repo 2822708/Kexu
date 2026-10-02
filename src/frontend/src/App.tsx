@@ -3,6 +3,7 @@ import AppLayout from './components/AppLayout'
 import DeviceConnectionPage from './pages/DeviceConnectionPage'
 import TimetablePage from './pages/TimetablePage'
 import TodosPage from './pages/TodosPage'
+import FocusPage from './pages/FocusPage'
 import AiChatPage from './pages/AiChatPage'
 import SettingsPage from './pages/SettingsPage'
 import UserManualPage from './pages/UserManualPage'
@@ -35,6 +36,7 @@ export default function App() {
       <Routes>
         <Route path="/timetable" element={<TimetablePage />} />
         <Route path="/todos" element={<TodosPage />} />
+        <Route path="/focus" element={<FocusPage />} />
         <Route path="/ai" element={<AiChatPage />} />
         <Route path="/manual" element={<UserManualPage />} />
         <Route path="/settings" element={<SettingsPage />} />

@@ -69,6 +69,15 @@ export const todoApi = {
   toggle: (id: number) => request<Todo>(`/todos/${id}/toggle`, { method: 'PUT' }),
 }
 
+export const focusApi = {
+  completedCourseIds: (scheduleId: number, date: string) =>
+    request<number[]>(`/focus/course-completions?scheduleId=${scheduleId}&date=${date}`),
+  setCourseCompleted: (
+    courseId: number,
+    body: { scheduleId: number; date: string; completed: boolean },
+  ) => request<null>(`/focus/course-completions/${courseId}`, { method: 'PUT', body }),
+}
+
 export const recurringApi = {
   list: () => request<RecurringTodo[]>('/recurring-todos'),
   create: (body: RecurringTodoPayload) =>

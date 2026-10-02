@@ -6,6 +6,7 @@ import {
   CalendarOutlined,
   CheckSquareOutlined,
   DesktopOutlined,
+  FieldTimeOutlined,
   MenuOutlined,
   MessageOutlined,
   ReloadOutlined,
@@ -18,6 +19,7 @@ import QuickImportWidget from './QuickImportWidget'
 
 const NAV_ITEMS = [
   { key: '/timetable', icon: <CalendarOutlined />, label: '课表' },
+  { key: '/focus', icon: <FieldTimeOutlined />, label: '专注' },
   { key: '/todos', icon: <CheckSquareOutlined />, label: '待办' },
   { key: '/ai', icon: <MessageOutlined />, label: 'AI 助手' },
   { key: '/manual', icon: <BookOutlined />, label: '用户手册' },
