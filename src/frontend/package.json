@@ -13,8 +13,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:mobile": "tsc -b && vite build --mode mobile",
     "typecheck": "tsc --noEmit",
     "test:device-session": "node --test scripts/test-device-session.mjs",
+    "test:pwa": "node --test scripts/test-pwa.mjs",
+    "test:day-agenda": "node --test scripts/test-day-agenda.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

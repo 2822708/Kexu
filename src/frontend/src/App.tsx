@@ -1,16 +1,39 @@
+import { lazy, Suspense } from 'react'
+import { Spin } from 'antd'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
+import PwaStatus from './components/PwaStatus'
 import DeviceConnectionPage from './pages/DeviceConnectionPage'
-import TimetablePage from './pages/TimetablePage'
-import TodosPage from './pages/TodosPage'
-import FocusPage from './pages/FocusPage'
-import AiChatPage from './pages/AiChatPage'
-import SettingsPage from './pages/SettingsPage'
-import UserManualPage from './pages/UserManualPage'
-import WidgetPreviewPage from './pages/WidgetPreviewPage'
 import { useApp } from './store/AppContext'
 
+const TimetablePage = lazy(() => import('./pages/TimetablePage'))
+const TodosPage = lazy(() => import('./pages/TodosPage'))
+const FocusPage = lazy(() => import('./pages/FocusPage'))
+const AiChatPage = lazy(() => import('./pages/AiChatPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const UserManualPage = lazy(() => import('./pages/UserManualPage'))
+const WidgetPreviewPage = lazy(() => import('./pages/WidgetPreviewPage'))
+
 export default function App() {
+  return (
+    <>
+      <PwaStatus />
+      <Suspense
+        fallback={
+          <div className="app-loading-page">
+            <Spin tip="正在打开页面…">
+              <div style={{ height: 48 }} />
+            </Spin>
+          </div>
+        }
+      >
+        <AppRoutes />
+      </Suspense>
+    </>
+  )
+}
+
+function AppRoutes() {
   const { ready, authed } = useApp()
   const location = useLocation()
   const widgetRoute = location.pathname.startsWith('/widget')

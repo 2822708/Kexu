@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons'
 import TimetableGrid from '../components/TimetableGrid'
 import CourseListView from '../components/CourseListView'
+import CourseDayView from '../components/CourseDayView'
 import CourseFormModal from '../components/CourseFormModal'
 import ScheduleManagerModal from '../components/ScheduleManagerModal'
 import ScheduleCreateModal from '../components/ScheduleCreateModal'
@@ -18,7 +19,8 @@ import ExamManagerModal from '../components/ExamManagerModal'
 import { aiApi, courseApi, examApi, scheduleApi } from '../api'
 import { useApp } from '../store/AppContext'
 import type { Course, CoursePayload, Exam, ExamPayload, Schedule } from '../types'
-import { currentWeekOf, totalWeeks } from '../utils/schedule'
+import { currentWeekOf, dayjs, totalWeeks } from '../utils/schedule'
+import '../day-agenda.css'
 
 export default function TimetablePage() {
   const {
@@ -31,10 +33,14 @@ export default function TimetablePage() {
     refreshCourses,
     refreshExams,
     refreshSchedules,
+    refreshTodos,
   } = useApp()
 
   const [week, setWeek] = useState(1)
-  const [viewMode, setViewMode] = useState<'week' | 'all'>('week')
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'all'>(() =>
+    window.matchMedia('(max-width: 767px)').matches ? 'day' : 'week',
+  )
+  const [selectedDate, setSelectedDate] = useState(() => dayjs().format('YYYY-MM-DD'))
   const [courseModal, setCourseModal] = useState<{
     open: boolean
     course: Course | null
@@ -131,18 +137,21 @@ export default function TimetablePage() {
     message.success('课表已删除')
     await refreshSchedules()
     await refreshCourses()
-    await refreshExams()
+    await Promise.all([refreshExams(), refreshTodos()])
   }
 
   const createExam = async (payload: ExamPayload) => {
-    if (!activeScheduleId) return
+    if (!activeScheduleId) throw new Error('请先选择课表')
     setExamSaving(true)
     try {
       await examApi.create(activeScheduleId, payload)
       message.success('考试已添加')
-      await refreshExams()
+      await Promise.all([refreshExams(), refreshTodos()]).catch(() =>
+        message.warning('考试已保存，列表刷新失败，请稍后刷新'),
+      )
     } catch (e) {
       message.error(e instanceof Error ? e.message : '保存失败')
+      throw e
     } finally {
       setExamSaving(false)
     }
@@ -153,9 +162,12 @@ export default function TimetablePage() {
     try {
       await examApi.update(id, payload)
       message.success('考试已更新')
-      await refreshExams()
+      await Promise.all([refreshExams(), refreshTodos()]).catch(() =>
+        message.warning('考试已保存，列表刷新失败，请稍后刷新'),
+      )
     } catch (e) {
       message.error(e instanceof Error ? e.message : '保存失败')
+      throw e
     } finally {
       setExamSaving(false)
     }
@@ -165,7 +177,7 @@ export default function TimetablePage() {
     try {
       await examApi.remove(exam.id)
       message.success('考试已删除')
-      await refreshExams()
+      await Promise.all([refreshExams(), refreshTodos()])
     } catch (e) {
       message.error(e instanceof Error ? e.message : '删除失败')
     }
@@ -207,8 +219,9 @@ export default function TimetablePage() {
           </Typography.Title>
           <Segmented
             value={viewMode}
-            onChange={(v) => setViewMode(v as 'week' | 'all')}
+            onChange={(v) => setViewMode(v as 'day' | 'week' | 'all')}
             options={[
+              { value: 'day', label: '按日' },
               { value: 'week', label: '按周' },
               { value: 'all', label: '全部课程' },
             ]}
@@ -257,7 +270,27 @@ export default function TimetablePage() {
         </Space>
       </div>
 
-      {viewMode === 'week' ? (
+      {viewMode === 'day' && activeSchedule ? (
+        <CourseDayView
+          date={selectedDate}
+          schedule={activeSchedule}
+          courses={courses}
+          exams={exams}
+          periods={periods}
+          onDateChange={(date) => {
+            setSelectedDate(date)
+            setWeek(
+              Math.min(
+                total,
+                Math.max(1, currentWeekOf(activeSchedule.periodStartDate, dayjs(date))),
+              ),
+            )
+          }}
+          onEdit={(course) => setCourseModal({ open: true, course, defaults: null })}
+          onExamClick={() => setExamModalOpen(true)}
+          onCreate={openCreate}
+        />
+      ) : viewMode === 'week' ? (
         <div className="tt-scroll">
           <TimetableGrid
             courses={courses}

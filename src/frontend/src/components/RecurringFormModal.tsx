@@ -266,7 +266,7 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
         )}
 
         <Form.Item label="截止时间（从触发时刻往后推算）" required>
-          <Space>
+          <Space wrap>
             <Form.Item name="offsetDays" noStyle>
               <InputNumber min={0} max={60} addonAfter="天" style={{ width: 100 }} />
             </Form.Item>
@@ -291,8 +291,8 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
             extra={
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 用 JavaScript 编写 <code>shouldTrigger(ctx)</code> 函数，返回 <code>true</code>{' '}
-                表示触发。系统使用上海时间，延迟或重启时最多补查最近 10 分钟。
-                weekOfYear 是 ISO 年内周数，不是学期教学周。只能用纯 JS，不能访问 Java / IO。
+                表示触发。系统使用上海时间，延迟或重启时最多补查最近 10 分钟。 weekOfYear 是 ISO
+                年内周数，不是学期教学周。只能用纯 JS，不能访问 Java / IO。
                 下方「测试脚本」可校验语法并查看此刻是否会触发。
               </Typography.Text>
             }

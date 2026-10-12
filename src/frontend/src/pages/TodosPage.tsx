@@ -170,10 +170,12 @@ export default function TodosPage() {
             const urgent = !todo.completed && !overdue && ddl.diff(now, 'hour') < 24
             return (
               <List.Item
+                className="todo-record"
                 actions={[
                   <Button
                     key="edit"
                     type="text"
+                    aria-label={`编辑待办 ${todo.title}`}
                     icon={<EditOutlined />}
                     onClick={() => openModal(todo)}
                   />,
@@ -184,20 +186,26 @@ export default function TodosPage() {
                     cancelText="取消"
                     onConfirm={() => remove(todo)}
                   >
-                    <Button type="text" danger icon={<DeleteOutlined />} />
+                    <Button
+                      type="text"
+                      danger
+                      aria-label={`删除待办 ${todo.title}`}
+                      icon={<DeleteOutlined />}
+                    />
                   </Popconfirm>,
                 ]}
               >
                 <List.Item.Meta
                   avatar={
                     <Checkbox
+                      aria-label={`完成待办 ${todo.title}`}
                       checked={todo.completed}
                       onChange={() => toggle(todo)}
                       style={{ marginTop: 4 }}
                     />
                   }
                   title={
-                    <Space>
+                    <Space wrap>
                       <Typography.Text
                         delete={todo.completed}
                         type={todo.completed ? 'secondary' : undefined}

@@ -1,0 +1,44 @@
+.pwa-controls {
+  position: fixed;
+  z-index: 900;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+}
+
+.pwa-controls:empty {
+  display: none;
+}
+.pwa-controls .ant-btn {
+  box-shadow: 0 2px 8px #0002;
+}
+
+.pwa-offline {
+  position: fixed;
+  top: calc(52px + env(safe-area-inset-top));
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  z-index: 1100;
+  padding: 10px 12px;
+  background: #fff3cd;
+  color: #594000;
+  border: 1px solid #dec679;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+@media (max-width: 767px) {
+  .pwa-controls {
+    bottom: calc(var(--mobile-nav-height, calc(60px + env(safe-area-inset-bottom))) + 16px);
+  }
+  .pwa-controls .ant-btn {
+    min-height: 40px;
+    padding-inline: 12px;
+  }
+}
+
+[data-keyboard-open] .pwa-controls,
+[data-keyboard-open] .pwa-offline {
+  display: none;
+}

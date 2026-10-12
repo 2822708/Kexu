@@ -7,6 +7,8 @@
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 新目录下的开发命令和 Git 工作流 |
 | [WORKSPACE_SETUP.md](WORKSPACE_SETUP.md) | 项目来源、整理范围、基线及验证 |
 | [desktop/README.md](desktop/README.md) | 桌面版安全、备份恢复和构建说明 |
+| [mobile/README.md](mobile/README.md) | 联网手机 PWA 首版运行包、功能、验证边界与启动说明 |
+| [mobile/DEPLOYMENT.md](mobile/DEPLOYMENT.md) | 同源 HTTPS、Java/H2、SSE 反代与隔离接口验证 |
 | [android/ANDROID_IMPLEMENTATION_PLAN.md](android/ANDROID_IMPLEMENTATION_PLAN.md) | Android 离线单机版实施架构、数据模型、提醒、AI、导入导出与验收计划 |
 | [android/ANDROID_IMPLEMENTATION_STATUS.md](android/ANDROID_IMPLEMENTATION_STATUS.md) | Android 源码已落地部分、未完成范围与构建验证边界 |
 | [android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md](android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md) | Windows 安卓环境安装入口、固定版本、SDK/IDE路径和当前验证状态 |

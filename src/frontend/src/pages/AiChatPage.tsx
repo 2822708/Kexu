@@ -13,12 +13,7 @@ import {
   Typography,
   message,
 } from 'antd'
-import {
-  DeleteOutlined,
-  EditOutlined,
-  MenuOutlined,
-  PlusOutlined,
-} from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, MenuOutlined, PlusOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AiActionCard from '../components/AiActionCard'
 import AiChatComposer from '../components/AiChatComposer'
@@ -170,7 +165,9 @@ export default function AiChatPage() {
       setConversationCursor(page.nextCursor)
     } catch (e) {
       message.error(e instanceof Error ? e.message : '加载对话失败')
-    } finally { setLoadingConversations(false) }
+    } finally {
+      setLoadingConversations(false)
+    }
   }
 
   const refreshMessages = useCallback(async (id: number, preserveOlder = false) => {
@@ -201,7 +198,10 @@ export default function AiChatPage() {
       const page = await aiApi.pageMessages(id, messageCursor)
       if (currentIdRef.current !== id || version !== messageRequestRef.current) return
       const existing = new Set(messagesRef.current.map((item) => item.messageId))
-      const next = [...page.items.filter((item) => !existing.has(item.messageId)), ...messagesRef.current]
+      const next = [
+        ...page.items.filter((item) => !existing.has(item.messageId)),
+        ...messagesRef.current,
+      ]
       messagesRef.current = next
       setMessages(next)
       setMessageCursor(page.nextCursor)
@@ -211,8 +211,11 @@ export default function AiChatPage() {
         }
       })
     } catch (e) {
-      if (currentIdRef.current === id) message.error(e instanceof Error ? e.message : '加载历史失败')
-    } finally { if (currentIdRef.current === id) setLoadingOlder(false) }
+      if (currentIdRef.current === id)
+        message.error(e instanceof Error ? e.message : '加载历史失败')
+    } finally {
+      if (currentIdRef.current === id) setLoadingOlder(false)
+    }
   }
 
   useEffect(() => {
@@ -249,8 +252,12 @@ export default function AiChatPage() {
     }
     setLoadingMessages(true)
     refreshMessages(currentId)
-      .catch((e: Error) => { if (currentIdRef.current === currentId) message.error(e.message) })
-      .finally(() => { if (currentIdRef.current === currentId) setLoadingMessages(false) })
+      .catch((e: Error) => {
+        if (currentIdRef.current === currentId) message.error(e.message)
+      })
+      .finally(() => {
+        if (currentIdRef.current === currentId) setLoadingMessages(false)
+      })
   }, [currentId, refreshMessages])
 
   // 课表/待办变化时重新拉取消息，让失效提案立即显示
@@ -259,8 +266,7 @@ export default function AiChatPage() {
   useEffect(() => {
     if (previousDataVersionRef.current === dataVersion || currentId === null || sending) return
     previousDataVersionRef.current = dataVersion
-    refreshMessages(currentId, true)
-      .catch(() => undefined)
+    refreshMessages(currentId, true).catch(() => undefined)
   }, [dataVersion, currentId, sending, refreshMessages])
 
   // 只在「有新消息流式输出」或「切换对话加载完成」时自动滚到底部；
@@ -376,7 +382,8 @@ export default function AiChatPage() {
       return
     } finally {
       setCreatingConversation(false)
-      if (controller.signal.aborted && activeAbortRef.current === controller) activeAbortRef.current = null
+      if (controller.signal.aborted && activeAbortRef.current === controller)
+        activeAbortRef.current = null
     }
 
     if (controller.signal.aborted) return
@@ -387,16 +394,22 @@ export default function AiChatPage() {
     }))
 
     try {
-      await aiApi.sendMessageStream(cid, content, activeScheduleId, {
-        onThinking: () => patchStream(cid, { phase: 'thinking' }),
-        onText: (delta) =>
-          setStreams((prev) => {
-            const cur = prev[cid]
-            if (!cur) return prev
-            return { ...prev, [cid]: { ...cur, phase: 'text', text: cur.text + delta } }
-          }),
-        onPlanning: () => patchStream(cid, { phase: 'planning' }),
-      }, controller.signal)
+      await aiApi.sendMessageStream(
+        cid,
+        content,
+        activeScheduleId,
+        {
+          onThinking: () => patchStream(cid, { phase: 'thinking' }),
+          onText: (delta) =>
+            setStreams((prev) => {
+              const cur = prev[cid]
+              if (!cur) return prev
+              return { ...prev, [cid]: { ...cur, phase: 'text', text: cur.text + delta } }
+            }),
+          onPlanning: () => patchStream(cid, { phase: 'planning' }),
+        },
+        controller.signal,
+      )
       clearStream(cid)
       await refreshMessages(cid)
       await loadConversations()
@@ -408,7 +421,8 @@ export default function AiChatPage() {
       } catch {
         // 忽略
       }
-      if (!controller.signal.aborted && currentIdRef.current === cid) setInput((draft) => draft || content)
+      if (!controller.signal.aborted && currentIdRef.current === cid)
+        setInput((draft) => draft || content)
     } finally {
       if (activeAbortRef.current === controller) activeAbortRef.current = null
     }
@@ -468,7 +482,7 @@ export default function AiChatPage() {
     : null
 
   return (
-    <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+    <div className="ai-chat-page" style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
       {convPanelOpen && <div className="conv-backdrop" onClick={() => setConvPanelOpen(false)} />}
       <Card
         className={`conv-panel${convPanelOpen ? ' open' : ''}`}
@@ -593,11 +607,15 @@ export default function AiChatPage() {
             )
           }}
         />
-        {conversationCursor && <Button block type="text" loading={loadingConversations}
-          onClick={loadMoreConversations}>加载更多对话</Button>}
+        {conversationCursor && (
+          <Button block type="text" loading={loadingConversations} onClick={loadMoreConversations}>
+            加载更多对话
+          </Button>
+        )}
       </Card>
 
       <Card
+        className="ai-chat-main"
         size="small"
         style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}
         styles={{
@@ -633,7 +651,7 @@ export default function AiChatPage() {
             type="warning"
             showIcon
             message="AI 功能未启用"
-            description="后端未配置 DEEPSEEK_API_KEY 环境变量，请设置后重启服务。"
+            description="请联系服务管理员启用 AI。课表、考试和待办仍可正常使用。"
             style={{ marginBottom: 12, flexShrink: 0 }}
           />
         )}
@@ -657,11 +675,18 @@ export default function AiChatPage() {
 
         <div className="chat-layout">
           <div className="chat-messages" ref={chatScrollRef}>
-            {messageCursor && !loadingMessages && <div style={{ textAlign: 'center', paddingBottom: 12 }}>
-              <Button size="small" loading={loadingOlder} disabled={sending} onClick={loadOlderMessages}>
-                加载更早的消息
-              </Button>
-            </div>}
+            {messageCursor && !loadingMessages && (
+              <div style={{ textAlign: 'center', paddingBottom: 12 }}>
+                <Button
+                  size="small"
+                  loading={loadingOlder}
+                  disabled={sending}
+                  onClick={loadOlderMessages}
+                >
+                  加载更早的消息
+                </Button>
+              </div>
+            )}
             {loadingMessages ? (
               <div style={{ textAlign: 'center', padding: 40 }}>
                 <Spin />
@@ -707,9 +732,18 @@ export default function AiChatPage() {
                         key={action.actionId}
                         action={action}
                         executing={executingId === action.actionId}
-                        scheduleName={schedules.find((s) => s.id === (action.scheduleId ?? currentConv?.scheduleId))?.name}
-                        disabled={workspaceMismatch || sending || executingId !== null ||
-                          (action.scope === 'COURSE' && (action.scheduleId ?? currentConv?.scheduleId) !== activeScheduleId)}
+                        scheduleName={
+                          schedules.find(
+                            (s) => s.id === (action.scheduleId ?? currentConv?.scheduleId),
+                          )?.name
+                        }
+                        disabled={
+                          workspaceMismatch ||
+                          sending ||
+                          executingId !== null ||
+                          (action.scope === 'COURSE' &&
+                            (action.scheduleId ?? currentConv?.scheduleId) !== activeScheduleId)
+                        }
                         onExecute={() => execute(action.actionId)}
                         onReject={() => reject(action.actionId)}
                       />
