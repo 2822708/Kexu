@@ -1,6 +1,7 @@
 package com.timetable.controller;
 
 import com.timetable.dto.AiConversationRequest;
+import com.timetable.dto.AiContextSummary;
 import com.timetable.dto.AiMessageRequest;
 import com.timetable.dto.AiMessageResponse;
 import com.timetable.dto.AiParseHtmlRequest;
@@ -187,6 +188,15 @@ public class AiController {
             @PathVariable Long id, @RequestParam(required = false) Long beforeId,
             @RequestParam(defaultValue = "40") int pageSize) {
         return ApiResponse.success(aiService.pageMessages(id, beforeId, pageSize, RequestContext.getApiKey()));
+    }
+
+    /**
+     * 上下文注入摘要（AI Campus Agent V1.0 Step 3）。
+     * 与聊天 system prompt 的五段式上下文同源同算，供前端输入框上方展示 chips。
+     */
+    @GetMapping("/conversations/{id}/context")
+    public ApiResponse<AiContextSummary> conversationContext(@PathVariable Long id) {
+        return ApiResponse.success(aiService.contextSummary(id, RequestContext.getApiKey()));
     }
 
     @PostMapping("/conversations/{id}/messages")

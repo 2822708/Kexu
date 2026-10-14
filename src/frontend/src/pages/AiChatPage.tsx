@@ -24,7 +24,7 @@ import AiActionCard from '../components/AiActionCard'
 import AiChatComposer from '../components/AiChatComposer'
 import { aiApi } from '../api'
 import { useApp } from '../store/AppContext'
-import type { AiConversation, AiMessage } from '../types'
+import type { AiContextSummary, AiConversation, AiMessage } from '../types'
 import { formatWeekInfo } from '../utils/schedule'
 
 const EXAMPLES = [
@@ -68,6 +68,8 @@ export default function AiChatPage() {
   const [creatingConversation, setCreatingConversation] = useState(false)
   const [convPanelOpen, setConvPanelOpen] = useState(false)
   const [messages, setMessages] = useState<AiMessage[]>([])
+  // 上下文注入摘要（五段式：档案/课表/任务/记忆），与 system prompt 同源同算
+  const [context, setContext] = useState<AiContextSummary | null>(null)
   const [input, setInput] = useState('')
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [executingId, setExecutingId] = useState<number | null>(null)
@@ -93,11 +95,22 @@ export default function AiChatPage() {
       messageRequestRef.current++
       messagesRef.current = []
       setMessages([])
+      setContext(null)
       setMessageCursor(null)
       setLoadingOlder(false)
       setLoadingMessages(id !== null)
       currentIdRef.current = id
       setCurrentId(id)
+    }
+  }, [])
+
+  /** 拉取上下文摘要；切换对话后旧摘要先清空，避免串台 */
+  const loadContextSummary = useCallback(async (id: number) => {
+    try {
+      const summary = await aiApi.contextSummary(id)
+      if (currentIdRef.current === id) setContext(summary)
+    } catch {
+      if (currentIdRef.current === id) setContext(null)
     }
   }, [])
 
@@ -249,9 +262,10 @@ export default function AiChatPage() {
     }
     setLoadingMessages(true)
     refreshMessages(currentId)
+      .then(() => loadContextSummary(currentId))
       .catch((e: Error) => { if (currentIdRef.current === currentId) message.error(e.message) })
       .finally(() => { if (currentIdRef.current === currentId) setLoadingMessages(false) })
-  }, [currentId, refreshMessages])
+  }, [currentId, refreshMessages, loadContextSummary])
 
   // 课表/待办变化时重新拉取消息，让失效提案立即显示
   const dataVersion = JSON.stringify([courses, exams, todos, recurringTodos])
@@ -399,6 +413,7 @@ export default function AiChatPage() {
       }, controller.signal)
       clearStream(cid)
       await refreshMessages(cid)
+      await loadContextSummary(cid)
       await loadConversations()
     } catch (e) {
       clearStream(cid)
@@ -427,6 +442,7 @@ export default function AiChatPage() {
       await aiApi.execute(currentId, actionId)
       message.success('操作已执行')
       await refreshMessages(currentId, true)
+      await loadContextSummary(currentId)
       try {
         await Promise.all([refreshCourses(), refreshExams(), refreshTodos(), refreshRecurring()])
       } catch (e) {
@@ -456,6 +472,7 @@ export default function AiChatPage() {
     try {
       await aiApi.reject(currentId, actionId)
       await refreshMessages(currentId, true)
+      await loadContextSummary(currentId)
     } catch (e) {
       message.error(e instanceof Error ? e.message : '取消失败')
     } finally {
@@ -751,6 +768,22 @@ export default function AiChatPage() {
             )}
             <div ref={bottomRef} />
           </div>
+
+          {currentId !== null && context && (
+            <div className="chat-context-chips">
+              <Space size={4} wrap>
+                <Tag color={context.profilePresent ? 'green' : 'default'}>
+                  {context.profilePresent ? '档案 ✓' : '档案 未填写'}
+                </Tag>
+                <Tag color="geekblue">课表 {context.courseCount} 门</Tag>
+                <Tag color="purple">任务 {context.taskCount}{context.tasksTruncated ? '+' : ''}</Tag>
+                <Tag color="magenta">记忆 {context.memoryCount}{context.memoriesTruncated ? '+' : ''}</Tag>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  学长每轮回答前会读取这些数据
+                </Typography.Text>
+              </Space>
+            </div>
+          )}
 
           <AiChatComposer
             value={input}

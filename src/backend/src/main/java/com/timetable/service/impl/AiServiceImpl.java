@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.timetable.dto.AiContextSummary;
 import com.timetable.dto.AiActionDto;
 import com.timetable.dto.AiConversationRequest;
 import com.timetable.dto.AiMessageRequest;
@@ -25,6 +26,7 @@ import com.timetable.entity.Memory;
 import com.timetable.entity.PeriodConfig;
 import com.timetable.entity.Schedule;
 import com.timetable.entity.StudentProfile;
+import com.timetable.entity.Task;
 import com.timetable.entity.Todo;
 import com.timetable.entity.RecurringTodo;
 import com.timetable.exception.BusinessException;
@@ -41,6 +43,7 @@ import com.timetable.service.PeriodConfigService;
 import com.timetable.service.RecurringTodoService;
 import com.timetable.service.ScheduleService;
 import com.timetable.service.StudentProfileService;
+import com.timetable.service.TaskService;
 import com.timetable.service.TodoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,6 +114,7 @@ public class AiServiceImpl implements AiService {
     private final PeriodConfigService periodConfigService;
     private final StudentProfileService studentProfileService;
     private final MemoryService memoryService;
+    private final TaskService taskService;
     private final PromptTemplateRegistry promptTemplates;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
@@ -129,6 +133,7 @@ public class AiServiceImpl implements AiService {
                          PeriodConfigService periodConfigService,
                          StudentProfileService studentProfileService,
                          MemoryService memoryService,
+                         TaskService taskService,
                          PromptTemplateRegistry promptTemplates,
                          ObjectMapper objectMapper,
                          PlatformTransactionManager transactionManager,
@@ -146,6 +151,7 @@ public class AiServiceImpl implements AiService {
         this.periodConfigService = periodConfigService;
         this.studentProfileService = studentProfileService;
         this.memoryService = memoryService;
+        this.taskService = taskService;
         this.promptTemplates = promptTemplates;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -534,6 +540,17 @@ public class AiServiceImpl implements AiService {
     }
 
     @Override
+    public AiContextSummary contextSummary(Long conversationId, String apiKey) {
+        AiConversation conversation = getConversation(conversationId, apiKey);
+        StudentProfile profile = studentProfileService.find(apiKey);
+        List<Course> courses = conversation.getScheduleId() == null
+                ? List.of() : courseService.listByScheduleId(conversation.getScheduleId(), apiKey);
+        List<Task> openTasks = taskService.listOpen(apiKey, LocalDateTime.now(clock));
+        List<Memory> memories = memoryService.listActive(apiKey);
+        return AiPromptBuilder.summarizeContext(profile, courses.size(), openTasks.size(), memories.size());
+    }
+
+    @Override
     public CursorPage<AiMessageResponse> pageMessages(Long conversationId, Long beforeId, int pageSize, String apiKey) {
         getConversation(conversationId, apiKey);
         int limit = boundedPageSize(pageSize);
@@ -638,10 +655,11 @@ public class AiServiceImpl implements AiService {
         List<Todo> todos = todoService.list(apiKey);
         List<RecurringTodo> recurringTodos = recurringTodoService.list(apiKey);
         List<PeriodConfig> periods = periodConfigService.list();
-        // AI Campus Agent：档案与长期记忆随每轮对话加载（Step 3 起进入聊天上下文），
+        // AI Campus Agent：档案、长期记忆与未完成任务随每轮对话加载（Step 3 起进入五段式聊天上下文），
         // 同时也是 UPDATE_PROFILE / SAVE_MEMORY 提案的 _before 与指纹基线。
         StudentProfile profile = studentProfileService.find(apiKey);
         List<Memory> memories = memoryService.listActive(apiKey);
+        List<Task> openTasks = taskService.listOpen(apiKey, LocalDateTime.now(clock));
 
         // 未配置任何可用 provider 时立刻失败，避免白跑一轮数据库写入
         LlmClient client = llmClients.active();
@@ -658,11 +676,14 @@ public class AiServiceImpl implements AiService {
         messageMapper.insert(userMessage);
 
         PromptTemplateRegistry.PromptTemplate personaTemplate = promptTemplates.get("persona");
+        // 五段式上下文：人格 + 协议 + 档案/课表/任务/记忆；摘要与注入同源同算
+        AiPromptBuilder.ChatPrompt chatPrompt = AiPromptBuilder.buildChatSystemPrompt(
+                schedule, courses, exams, todos, recurringTodos, periods,
+                LocalDate.now(clock),
+                personaTemplate == null ? null : personaTemplate.body(),
+                profile, openTasks, memories);
         List<LlmClient.Message> payload = new ArrayList<>();
-        payload.add(new LlmClient.Message("system",
-                AiPromptBuilder.buildChatSystemPrompt(schedule, courses, exams, todos, recurringTodos, periods,
-                        LocalDate.now(clock),
-                        personaTemplate == null ? null : personaTemplate.body())));
+        payload.add(new LlmClient.Message("system", chatPrompt.prompt()));
 
         List<AiMessage> window = loadRecentMessages(conversationId, HISTORY_LIMIT);
         Map<Long, List<AiAction>> historyActions = loadActionsGrouped(

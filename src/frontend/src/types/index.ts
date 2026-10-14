@@ -136,6 +136,19 @@ export type AiActionStatus = 'PENDING' | 'EXECUTING' | 'EXECUTED' | 'REJECTED' |
 
 export type AiActionScope = 'COURSE' | 'TODO' | 'PROFILE' | 'MEMORY'
 
+/**
+ * AI 聊天上下文注入摘要（五段式：档案/课表/任务/记忆）。
+ * 计数为实际注入 system prompt 的条数（截断后），供输入框上方 chips 展示。
+ */
+export interface AiContextSummary {
+  profilePresent: boolean
+  courseCount: number
+  taskCount: number
+  memoryCount: number
+  tasksTruncated: boolean
+  memoriesTruncated: boolean
+}
+
 export interface AiAction {
   actionId: number
   type: AiActionType

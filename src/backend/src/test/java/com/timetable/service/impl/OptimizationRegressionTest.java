@@ -57,7 +57,7 @@ class OptimizationRegressionTest {
             RequestValidationService.class, ScheduleServiceImpl.class, CourseServiceImpl.class, ExamServiceImpl.class,
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
-            StudentProfileServiceImpl.class, MemoryServiceImpl.class,
+            StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
             LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class})
     static class TestApplication {
         @Bean

@@ -1,10 +1,15 @@
 package com.timetable.service.impl;
 
+import com.timetable.dto.AiContextSummary;
 import com.timetable.entity.AiMessage;
 import com.timetable.entity.Memory;
 import com.timetable.entity.StudentProfile;
+import com.timetable.entity.Task;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,5 +99,117 @@ class AiCampusAgentPromptTest {
         assertThat(window).contains("（未填写）");
         assertThat(window).contains("（无）");
         assertThat(window).contains("（空）");
+    }
+
+    // ==================== 五段式上下文（Step 3） ====================
+
+    private static AiPromptBuilder.ChatPrompt chatPrompt(StudentProfile profile, List<Task> tasks,
+                                                          List<Memory> memories) {
+        return AiPromptBuilder.buildChatSystemPrompt(null, List.of(), List.of(), List.of(), List.of(),
+                List.of(), LocalDate.of(2026, 9, 27), null, profile, tasks, memories);
+    }
+
+    private static Task task(long id, String title) {
+        Task task = new Task();
+        task.setId(id);
+        task.setTitle(title);
+        task.setType(Task.TYPE_OTHER);
+        task.setPriority(Task.PRIORITY_MEDIUM);
+        task.setStatus(Task.STATUS_PENDING);
+        task.setDeadline(LocalDateTime.of(2026, 9, 30, 23, 59));
+        return task;
+    }
+
+    private static Memory memory(long id, String content, int importance) {
+        Memory memory = new Memory();
+        memory.setId(id);
+        memory.setType(Memory.TYPE_HABIT);
+        memory.setContent(content);
+        memory.setImportance(importance);
+        return memory;
+    }
+
+    @Test
+    void chatPromptShowsPlaceholdersWhenNoProfileTasksOrMemories() {
+        AiPromptBuilder.ChatPrompt built = chatPrompt(null, List.of(), List.of());
+
+        assertThat(built.prompt()).contains("### 学生档案");
+        assertThat(built.prompt()).contains("（尚未填写。");
+        assertThat(built.prompt()).contains("### 当前任务");
+        assertThat(built.prompt()).contains("（无）");
+        assertThat(built.prompt()).contains("### 长期记忆");
+        assertThat(built.prompt()).contains("（暂无）");
+        assertThat(built.summary().isProfilePresent()).isFalse();
+        assertThat(built.summary().getTaskCount()).isZero();
+        assertThat(built.summary().getMemoryCount()).isZero();
+    }
+
+    @Test
+    void chatPromptTaskSectionCapsAtFifteenWithTruncationNote() {
+        List<Task> tasks = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            tasks.add(task(i + 1L, "任务 " + i));
+        }
+
+        AiPromptBuilder.ChatPrompt built = chatPrompt(null, tasks, List.of());
+
+        assertThat(built.prompt()).contains("当前仅提供前 15 条，共 20 条");
+        assertThat(built.prompt()).contains("id=1 标题=任务 0");
+        assertThat(built.prompt()).doesNotContain("标题=任务 19");
+        assertThat(built.summary().getTaskCount()).isEqualTo(15);
+        assertThat(built.summary().isTasksTruncated()).isTrue();
+    }
+
+    @Test
+    void chatPromptMemorySectionCapsAtTwentyWithTruncationNote() {
+        List<Memory> memories = new ArrayList<>();
+        for (int i = 0; i < 25; i++) {
+            memories.add(memory(i + 1L, "记忆 " + i, 5));
+        }
+
+        AiPromptBuilder.ChatPrompt built = chatPrompt(null, List.of(), memories);
+
+        assertThat(built.prompt()).contains("当前仅提供重要度前 20 条，共 25 条");
+        assertThat(built.prompt()).contains("- [习惯·重要度5] 记忆 0");
+        assertThat(built.prompt()).doesNotContain("记忆 24");
+        assertThat(built.summary().getMemoryCount()).isEqualTo(20);
+        assertThat(built.summary().isMemoriesTruncated()).isTrue();
+    }
+
+    @Test
+    void chatPromptProfileSectionListsAllFilledFields() {
+        StudentProfile profile = new StudentProfile();
+        profile.setName("小明");
+        profile.setSchool("清华大学");
+        profile.setMajor("计算机科学与技术");
+        profile.setGrade("2024 级");
+        profile.setGoal("通过六级");
+        profile.setLearningStyle("先理解再刷题");
+        profile.setInterest(List.of("机器学习", "吉他"));
+        profile.setSkills(List.of("Java"));
+
+        AiPromptBuilder.ChatPrompt built = chatPrompt(profile, List.of(), List.of());
+
+        assertThat(built.prompt()).contains("姓名=小明 学校=清华大学 专业=计算机科学与技术 年级=2024 级");
+        assertThat(built.prompt()).contains("兴趣=机器学习、吉他");
+        assertThat(built.prompt()).contains("技能=Java");
+        assertThat(built.summary().isProfilePresent()).isTrue();
+    }
+
+    @Test
+    void summarizeContextAppliesBudgetsAndProfilePresence() {
+        StudentProfile empty = new StudentProfile();
+        assertThat(AiPromptBuilder.summarizeContext(empty, 5, 3, 2).isProfilePresent()).isFalse();
+
+        StudentProfile profile = new StudentProfile();
+        profile.setGoal("考研");
+        AiContextSummary summary = AiPromptBuilder.summarizeContext(profile, 150, 20, 5);
+
+        assertThat(summary.isProfilePresent()).isTrue();
+        assertThat(summary.getCourseCount()).isEqualTo(100);
+        assertThat(summary.getTaskCount()).isEqualTo(15);
+        assertThat(summary.isTasksTruncated()).isTrue();
+        assertThat(summary.getMemoryCount()).isEqualTo(5);
+        assertThat(summary.isMemoriesTruncated()).isFalse();
     }
 }

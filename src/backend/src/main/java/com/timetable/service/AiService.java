@@ -1,5 +1,6 @@
 package com.timetable.service;
 
+import com.timetable.dto.AiContextSummary;
 import com.timetable.dto.AiConversationRequest;
 import com.timetable.dto.AiMessageRequest;
 import com.timetable.dto.AiMessageResponse;
@@ -22,6 +23,14 @@ public interface AiService {
     void deleteConversation(Long conversationId, String apiKey);
 
     List<AiMessageResponse> listMessages(Long conversationId, String apiKey);
+
+    /**
+     * 上下文注入摘要（AI Campus Agent V1.0 Step 3）。
+     *
+     * 与聊天 system prompt 的五段式上下文（档案/课表/任务/记忆）同源同算，
+     * 供前端在输入框上方展示上下文 chips。纯读查询，不调用模型、不写库。
+     */
+    AiContextSummary contextSummary(Long conversationId, String apiKey);
 
     CursorPage<AiMessageResponse> pageMessages(Long conversationId, Long beforeId, int pageSize, String apiKey);
 

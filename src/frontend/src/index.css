@@ -500,6 +500,11 @@ body {
   margin-top: 10px;
   max-width: 720px;
 }
+/* 输入框上方的上下文 chips（五段式注入摘要） */
+.chat-context-chips {
+  padding: 8px 0 0;
+  flex-shrink: 0;
+}
 .chat-input-bar {
   display: flex;
   gap: 8px;

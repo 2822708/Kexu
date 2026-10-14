@@ -2,6 +2,7 @@ import { request } from './client'
 import { streamMessage } from './stream'
 import type {
   AiConfig,
+  AiContextSummary,
   AiConversation,
   AiMessage,
   AuthVerifyResponse,
@@ -128,6 +129,9 @@ export const aiApi = {
       body: { title },
     }),
   listMessages: (id: number) => request<AiMessage[]>(`/ai/conversations/${id}/messages`),
+  /** 上下文注入摘要（五段式：档案/课表/任务/记忆），供输入框上方 chips 展示 */
+  contextSummary: (id: number) =>
+    request<AiContextSummary>(`/ai/conversations/${id}/context`),
   pageMessages: (id: number, beforeId: string | null = null) =>
     request<CursorPage<AiMessage>>(
       `/ai/conversations/${id}/messages/page?pageSize=40${beforeId ? `&beforeId=${encodeURIComponent(beforeId)}` : ''}`,

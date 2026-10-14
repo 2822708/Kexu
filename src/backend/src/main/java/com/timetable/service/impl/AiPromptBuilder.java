@@ -1,5 +1,6 @@
 package com.timetable.service.impl;
 
+import com.timetable.dto.AiContextSummary;
 import com.timetable.entity.Course;
 import com.timetable.entity.Exam;
 import com.timetable.entity.Memory;
@@ -7,6 +8,7 @@ import com.timetable.entity.PeriodConfig;
 import com.timetable.entity.RecurringTodo;
 import com.timetable.entity.Schedule;
 import com.timetable.entity.StudentProfile;
+import com.timetable.entity.Task;
 import com.timetable.entity.Todo;
 import com.timetable.entity.AiMessage;
 
@@ -18,6 +20,11 @@ import java.util.List;
 
 /**
  * 构建 DeepSeek 的 System Prompt，注入当前日期、学期周次映射、已有课程/待办上下文。
+ *
+ * AI Campus Agent V1.0 Step 3 起，聊天上下文扩展为五段式：
+ * 【学生档案】（全量）/【近期课表】（当前课表数据段）/【当前任务】（未完成、14 天内或已逾期、
+ * 最多 15 条）/【长期记忆】（ACTIVE 按重要度 top 20）/【用户问题】（user 消息，永不截断）。
+ * 超限的段整体保留并标注「仅提供前 N 条」，与既有数据段风格一致。
  */
 public final class AiPromptBuilder {
 
@@ -28,9 +35,14 @@ public final class AiPromptBuilder {
     public static final int MAX_SYSTEM_PROMPT_CHARS = 40000;
     private static final int MAX_SECTION_CHARS = 7000;
     private static final int MAX_SCRIPT_CHARS = 2000;
+    /** 【当前任务】段预算：未完成且 14 天内/已逾期/无截止，最多 15 条。 */
+    public static final int MAX_TASKS = 15;
+    /** 【长期记忆】段预算：ACTIVE 按重要度排序，最多 20 条。 */
+    public static final int MAX_MEMORIES = 20;
 
     private static final String[] WEEK_NAMES = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private AiPromptBuilder() {}
 
@@ -51,28 +63,39 @@ public final class AiPromptBuilder {
     }
 
     /**
-     * 构建聊天 System Prompt：学长人格（persona 模板）+ JSON 提案协议 + 数据上下文。
+     * 构建聊天 System Prompt：学长人格（persona 模板）+ JSON 提案协议 + 五段式数据上下文。
      *
      * @param persona 人格段文本（来自 prompts/persona.md，按版本管理）；为空时跳过人格段，
      *                协议与数据上下文仍然完整，聊天不中断
+     * @param profile  学生档案（可空）；为空表示尚未建档
+     * @param tasks    未完成任务（可空）；调用方已按预算筛选，这里再做上限保护
+     * @param memories 长期记忆（可空）；按重要度排序后取 top 20
+     * @return prompt 文本 + 实际注入的上下文摘要（供前端 chips 展示）
      */
-    public static String buildChatSystemPrompt(Schedule schedule,
+    public static ChatPrompt buildChatSystemPrompt(Schedule schedule,
                                                List<Course> courses,
                                                List<Exam> exams,
                                                List<Todo> todos,
                                                List<RecurringTodo> recurringTodos,
                                                List<PeriodConfig> periods,
                                                LocalDate today,
-                                               String persona) {
+                                               String persona,
+                                               StudentProfile profile,
+                                               List<Task> tasks,
+                                               List<Memory> memories) {
         int courseCount = courses == null ? 0 : courses.size();
         int examCount = exams == null ? 0 : exams.size();
         int todoCount = todos == null ? 0 : todos.size();
         int recurringCount = recurringTodos == null ? 0 : recurringTodos.size();
+        int taskTotal = tasks == null ? 0 : tasks.size();
+        int memoryTotal = memories == null ? 0 : memories.size();
         courses = bounded(courses, MAX_COURSES);
         exams = bounded(exams, MAX_EXAMS);
         todos = bounded(todos, MAX_TODOS);
         recurringTodos = bounded(recurringTodos, MAX_RECURRING_RULES);
         periods = bounded(periods, 12);
+        tasks = bounded(tasks, MAX_TASKS);
+        memories = bounded(memories, MAX_MEMORIES);
         StringBuilder sb = new StringBuilder();
         if (persona != null && !persona.isBlank()) {
             sb.append("## 你是谁\n").append(persona.strip()).append("\n\n");
@@ -327,7 +350,163 @@ public final class AiPromptBuilder {
                 if (!appendContextRecord(sb, record, sectionStart)) break;
             }
         }
-        return sb.toString();
+
+        // ==================== 五段式上下文新增段（AI Campus Agent V1.0 Step 3） ====================
+
+        sb.append("\n### 学生档案\n");
+        boolean profilePresent = profile != null && hasProfileContent(profile);
+        if (!profilePresent) {
+            sb.append("（尚未填写。用户问到个人情况、目标或基础时，先询问或建议到设置页完善，不要假设其信息。）\n");
+        } else {
+            StringBuilder fields = new StringBuilder();
+            appendField(fields, "姓名", profile.getName());
+            appendField(fields, "学校", profile.getSchool());
+            appendField(fields, "专业", profile.getMajor());
+            appendField(fields, "年级", profile.getGrade());
+            appendField(fields, "目标", brief(profile.getGoal(), 300));
+            appendField(fields, "学习风格", profile.getLearningStyle());
+            appendField(fields, "兴趣", joinTags(profile.getInterest()));
+            appendField(fields, "技能", joinTags(profile.getSkills()));
+            sb.append(fields.length() == 0 ? "（尚未填写）" : fields.toString().strip()).append('\n');
+        }
+
+        sb.append("\n### 当前任务\n");
+        sb.append("（任务与待办是两个独立模块：待办来自对话指令与循环规则，任务来自文件解析、手动创建或待办迁移；")
+                .append("用户说「任务」时指本节，「待办」指上一节。列表含未完成且 14 天内截止、已逾期或未设置截止的任务。）\n");
+        sectionStart = sb.length();
+        if (tasks == null || tasks.isEmpty()) {
+            sb.append("（无）\n");
+        } else {
+            if (taskTotal > MAX_TASKS) {
+                sb.append("当前仅提供前 ").append(MAX_TASKS).append(" 条，共 ").append(taskTotal).append(" 条。\n");
+            }
+            for (Task task : tasks) {
+                StringBuilder record = new StringBuilder("id=").append(task.getId())
+                        .append(" 标题=").append(brief(task.getTitle(), 200))
+                        .append(" 类型=").append(taskTypeLabel(task.getType()))
+                        .append(" 优先级=").append(taskPriorityLabel(task.getPriority()))
+                        .append(" 状态=").append(taskStatusLabel(task.getStatus()))
+                        .append(" 截止=").append(task.getDeadline() == null
+                                ? "未设置" : task.getDeadline().format(DATETIME_FMT));
+                if (task.getDescription() != null && !task.getDescription().isBlank()) {
+                    record.append(" 描述=").append(brief(task.getDescription(), 300));
+                }
+                record.append("\n");
+                if (!appendContextRecord(sb, record, sectionStart)) break;
+            }
+        }
+
+        sb.append("\n### 长期记忆\n");
+        sectionStart = sb.length();
+        if (memories == null || memories.isEmpty()) {
+            sb.append("（暂无）\n");
+        } else {
+            if (memoryTotal > MAX_MEMORIES) {
+                sb.append("当前仅提供重要度前 ").append(MAX_MEMORIES).append(" 条，共 ")
+                        .append(memoryTotal).append(" 条。\n");
+            }
+            for (Memory memory : memories) {
+                StringBuilder record = new StringBuilder("- [")
+                        .append(memoryTypeLabel(memory.getType())).append("·重要度")
+                        .append(memory.getImportance()).append("] ")
+                        .append(brief(memory.getContent(), 200)).append('\n');
+                if (!appendContextRecord(sb, record, sectionStart)) break;
+            }
+        }
+
+        // 摘要与注入内容同源同算：前端 chips 展示的就是模型这轮真实看到的条数
+        AiContextSummary summary = summarizeContext(profile, courseCount, taskTotal, memoryTotal);
+        return new ChatPrompt(sb.toString(), summary);
+    }
+
+    /**
+     * 计算上下文注入摘要（与 {@link #buildChatSystemPrompt} 相同的预算规则），
+     * 供 GET /conversations/{id}/context 在发送前预取，让前端 chips 与实际注入一致。
+     *
+     * @param courseCount 当前课表课程条数（上限 MAX_COURSES）
+     * @param taskTotal   未完成窗口内任务总条数（上限 MAX_TASKS）
+     * @param memoryTotal ACTIVE 记忆总条数（上限 MAX_MEMORIES）
+     */
+    public static AiContextSummary summarizeContext(StudentProfile profile, int courseCount,
+                                                    int taskTotal, int memoryTotal) {
+        AiContextSummary summary = new AiContextSummary();
+        summary.setProfilePresent(profile != null && hasProfileContent(profile));
+        summary.setCourseCount(Math.min(Math.max(courseCount, 0), MAX_COURSES));
+        int injectedTasks = Math.min(Math.max(taskTotal, 0), MAX_TASKS);
+        summary.setTaskCount(injectedTasks);
+        summary.setTasksTruncated(taskTotal > injectedTasks);
+        int injectedMemories = Math.min(Math.max(memoryTotal, 0), MAX_MEMORIES);
+        summary.setMemoryCount(injectedMemories);
+        summary.setMemoriesTruncated(memoryTotal > injectedMemories);
+        return summary;
+    }
+
+    /** 聊天 system prompt 与同步算出的上下文摘要（单一数据源，避免 chips 与实际注入不一致）。 */
+    public record ChatPrompt(String prompt, AiContextSummary summary) {}
+
+    private static boolean hasProfileContent(StudentProfile profile) {
+        return notBlank(profile.getName()) || notBlank(profile.getSchool()) || notBlank(profile.getMajor())
+                || notBlank(profile.getGrade()) || notBlank(profile.getGoal())
+                || notBlank(profile.getLearningStyle())
+                || (profile.getInterest() != null && !profile.getInterest().isEmpty())
+                || (profile.getSkills() != null && !profile.getSkills().isEmpty());
+    }
+
+    private static boolean notBlank(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static String joinTags(List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return null;
+        }
+        return String.join("、", tags);
+    }
+
+    private static String taskTypeLabel(String type) {
+        if (type == null) return "未指定";
+        return switch (type) {
+            case "COURSE_WORK" -> "课程作业";
+            case "LAB_REPORT" -> "实验报告";
+            case "ONLINE_COURSE" -> "网课";
+            case "EXAM" -> "考试";
+            case "COMPETITION" -> "竞赛";
+            case "OTHER" -> "其他";
+            default -> type;
+        };
+    }
+
+    private static String taskPriorityLabel(Integer priority) {
+        if (priority == null) return "中";
+        return switch (priority) {
+            case 1 -> "高";
+            case 2 -> "中";
+            case 3 -> "低";
+            default -> "中";
+        };
+    }
+
+    private static String taskStatusLabel(String status) {
+        if (status == null) return "未指定";
+        return switch (status) {
+            case "PENDING" -> "未开始";
+            case "IN_PROGRESS" -> "进行中";
+            case "DONE" -> "已完成";
+            case "CANCELLED" -> "已取消";
+            default -> status;
+        };
+    }
+
+    private static String memoryTypeLabel(String type) {
+        if (type == null) return "未指定";
+        return switch (type) {
+            case "GOAL" -> "目标";
+            case "INTEREST" -> "兴趣";
+            case "ABILITY" -> "能力";
+            case "HABIT" -> "习惯";
+            case "PREFERENCE" -> "偏好";
+            default -> type;
+        };
     }
 
     private static boolean appendContextRecord(StringBuilder target, StringBuilder record, int sectionStart) {
