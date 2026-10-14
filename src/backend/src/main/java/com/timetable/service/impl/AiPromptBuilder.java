@@ -696,13 +696,19 @@ public final class AiPromptBuilder {
         }
 
         sb.append("\n【已有长期记忆】\n");
-        if (memories == null || memories.isEmpty()) {
+        List<Memory> known = bounded(memories, MAX_MEMORIES);
+        if (known == null || known.isEmpty()) {
             sb.append("（无）\n");
         } else {
-            for (Memory memory : memories) {
-                sb.append("- [").append(memory.getType()).append('·')
+            // 带上 id：修正已有记忆时模型必须回传 target_id（否则无法定位要改哪条）
+            for (Memory memory : known) {
+                sb.append("- #").append(memory.getId()).append(" [").append(memory.getType()).append('·')
                         .append(memory.getImportance()).append("] ")
                         .append(memory.getContent()).append('\n');
+            }
+            if (memories != null && memories.size() > MAX_MEMORIES) {
+                sb.append("（另有 ").append(memories.size() - MAX_MEMORIES)
+                        .append(" 条重要度较低的记忆未列出，不要凭空引用它们的 id）\n");
             }
         }
 

@@ -486,23 +486,35 @@ function renderBody(type: string, data: Dict) {
 
   if (type === 'SAVE_MEMORY') {
     const items = (data.memories as Dict[]) ?? []
+    // Step 7：action=UPDATE 是「修正已有记忆」，不会新增条目；ADD（缺省）才是新增
+    const updating = items.some(
+      (m) => String(m.action ?? 'ADD').toUpperCase() === 'UPDATE' && m.target_id != null,
+    )
     return (
       <Space direction="vertical" style={{ width: '100%' }} size={8}>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          学长想把以下信息记入长期记忆，之后回答问题时会参考：
+          {updating
+            ? '学长想修正已有记忆（不会新增条目），之后回答问题时会参考：'
+            : '学长想把以下信息记入长期记忆，之后回答问题时会参考：'}
         </Typography.Text>
-        {items.map((m, i) => (
-          <div key={i}>
-            <Space size={4}>
-              <Tag color="magenta">{MEMORY_TYPE_LABELS[String(m.type)] ?? String(m.type)}</Tag>
-              <Typography.Text strong>{str(m.content)}</Typography.Text>
-            </Space>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-              重要度 {'★'.repeat(Math.min(5, Math.max(1, Number(m.importance) || 3)))}
-              {'☆'.repeat(5 - Math.min(5, Math.max(1, Number(m.importance) || 3)))}（{Number(m.importance) || 3}/5）
+        {items.map((m, i) => {
+          const isUpdate =
+            String(m.action ?? 'ADD').toUpperCase() === 'UPDATE' && m.target_id != null
+          const stars = Math.min(5, Math.max(1, Number(m.importance) || 3))
+          return (
+            <div key={i}>
+              <Space size={4} wrap>
+                <Tag color="magenta">{MEMORY_TYPE_LABELS[String(m.type)] ?? String(m.type)}</Tag>
+                {isUpdate && <Tag color="blue">修正 #{String(m.target_id)}</Tag>}
+                <Typography.Text strong>{str(m.content)}</Typography.Text>
+              </Space>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                重要度 {'★'.repeat(stars)}
+                {'☆'.repeat(5 - stars)}（{Number(m.importance) || 3}/5）
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </Space>
     )
   }

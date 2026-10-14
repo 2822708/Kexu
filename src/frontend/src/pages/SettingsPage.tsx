@@ -22,6 +22,7 @@ import { useFont } from '../store/FontContext'
 import type { AiConfig, PeriodCategory, PeriodConfig } from '../types'
 import { dayjs } from '../utils/schedule'
 import BackupSettings from '../components/BackupSettings'
+import MemoryManager from '../components/MemoryManager'
 
 const TIME_FORMAT = 'HH:mm'
 
@@ -312,6 +313,8 @@ export default function SettingsPage() {
           </Typography.Text>
         </Space>
       </Card>
+
+      <MemoryManager />
 
       {isAdmin && <BackupSettings />}
 

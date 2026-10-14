@@ -279,6 +279,40 @@ export interface StudentProfile {
   updatedAt?: string
 }
 
+/** 长期记忆类型（AI Campus Agent V1.0 Step 7） */
+export type MemoryType = 'GOAL' | 'INTEREST' | 'ABILITY' | 'HABIT' | 'PREFERENCE'
+
+/** 长期记忆：从对话提炼或设置页手动维护的跨天有效事实 */
+export interface Memory {
+  id: number
+  type: MemoryType
+  content: string
+  /** 1=随口一提，5=核心目标 */
+  importance: number
+  /** ACTIVE=参与 AI 上下文；SUPERSEDED=已归档 */
+  status: 'ACTIVE' | 'SUPERSEDED'
+  /** AI=对话提炼，USER=手动添加 */
+  source: 'AI' | 'USER'
+  sourceRef: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** 设置页记忆列表返回体；injected 是真正会进入 AI 上下文的条数 */
+export interface MemoryList {
+  items: Memory[]
+  total: number
+  injected: number
+  limit: number
+}
+
+/** 新增/编辑记忆的请求体；type 与 importance 可省略 */
+export interface MemoryPayload {
+  type?: MemoryType
+  content: string
+  importance?: number
+}
+
 /**
  * AI Dashboard 聚合数据（AI Campus Agent V1.0 Step 5）。
  * 一次请求返回首页所需的全部信息；planSummary 为 Step 6「AI 每日计划」占位。

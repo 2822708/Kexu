@@ -13,6 +13,9 @@ import type {
   DashboardData,
   Exam,
   ExamPayload,
+  Memory,
+  MemoryList,
+  MemoryPayload,
   ParseHtmlResult,
   PeriodConfig,
   RecurringScriptTemplate,
@@ -161,6 +164,19 @@ export const planApi = {
     request<DailyPlan | null>(`/plans/daily${date ? `?date=${date}` : ''}`),
   generate: (body: { date?: string; scheduleId?: number | null } = {}) =>
     request<DailyPlan>('/plans/daily', { method: 'POST', body }),
+}
+
+export const memoryApi = {
+  /** 设置页记忆列表（只含 ACTIVE） */
+  list: () => request<MemoryList>('/memories'),
+  /** 手动添加：source=USER，与 AI 提炼的记忆区分 */
+  create: (body: MemoryPayload) => request<Memory>('/memories', { method: 'POST', body }),
+  /** 局部更新：省略的字段保持原值 */
+  update: (id: number, body: MemoryPayload) =>
+    request<Memory>(`/memories/${id}`, { method: 'PATCH', body }),
+  /** 归档：不再进入 AI 上下文，记录保留 */
+  archive: (id: number) => request<Memory>(`/memories/${id}/archive`, { method: 'POST' }),
+  remove: (id: number) => request<null>(`/memories/${id}`, { method: 'DELETE' }),
 }
 
 export const periodApi = {

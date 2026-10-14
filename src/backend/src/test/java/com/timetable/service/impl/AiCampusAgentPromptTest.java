@@ -45,11 +45,14 @@ class AiCampusAgentPromptTest {
         assertThat(persona.version()).isEqualTo(1);
         assertThat(persona.body()).contains("学长");
 
+        // Step 7：提炼模板升到 v2，新增「同一事实走 UPDATE + target_id」规则
         PromptTemplateRegistry.PromptTemplate refine = registry.get("memory-extract");
         assertThat(refine).isNotNull();
-        assertThat(refine.version()).isEqualTo(1);
+        assertThat(refine.version()).isEqualTo(2);
         assertThat(refine.body()).contains("memories");
         assertThat(refine.body()).contains("profile");
+        assertThat(refine.body()).contains("target_id");
+        assertThat(refine.body()).contains("UPDATE");
     }
 
     @Test
@@ -86,7 +89,8 @@ class AiCampusAgentPromptTest {
         assertThat(window).contains("兴趣=机器学习");
         assertThat(window).contains("技能=Java");
         assertThat(window).contains("【已有长期记忆】");
-        assertThat(window).contains("- [GOAL·5] 准备 12 月 CET-6 考试");
+        // 带 id：模型修正已有记忆时要回传 target_id，否则服务端无法定位
+        assertThat(window).contains("- #7 [GOAL·5] 准备 12 月 CET-6 考试");
         assertThat(window).contains("【对话窗口】");
         assertThat(window).contains("用户：我报了 12 月的六级");
         assertThat(window).contains("学长：加油，一起准备");

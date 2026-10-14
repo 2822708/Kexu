@@ -50,6 +50,7 @@ import com.timetable.service.TaskService;
 import com.timetable.service.TodoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -125,6 +126,13 @@ public class AiServiceImpl implements AiService {
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
     private final Validator validator;
+
+    /**
+     * 记忆提炼总开关（回滚开关）。关闭后对话照常进行、已有记忆照常注入上下文，
+     * 只是不再产生新的 SAVE_MEMORY 提案——出问题可以一键退回 Step 6 的行为。
+     */
+    @Value("${app.ai.memory-refine-enabled:true}")
+    private boolean memoryRefineEnabled = true;
 
     public AiServiceImpl(AiConversationMapper conversationMapper,
                          AiMessageMapper messageMapper,
@@ -858,7 +866,7 @@ public class AiServiceImpl implements AiService {
                               LlmClient client, Map<String, String> fingerprintSnapshot,
                               StudentProfile profile, List<Memory> memories) {
         try {
-            if (!client.isConfigured()) {
+            if (!memoryRefineEnabled || !client.isConfigured()) {
                 return;
             }
             PromptTemplateRegistry.PromptTemplate template = promptTemplates.get("memory-extract");
@@ -1473,14 +1481,25 @@ public class AiServiceImpl implements AiService {
                 }
             }
             case "SAVE_MEMORY" -> {
-                // AI Campus Agent：记忆写入同样来自提案执行，source=AI 便于审计
+                // AI Campus Agent：记忆写入同样来自提案执行，source=AI 便于审计。
+                // Step 7：action=UPDATE 时改写已有记忆（不新增），ADD 走 create（内部再去重兜底）
                 for (JsonNode node : arrayOf(data, "memories")) {
-                    memoryService.create(apiKey,
-                            node.path("type").asText("").trim().toUpperCase(),
-                            node.path("content").asText(""),
-                            node.path("importance").asInt(3),
-                            Memory.SOURCE_AI,
-                            "message:" + messageId);
+                    String memoryType = node.path("type").asText("").trim().toUpperCase();
+                    String content = node.path("content").asText("");
+                    Integer importance = node.path("importance").isIntegralNumber()
+                            ? node.path("importance").asInt() : null;
+                    Long targetId = null;
+                    if (node.path("target_id").isIntegralNumber() && node.path("target_id").canConvertToLong()) {
+                        targetId = node.path("target_id").asLong();
+                    }
+                    if ("UPDATE".equals(node.path("action").asText("").trim().toUpperCase())
+                            && targetId != null && targetId > 0) {
+                        memoryService.update(targetId, apiKey, memoryType, content, importance);
+                    } else {
+                        memoryService.create(apiKey, memoryType, content,
+                                importance == null ? 3 : importance,
+                                Memory.SOURCE_AI, "message:" + messageId);
+                    }
                 }
             }
             case "UPDATE_PROFILE" -> {
@@ -1711,6 +1730,20 @@ public class AiServiceImpl implements AiService {
                         int importance = item.path("importance").asInt();
                         if (importance < 1 || importance > 5) {
                             return false;
+                        }
+                        // Step 7：新增/修正二选一；修正必须指向本人名下真实存在的记忆，
+                        // 否则用户确认后执行会 404，不如干脆不生成提案
+                        String memoryAction = item.path("action").asText("ADD").trim().toUpperCase();
+                        if (!"ADD".equals(memoryAction) && !"UPDATE".equals(memoryAction)) {
+                            return false;
+                        }
+                        if ("UPDATE".equals(memoryAction)) {
+                            JsonNode target = item.path("target_id");
+                            if (!target.isIntegralNumber() || !target.canConvertToLong()
+                                    || target.asLong() <= 0) {
+                                return false;
+                            }
+                            memoryService.getById(target.asLong(), apiKey);
                         }
                     }
                     case "CREATE_TASK", "UPDATE_TASK" -> {
