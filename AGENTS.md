@@ -28,6 +28,14 @@
 - 桌面版与 Web 版共用前后端；standalone 使用 H2、静态前端资源和本机设置，需要与默认 MySQL 配置分别验证。
 - 按变更影响验证，不把历史测试结果写成本轮运行结果。
 
+## 交接文件（多 Agent 协作，必读）
+
+- `docs/HANDOVER.md` 是本项目的**当前状态唯一真相**，由 WorkBuddy 与 Codex 共同维护。
+- 任何 Agent 在本仓库开工前**必须先读** `docs/HANDOVER.md`，不得凭记忆或历史报告判断进度。
+- 收工前**必须更新** `docs/HANDOVER.md`：至少追加一条「会话日志」并刷新「当前状态快照」（HEAD / 测试数 / lint 警告数 / 下一步待办）。
+- 改代码前先 `git status`：另一 Agent 可能刚提交过；发现未提交改动先读完再决定接续还是另起。
+- `docs/reviews/AI_CAMPUS_AGENT_STEP*.md` 是各步的历史实施报告，只代表当时状态；「现在是什么样」以 HANDOVER 为准。
+
 ## 文档与本地文件
 
 - `docs/project` 保存原项目文档快照；新的当前决定和变更说明写在 docs 及 reviews 中。
