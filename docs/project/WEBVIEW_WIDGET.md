@@ -1,0 +1,143 @@
+> 迁移说明（2026-09-26）：本文件来自修复版 `32de25c`。正文中的目录树和启动命令仍描述原布局；当前后端为 `src/backend`，前端为 `src/frontend`。当前入口见 [文档导航](../README.md) 和 [开发命令](../DEVELOPMENT.md)。
+
+# WebView 小组件 / 全屏应用
+
+> 更新日期：2026-09-26
+
+「大切课程表」在移动端通过 **WebView** 承载，iPad 与 Android 采用同一套方式。区别只在
+加载哪个页面，共有两种承载形态：
+
+| 形态 | 加载地址 | 说明 |
+|------|----------|------|
+| **桌面小组件** | `/widget?key=...&scheduleId=...` | 专门为小尺寸优化的**只读展示页**，不可交互，每 60 秒轮询 |
+| **全屏应用** | `/`（正常首页） | **完整应用**，响应式布局自动适配窄屏，可正常登录与操作 |
+
+两者本质都是「用 WebView 打开一个网页」，因此**不需要任何原生客户端**：小组件复用只读展示页，
+全屏应用直接复用主应用及其响应式布局。
+
+---
+
+## 1. 桌面小组件（只读展示页）
+
+### 1.1 整体链路
+
+```
+iPad / Android 桌面小组件（WebView 组件）
+  │  加载  https://<站点>/widget#key=<APIKEY>&scheduleId=<ID>
+  ▼
+前端展示页  /widget  (WidgetPreviewPage.tsx，公开只读，无需登录)
+  │  fetch 每 60 秒轮询 + 页面可见时刷新（Key 走 X-API-Key 请求头）
+  ▼
+后端接口  GET /api/widget/overview?scheduleId=<ID>
+  │  实时聚合
+  ▼
+紧凑 JSON（今日课程 / 考试 / 待办 / 周次）
+```
+
+### 1.2 展示页 `/widget`
+
+- 路由：`/widget`，在 `App.tsx` 中以早于登录判断的提前返回实现（不是 `<Route>`），公开访问、不依赖登录态。
+- 参数（URL **fragment** 优先，query 形式继续兼容）：
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | `key` | 是 | API Key，用于鉴权；缺省时回退到本地已存 Key，**没有内置演示 Key** |
+  | `scheduleId` | 否 | 指定课表；不传则默认该账号第一个课表 |
+- **为什么用 `#` 而不是 `?`**：fragment 不会随请求发往服务端，也不会进入 `Referer`；query 形式会留在访问日志与浏览器历史里。
+- 行为：每 60 秒轮询一次；`visibilitychange` / 窗口 `focus` 时立即刷新。
+- 样式：暗色只读双栏布局（左：课程与考试；右：待办与 DDL 倒计时），样式在 `index.css` 的 `.widget-*`。
+- 设置页「小组件 / WebView 网页地址」卡片可一键复制带 `key` 与当前课表的完整地址。
+
+### 1.3 后端接口
+
+```
+GET /api/widget/overview?scheduleId={id}
+X-API-Key: <APIKEY>
+```
+
+- 鉴权：与其它接口一致，走 `X-API-Key` 请求头，由 `ApiKeyInterceptor` 统一校验
+  （`/api/widget/**` **不再**是拦截器白名单）。此前 Key 放在 URL 路径里，会让凭据落入
+  nginx 访问日志、浏览器历史与 `Referer`，已移除该形式。
+- 响应头：`Cache-Control: no-store`；`Content-Type: application/json;charset=utf-8`。
+- 响应结构（`ApiResponse`）：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "title": "大切课程表",
+    "week": "第3周",
+    "today": "2026-09-26 周六",
+    "updatedAt": "12:30",
+    "todayCourses": [
+      { "name": "数据结构", "time": "10:40-11:25", "location": "教3-201",
+        "teacher": "张老师", "period": "第3-4节", "status": "进行中",
+        "date": "09-26", "dow": "周六", "week": 3, "sortKey": 3 }
+    ],
+    "exams": [
+      { "name": "CET-6", "time": "09:00-11:20", "location": "教1-101",
+        "date": "09-26", "dow": "周六", "week": 3, "status": "今天", "sortKey": 1 }
+    ],
+    "todayRemaining": 2,
+    "todos": [
+      { "title": "高数作业", "ddlText": "今天 23:00",
+        "ddlRemain": "还有 10 小时", "overdue": false }
+    ],
+    "todoSummary": "3 项待办",
+    "empty": false
+  }
+}
+```
+
+- 数据为空时返回空数组，`empty=true`，展示页显示「今天没有课 / 暂无待办」，不报错。
+
+### 1.4 配置
+
+1. 在 Web 端「设置 → 小组件 / WebView 网页地址」选择课表，点击**一键复制**，得到形如
+   `https://<站点>/widget?key=xxx&scheduleId=1` 的地址。
+2. 在 iPad / Android 上使用支持加载网页（WebView）的桌面小组件 App，新建中号（4×2）小组件，
+   填入该地址。
+3. 小组件即加载该只读页面，展示今日课程、考试与待办。
+
+> 该地址包含你的 API Key，仅供本人使用，请勿公开分享。
+
+---
+
+## 2. 全屏应用
+
+全屏应用**不使用 `/widget`**，而是直接打开应用首页：
+
+- 地址：`https://<站点>/`（无需拼接 key，正常登录即可）。
+- 首页是**响应式布局**，在窄屏（手机 / 平板）下自动适配：
+  - 课表网格列宽自动收缩，**不横向滚动**；
+  - 侧边栏与 AI 对话列表变为抽屉；
+  - 弹窗贴顶限宽、页头纵向堆叠、聊天输入纵向堆叠。
+- 因此全屏应用拥有**完整功能**（课表、待办、AI 对话、设置、用户手册等），不是只读视图。
+
+> 想常驻一块只读信息用**小组件**；想完整使用用**全屏应用**。
+
+---
+
+## 3. 安全注意事项（小组件）
+
+- **Key 仍会出现在展示页地址里**：为保证 WebView 无登录态也能取数，`/widget#key=...`
+  必须携带凭据。已把 Key 从 API 请求 URL 移到请求头，并优先使用 fragment（不进访问日志与
+  `Referer`），但展示页地址本身仍会留在设备本地的浏览历史中。建议仅在个人设备使用，
+  后续可考虑改用短期只读 token。
+- 接口只返回展示所需的汇总字段，不返回敏感明细。
+- `/api/widget/**` **不再**位于鉴权白名单：与其它接口一样由 `ApiKeyInterceptor` 校验
+  `X-API-Key`，Controller 内不再手工查 Key。
+
+---
+
+## 4. 验收清单
+
+- [ ] `curl -H 'X-API-Key: <key>' '<站点>/api/widget/overview'` 能直接拿到 JSON（不依赖 JS）。
+- [ ] 不带 `X-API-Key` 时返回 401。
+- [ ] 旧的 `/api/widget/overview/<key>` 路径形式已不可用（不再接受 URL 里的 Key）。
+- [ ] 返回 `charset=utf-8`，中文正常。
+- [ ] 响应体精简，字段简短，适合小组件展示。
+- [ ] 无效 Key 返回 401；空数据不报错。
+- [ ] 展示页每 60 秒自动刷新，页面重新可见时立即刷新。
+- [ ] 小组件中暗色布局正常，无横向溢出。
+- [ ] 全屏应用打开 `<站点>/` 后，窄屏下首页自适应、无横向滚动、功能完整。

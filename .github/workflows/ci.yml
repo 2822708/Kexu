@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: src/backend/pom.xml
+      - name: Test and build backend
+        working-directory: src/backend
+        run: ./mvnw -B package
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: src/frontend
+        run: npm ci
+      - name: Typecheck
+        working-directory: src/frontend
+        run: npm run typecheck
+      - name: Lint
+        working-directory: src/frontend
+        run: npm run lint
+      - name: Build
+        working-directory: src/frontend
+        run: npm run build

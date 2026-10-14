@@ -1,0 +1,63 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+*.log
+*.iml
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+application-local.yml
+application-prod.yml
+
+node_modules/
+dist/
+.env
+.env.local
+npm-debug.log*
+.vite/
+*.tsbuildinfo
+
+# 本地临时文件（测试脚本、日志等，不提交）
+tmp/
+
+# 敏感凭据（DB密码、API Key、DeepSeek Key 等，勿提交到公开仓库）
+docs/CREDENTIALS.md
+
+# 内部整改文档（不对外发布）
+docs/OPEN_SOURCE_PREP.md
+
+# Current workspace: local settings, intermediate files and credentials
+work/
+.env.*
+!.env.example
+*.local.yml
+*.local.yaml
+**/CREDENTIALS.md
+**/OPEN_SOURCE_PREP.md
+*.pem
+*.key
+*.p12
+*.pfx
+*.dump
+*.sql.gz
+# Desktop packages and local data (source remains tracked)
+src/desktop/app-image/
+releases/
+*.mv.db
+*.trace.db
+settings.properties
+account.key
+
+# Android local toolchain, generated outputs and signing material
+**/.gradle/
+**/build/
+src/android/local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+!src/android/gradle/wrapper/gradle-wrapper.jar

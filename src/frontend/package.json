@@ -1,0 +1,48 @@
+{
+  "name": "timetable-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "大切课程表 · 课程表与待办 Web 前端",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tangent0712/Tangent-Timetable.git",
+    "directory": "frontend"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc --noEmit",
+    "test:device-session": "node --test scripts/test-device-session.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.5.1",
+    "antd": "^5.21.6",
+    "dayjs": "^1.11.13",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "5.4.449",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.27.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.70.1",
+    "vite": "^5.4.10"
+  }
+}

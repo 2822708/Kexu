@@ -1,0 +1,1699 @@
+From 32de25c0b28bbf762413bdccac63acb410274a77 Mon Sep 17 00:00:00 2001
+From: Code Review Bot <review@localhost>
+Date: Sat, 26 Sep 2026 02:48:26 +0800
+Subject: [PATCH] =?UTF-8?q?fix:=20=E4=BF=AE=E5=A4=8D=E5=85=A8=E9=83=A8?=
+ =?UTF-8?q?=E4=B8=A5=E9=87=8D=E4=B8=8E=E9=AB=98=E5=8D=B1=E9=97=AE=E9=A2=98?=
+ =?UTF-8?q?=EF=BC=88=E6=B2=99=E7=AE=B1=20DoS=E3=80=81=E5=86=85=E7=BD=AE?=
+ =?UTF-8?q?=E5=87=AD=E6=8D=AE=E3=80=81=E6=8C=87=E7=BA=B9=E5=9F=BA=E7=BA=BF?=
+ =?UTF-8?q?=E3=80=81=E8=B0=83=E5=BA=A6=E5=99=A8=E5=B9=82=E7=AD=89=EF=BC=89?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- 沙箱：源码层拒绝正则字面量，运行时顶替 RegExp/eval/Function 与
+  RegExp.prototype.test/exec、String.prototype.match/search；并发许可为
+  失控线程数设硬上限（被遗弃的线程不归还许可）；区分「沙箱不可用」与
+  「脚本错误」，前者不再自动停用用户规则
+- 凭据：移除 data.sql 内置的 demo-key-001，改为 api_key 为空时创建首个
+  账号并把 Key 只打印一次（可用 TANGENT_BOOTSTRAP_KEY 指定）
+- AI：提案指纹改在调用模型前、用与 Prompt 同一份已加载数据计算
+- 小组件：凭据从 URL 路径改为 X-API-Key 请求头，恢复拦截器覆盖
+- AI 流：客户端断连时中断上游调用且不落库；线程池 core=max 且可配置
+- 调度器：每期原子占位 + 唯一键兜底；全部改为目标列更新，避免整行
+  写回覆盖用户修改或复活已停用规则
+- 文档同步；新增 6 个沙箱回归用例（单测 15 → 21）
+---
+ AGENTS.md                                     |  29 ++-
+ CONTRIBUTING.md                               |   3 +-
+ README.md                                     |  20 +-
+ .../com/timetable/config/ApiKeyBootstrap.java |  77 ++++++
+ .../com/timetable/config/WebMvcConfig.java    |   5 +-
+ .../timetable/controller/AiController.java    |  76 ++++--
+ .../controller/WidgetController.java          |  28 +--
+ .../java/com/timetable/service/AiService.java |   8 +
+ .../com/timetable/service/DeepSeekClient.java |  19 +-
+ .../timetable/service/impl/AiServiceImpl.java | 114 ++++++---
+ .../service/impl/DeepSeekClientImpl.java      |  21 +-
+ .../impl/RecurringScriptEvaluator.java        | 220 +++++++++++++++---
+ .../impl/RecurringTodoServiceImpl.java        | 144 ++++++++----
+ backend/src/main/resources/application.yml    |   2 +
+ backend/src/main/resources/db/data.sql        |   4 +-
+ backend/src/main/resources/db/schema.sql      |   5 +-
+ .../impl/RecurringScriptEvaluatorTest.java    |  59 +++++
+ docs/ARCHITECTURE.md                          |   4 +-
+ docs/DEPLOYMENT.md                            |  17 ++
+ docs/WEBVIEW_WIDGET.md                        |  34 +--
+ frontend/src/pages/LoginPage.tsx              |   2 +-
+ frontend/src/pages/SettingsPage.tsx           |   5 +-
+ frontend/src/pages/WidgetPreviewPage.tsx      |  21 +-
+ 23 files changed, 727 insertions(+), 190 deletions(-)
+ create mode 100644 backend/src/main/java/com/timetable/config/ApiKeyBootstrap.java
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 2f3ed97..bd5b9da 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -217,8 +217,9 @@ npm run build        # tsc -b && vite build → dist/
+ 
+ ### 默认数据
+ 
+-- API Key: `demo-key-001` (label: 默认用户)
+ - 12 节作息时间 (08:00–21:05, MORNING/AFTERNOON/EVENING)
++- **不再内置演示 API Key**：`api_key` 表为空时，`ApiKeyBootstrap` 在启动后创建首个账号
++  （label `管理员`）；Key 取 `TANGENT_BOOTSTRAP_KEY`，未配置则随机生成并**只在创建那一次**打印到日志
+ 
+ ---
+ 
+@@ -273,7 +274,7 @@ npm run build        # tsc -b && vite build → dist/
+ | POST | `/api/ai/conversations/{id}/actions/{actionId}/execute` | 确认执行单个提案 |
+ | POST | `/api/ai/conversations/{id}/actions/{actionId}/reject` | 取消单个提案 |
+ | POST | `/api/ai/parse-html?scheduleId=` | 解析教务 HTML → `{courses, note}` |
+-| GET | `/api/widget/overview/{key}?scheduleId=` | 桌面小组件只读聚合（WebView，免鉴权，key 路径传入） |
++| GET | `/api/widget/overview?scheduleId=` | 桌面小组件只读聚合（WebView；与其它接口一致走 `X-API-Key` 请求头） |
+ 
+ ### 统一响应格式
+ 
+@@ -513,21 +514,33 @@ Rhino 提供 `ClassShutter` + 指令计数 + 栈深限制，可在进程内安
+ | `daysSinceLastTrigger` | 距上次触发天数（从未触发为 -1） |
+ | `neverTriggered` | 是否从未触发 |
+ 
+-**沙箱五层防护**（`RecurringScriptEvaluator`，均已逐项攻击验证）
++**沙箱防护分层**（`RecurringScriptEvaluator`）
+ 
+ | 防护 | 拦截目标 |
+ |------|---------|
+ | `ClassShutter` 全量拒绝 | `java.lang.Runtime` / `Packages` / `java.io.File` → ReferenceError |
+-| 指令计数（每 200 条观察） | 死循环、大数组分配；用 `Error` 抛出，脚本无法 try/catch 吞掉 |
++| `initSafeStandardObjects`（**不密封**） | 作用域内不含 `Packages`/`java`/`getClass`/`JavaAdapter`/`importClass` 等 LiveConnect 桥接；不密封是为了能覆写下一条的原型方法（密封时 `String.prototype` 无法修改） |
++| 源码层拒绝正则字面量 + 运行时顶替 `RegExp`/`eval`/`Function` 与 `RegExp.prototype.test/exec`、`String.prototype.match/search` | 正则回溯与动态代码 —— 它们是仅有的、能绕过指令计数的**无界原生**执行入口 |
++| 指令计数（每 200 条观察）+ 1.5s 墙钟检查 | 死循环；用 `Error` 抛出，脚本无法 try/catch 吞掉 |
+ | `setMaximumInterpreterStackDepth(256)` | 无限递归 |
+ | 堆增长哨兵 64MB + 工作线程内捕获 OOM/StackOverflow | 内存耗尽拖垮服务 |
+-| `initSafeStandardObjects(sealed)` + 4000 字符上限 | 桥接逃逸、超大脚本 |
++| 并发许可（默认 2） | 被遗弃（无法终止）的线程**不归还许可**，因此失控脚本数量有硬上限；用满后求值失败关闭 |
++| 脚本长度上限 4000 字符 | 超大脚本 |
+ 
+-> **踩坑记录**：最初只做了前两层，测试发现无限递归
++> **已知限制（不要在文档里宣称已完全解决）**：JVM 无法安全抢占一次正在执行的原生调用，
++> 因此进程内手段**不能**保证「超时即终止」。本项目通过关掉全部已证实的无界原生入口，
++> 并把失控线程数量限制在并发许可数以内，把「无界资源耗尽」降级为「有界且可告警」。
++> 彻底方案是把求值移到可强杀的独立进程（待办事项见文末 TODO）。
++
++> **踩坑记录（两轮）**：第一轮只做了 ClassShutter + 指令计数，测试发现无限递归
+ > （`function f(){return f();}`）会让 Rhino 解释器堆帧耗尽内存，
+-> 抛出的 `OutOfMemoryError` 从工作线程传播到主线程，**整个 JVM 崩溃**。
++> 抛出的 `OutOfMemoryError` 从工作线程传播到主线程，**整个 JVM 崩溃**；
+ > 修复方式是栈深限制 + 在工作线程内捕获 `OutOfMemoryError`。
+-> 结论：执行不可信代码时，光靠指令计数不够，必须同时限制内存与栈深。
++> 第二轮发现：正则回溯发生在原生代码里，指令计数器**根本不会被调用** ——
++> `/(a+)+$/` 这类脚本会让 `test()` 正常超时返回，而工作线程永远占满一个 CPU 核心，
++> 每次请求泄漏一个线程。修复方式是源码层拒绝正则字面量、运行时顶替 RegExp/eval/Function
++> 与相关原型方法，并用并发许可给失控线程数设硬上限。
++> 结论：执行不可信代码时，光靠指令计数不够，还要限制内存、栈深，并关掉所有无界原生入口。
+ 
+ **运行机制**
+ - CUSTOM 不预算 `next_trigger_at`（`nextTriggerAfter` 返回 null），
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index f0bbe98..ffc2f1a 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -25,7 +25,8 @@ export DEEPSEEK_API_KEY=sk-xxx        # 可选，不配则 AI 功能禁用
+ ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+ ```
+ 
+-首次启动会自动执行 `db/schema.sql` 建表并写入默认数据（含演示账号 `demo-key-001`）。
++首次启动会自动执行 `db/schema.sql` 建表并写入作息时间种子数据。`api_key` 表为空时会自动
++创建首个账号并把 Key **只打印一次**到日志（也可用 `TANGENT_BOOTSTRAP_KEY` 指定自己的 Key）。
+ 
+ ### 前端
+ 
+diff --git a/README.md b/README.md
+index 5938e49..a1b18d9 100644
+--- a/README.md
++++ b/README.md
+@@ -12,7 +12,7 @@
+ - **课表管理**：多课表、周次与单双周、跨节课程、可视化 7×12 网格、冲突提示。
+ - **待办事项**：秒级 DDL 倒计时、完成状态标记；考试关联待办在考试结束后自动完成。
+ - **循环待办**：每日 / 每周 / 每月规则自动生成；支持用 JavaScript 编写
+-  `shouldTrigger(ctx)` 自定义规则（Rhino 沙箱隔离，五层安全防护）。
++  `shouldTrigger(ctx)` 自定义规则（Rhino 沙箱隔离：ClassShutter + 关闭正则与动态代码 + 指令计数 / 栈深 / 内存 / 并发上限）。
+ - **考试记录**：直接输入日期与起止时间，课表内以红色块展示，自动生成关联待办，
+   考试结束后自动完成。
+ - **AI 助手**：粘贴教务 HTML 自动解析导入；用自然语言增删改课表、待办、考试、循环规则；
+@@ -82,7 +82,18 @@ export DEEPSEEK_API_KEY=sk-xxx
+ ```
+ 
+ 默认连接 `jdbc:mysql://localhost:3306/timetable`（不存在会自动建库），
+-首次启动自动执行 `db/schema.sql` 与 `db/data.sql`，写入演示账号 `demo-key-001`。
++首次启动自动执行 `db/schema.sql` 与 `db/data.sql` 建表并写入作息时间种子数据。
++
++**账号**：应用没有注册页，账号就是 `api_key` 表里的一行。仓库不再内置演示 Key
++（公开仓库里的固定 Key 等于公开凭据）：`api_key` 表为空时，启动过程会自动创建首个账号，
++并把生成的 Key **只打印一次**到日志；也可以用下面的变量指定。
++
++```bash
++# 想让首个账号用你指定的 Key，就在启动前设置（不设则随机生成并打印到日志）
++export TANGENT_BOOTSTRAP_KEY=your-custom-key
++```
++
++后续新增账号见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)（`INSERT INTO api_key ...`）。
+ 
+ ### 2. 启动前端
+ 
+@@ -92,7 +103,7 @@ npm install
+ npm run dev        # http://localhost:5173，/api 已代理到 :8080
+ ```
+ 
+-浏览器打开后，在登录页输入 API Key（默认演示账号 `demo-key-001`）即可进入。
++浏览器打开后，在登录页输入上面那个 API Key 即可进入。
+ 
+ > 更多开发命令、代码约定与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+ 
+@@ -106,6 +117,7 @@ npm run dev        # http://localhost:5173，/api 已代理到 :8080
+ | `DEEPSEEK_MODEL` | 模型名（`deepseek-flash` = DeepSeek-V4.1-Flash） | `deepseek-flash` |
+ | `CORS_ALLOWED_ORIGINS` | 允许跨域的来源（逗号分隔） | `*` |
+ | `ADMIN_LABELS` | 可编辑全局作息表的账号 label（逗号分隔） | `Tangent0712` |
++| `TANGENT_BOOTSTRAP_KEY` | 首次启动且 `api_key` 表为空时，用它创建首个账号 | 空（随机生成并打印） |
+ | `VITE_API_BASE`（前端） | 前端 API 基地址 | `/api` |
+ | `VITE_ADMIN_LABELS`（前端） | 前端 UI 管理员判断（仅 UI，后端以 `ADMIN_LABELS` 为准） | `Tangent0712` |
+ 
+@@ -130,7 +142,7 @@ npm run dev        # http://localhost:5173，/api 已代理到 :8080
+ | 考试 | `GET/POST /api/schedules/{id}/exams`、`PUT/DELETE /api/exams/{id}` |
+ | 作息 | `GET/PUT /api/period-config`（PUT 仅管理员） |
+ | AI | `POST /api/ai/conversations/{id}/messages/stream`、`POST /api/ai/parse-html` |
+-| 小组件 | `GET /api/widget/overview/{key}?scheduleId=` |
++| 小组件 | `GET /api/widget/overview?scheduleId=`（需 `X-API-Key` 请求头） |
+ 
+ 完整接口清单与实现细节见 `AGENTS.md`，整体架构见 `docs/ARCHITECTURE.md`。
+ 
+diff --git a/backend/src/main/java/com/timetable/config/ApiKeyBootstrap.java b/backend/src/main/java/com/timetable/config/ApiKeyBootstrap.java
+new file mode 100644
+index 0000000..0a24396
+--- /dev/null
++++ b/backend/src/main/java/com/timetable/config/ApiKeyBootstrap.java
+@@ -0,0 +1,77 @@
++package com.timetable.config;
++
++import com.timetable.entity.ApiKey;
++import com.timetable.mapper.ApiKeyMapper;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Value;
++import org.springframework.boot.context.event.ApplicationReadyEvent;
++import org.springframework.context.event.EventListener;
++import org.springframework.dao.DuplicateKeyException;
++import org.springframework.stereotype.Component;
++
++import java.security.SecureRandom;
++import java.util.HexFormat;
++
++/**
++ * 首次启动引导：{@code api_key} 表为空时创建一个管理员账号。
++ *
++ * 应用没有注册页与账号管理接口，账号只能由部署者预先写入数据库。若什么都不做，
++ * 全新部署会连一个能登录的账号都没有，因此这里在表为空时补一个：
++ * 优先使用配置项（环境变量 {@code TANGENT_BOOTSTRAP_KEY}），否则生成随机 Key 并打印到日志。
++ *
++ * <p>刻意不再内置任何固定 Key —— 公开仓库里的固定 Key 等于公开凭据；随机 Key 只在
++ * 创建的那一次输出，之后不再打印。运维应把它换成一个自己保管的值（见 docs/DEPLOYMENT.md）。
++ */
++@Component
++public class ApiKeyBootstrap {
++
++    private static final Logger log = LoggerFactory.getLogger(ApiKeyBootstrap.class);
++
++    /** 随机 Key 的字节数（32 字节 → 64 个十六进制字符，正好等于 api_key 列宽） */
++    private static final int RANDOM_KEY_BYTES = 32;
++
++    private final ApiKeyMapper apiKeyMapper;
++    private final String configuredKey;
++
++    public ApiKeyBootstrap(ApiKeyMapper apiKeyMapper,
++                           @Value("${app.bootstrap-key:}") String configuredKey) {
++        this.apiKeyMapper = apiKeyMapper;
++        this.configuredKey = configuredKey;
++    }
++
++    @EventListener(ApplicationReadyEvent.class)
++    public void createFirstKeyIfEmpty() {
++        try {
++            Long existing = apiKeyMapper.selectCount(null);
++            if (existing != null && existing > 0) {
++                return;
++            }
++            String key = configuredKey == null || configuredKey.isBlank()
++                    ? randomKey()
++                    : configuredKey.trim();
++            ApiKey account = new ApiKey();
++            account.setApiKey(key);
++            account.setLabel("管理员");
++            apiKeyMapper.insert(account);
++            log.warn("======================================================================");
++            log.warn(" 未发现任何 API Key，已创建首个账号（label=管理员）");
++            log.warn(" 登录用 Key：{}", key);
++            log.warn(" 该 Key 只在此处输出一次，请立即妥善保存；如非本意，请在启动前设置");
++            log.warn(" TANGENT_BOOTSTRAP_KEY 指定自己的 Key。");
++            log.warn("======================================================================");
++        } catch (DuplicateKeyException e) {
++            // 并发启动（多实例）时另一个实例已创建，忽略
++            log.info("First API key already created by another instance");
++        } catch (Exception e) {
++            // 引导失败不应阻止应用启动，但要明确记录
++            log.error("Failed to bootstrap the first API key", e);
++        }
++    }
++
++    private String randomKey() {
++        byte[] bytes = new byte[RANDOM_KEY_BYTES];
++        new SecureRandom().nextBytes(bytes);
++        return HexFormat.of().formatHex(bytes);
++    }
++}
+diff --git a/backend/src/main/java/com/timetable/config/WebMvcConfig.java b/backend/src/main/java/com/timetable/config/WebMvcConfig.java
+index b9608e2..b922bdc 100644
+--- a/backend/src/main/java/com/timetable/config/WebMvcConfig.java
++++ b/backend/src/main/java/com/timetable/config/WebMvcConfig.java
+@@ -16,8 +16,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
+ 
+     @Override
+     public void addInterceptors(InterceptorRegistry registry) {
++        // 只放行 /api/auth/verify（它自己用 @RequestHeader 读 Key，用于登录校验）。
++        // /api/widget/** 不再豁免：把 Key 放在 URL 路径里会让凭据进入访问日志与 Referer，
++        // 小组件页改为和其它接口一样用 X-API-Key 请求头。
+         registry.addInterceptor(apiKeyInterceptor)
+                 .addPathPatterns("/api/**")
+-                .excludePathPatterns("/api/auth/verify", "/api/widget/**");
++                .excludePathPatterns("/api/auth/verify");
+     }
+ }
+diff --git a/backend/src/main/java/com/timetable/controller/AiController.java b/backend/src/main/java/com/timetable/controller/AiController.java
+index 7b0e941..0bc26a3 100644
+--- a/backend/src/main/java/com/timetable/controller/AiController.java
++++ b/backend/src/main/java/com/timetable/controller/AiController.java
+@@ -14,6 +14,7 @@ import jakarta.annotation.PreDestroy;
+ import jakarta.validation.Valid;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Value;
+ import org.springframework.http.MediaType;
+ import org.springframework.web.bind.annotation.*;
+ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+@@ -27,6 +28,7 @@ import java.util.concurrent.ExecutorService;
+ import java.util.concurrent.RejectedExecutionException;
+ import java.util.concurrent.ThreadPoolExecutor;
+ import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicBoolean;
+ import java.util.concurrent.atomic.AtomicInteger;
+ 
+ @RestController
+@@ -39,19 +41,32 @@ public class AiController {
+ 
+     private final AiService aiService;
+ 
+-    // 有界线程池：限制并发流式任务，队列满时由调用线程执行以形成背压，避免无限创建线程
+-    private final ExecutorService streamExecutor = new ThreadPoolExecutor(
+-            4, 16, 60L, TimeUnit.SECONDS,
+-            new ArrayBlockingQueue<>(64),
+-            r -> {
+-                Thread t = new Thread(r, "ai-stream-" + STREAM_THREAD_SEQ.incrementAndGet());
+-                t.setDaemon(true);
+-                return t;
+-            },
+-            new ThreadPoolExecutor.AbortPolicy());
+-
+-    public AiController(AiService aiService) {
++    /**
++     * 流式任务执行器。
++     *
++     * 线程数等于最大并发：ThreadPoolExecutor 只在核心线程忙、且队列也满时才创建更多线程，
++     * 所以「core=4 / max=16」实际并发上限就是 4，第 5 个请求会静默排队而不发任何事件。
++     * 这里把 core 与 max 都设为配置值，队列只作为短时缓冲，队列满即按 AbortPolicy 拒绝并回
++     * 503，客户端能立刻得到明确反馈。
++     */
++    private final ExecutorService streamExecutor;
++
++    public AiController(AiService aiService,
++                        @Value("${app.ai.stream.max-concurrency:16}") int maxConcurrency,
++                        @Value("${app.ai.stream.queue-capacity:64}") int queueCapacity) {
+         this.aiService = aiService;
++        int concurrency = Math.max(1, maxConcurrency);
++        ThreadPoolExecutor executor = new ThreadPoolExecutor(
++                concurrency, concurrency, 60L, TimeUnit.SECONDS,
++                new ArrayBlockingQueue<>(Math.max(1, queueCapacity)),
++                r -> {
++                    Thread t = new Thread(r, "ai-stream-" + STREAM_THREAD_SEQ.incrementAndGet());
++                    t.setDaemon(true);
++                    return t;
++                },
++                new ThreadPoolExecutor.AbortPolicy());
++        executor.allowCoreThreadTimeOut(true);
++        this.streamExecutor = executor;
+     }
+ 
+     @PreDestroy
+@@ -108,6 +123,12 @@ public class AiController {
+                                         @Valid @RequestBody AiMessageRequest request) {
+         String apiKey = RequestContext.getApiKey();
+         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
++        // 客户端断开（完成/超时/出错）后置位，用于中断上游调用：
++        // 否则工作线程会一直读到上游结束，白占并发额度，并把用户看不到的回复落库
++        AtomicBoolean cancelled = new AtomicBoolean(false);
++        emitter.onCompletion(() -> cancelled.set(true));
++        emitter.onTimeout(() -> cancelled.set(true));
++        emitter.onError(e -> cancelled.set(true));
+ 
+         try {
+             streamExecutor.execute(() -> {
+@@ -116,44 +137,57 @@ public class AiController {
+                         new AiService.StreamCallback() {
+                             @Override
+                             public void onThinking(String delta) {
+-                                emit(emitter, "thinking", Map.of("delta", delta));
++                                emit(emitter, "thinking", Map.of("delta", delta), cancelled);
+                             }
+ 
+                             @Override
+                             public void onText(String delta) {
+-                                emit(emitter, "text", Map.of("delta", delta));
++                                emit(emitter, "text", Map.of("delta", delta), cancelled);
+                             }
+ 
+                             @Override
+                             public void onPlanning() {
+-                                emit(emitter, "planning", Map.of());
++                                emit(emitter, "planning", Map.of(), cancelled);
++                            }
++
++                            @Override
++                            public boolean isCancelled() {
++                                return cancelled.get();
+                             }
+                         });
+-                emit(emitter, "done", result);
++                emit(emitter, "done", result, cancelled);
+                 emitter.complete();
+             } catch (BusinessException e) {
+-                emit(emitter, "error", Map.of("code", e.getCode(), "message", e.getMessage()));
++                emit(emitter, "error", Map.of("code", e.getCode(), "message", e.getMessage()), cancelled);
+                 emitter.complete();
+             } catch (Exception e) {
+                 log.error("AI stream failed", e);
+-                emit(emitter, "error", Map.of("code", 500, "message", "AI 服务异常"));
++                emit(emitter, "error", Map.of("code", 500, "message", "AI 服务异常"), cancelled);
+                 emitter.complete();
+             }
+             });
+         } catch (RejectedExecutionException e) {
+             log.warn("AI stream rejected: executor saturated");
+-            emit(emitter, "error", Map.of("code", 503, "message", "当前 AI 请求过多，请稍后重试"));
++            emit(emitter, "error", Map.of("code", 503, "message", "当前 AI 请求过多，请稍后重试"), cancelled);
+             emitter.complete();
+         }
+ 
+         return emitter;
+     }
+ 
+-    private void emit(SseEmitter emitter, String event, Object data) {
++    /**
++     * 推送一个 SSE 事件。客户端已断开时不可能送达，此时置位 cancelled 并放弃，
++     * 让上游读取循环尽快退出。
++     */
++    private void emit(SseEmitter emitter, String event, Object data, AtomicBoolean cancelled) {
++        if (cancelled.get()) {
++            return;
++        }
+         try {
+             emitter.send(SseEmitter.event().name(event).data(data, MediaType.APPLICATION_JSON));
+         } catch (IOException | IllegalStateException e) {
+-            // 客户端已断开，忽略
++            // 客户端已断开：标记取消，由上游据此中断请求
++            cancelled.set(true);
+         }
+     }
+ 
+diff --git a/backend/src/main/java/com/timetable/controller/WidgetController.java b/backend/src/main/java/com/timetable/controller/WidgetController.java
+index 61e0c1a..a76bed6 100644
+--- a/backend/src/main/java/com/timetable/controller/WidgetController.java
++++ b/backend/src/main/java/com/timetable/controller/WidgetController.java
+@@ -1,12 +1,10 @@
+ package com.timetable.controller;
+ 
+ import com.timetable.dto.ApiResponse;
+-import com.timetable.exception.BusinessException;
+-import com.timetable.mapper.ApiKeyMapper;
++import com.timetable.interceptor.RequestContext;
+ import com.timetable.service.WidgetService;
+ import jakarta.servlet.http.HttpServletResponse;
+ import org.springframework.web.bind.annotation.GetMapping;
+-import org.springframework.web.bind.annotation.PathVariable;
+ import org.springframework.web.bind.annotation.RequestMapping;
+ import org.springframework.web.bind.annotation.RequestParam;
+ import org.springframework.web.bind.annotation.RestController;
+@@ -14,35 +12,29 @@ import org.springframework.web.bind.annotation.RestController;
+ import java.util.Map;
+ 
+ /**
+- * 桌面小组件展示接口（只读，key 通过 URL 传入）。
++ * 桌面小组件展示接口（只读）。
+  * 由桌面小组件（WebView 组件）加载只读展示页，每 60 秒轮询一次，
+  * 每次请求都实时聚合最新数据返回。
+- * 免鉴权拦截器（见 WebMvcConfig），key 在此手动校验。
++ *
++ * 凭据与其它接口一致：走 {@code X-API-Key} 请求头，由 {@link com.timetable.interceptor.ApiKeyInterceptor}
++ * 统一校验。此前 Key 走 URL 路径（{@code /overview/{key}}），会让凭据落入 nginx 访问日志、
++ * 浏览器历史与 Referer，因此已改为请求头。
+  */
+ @RestController
+ @RequestMapping("/api/widget")
+ public class WidgetController {
+ 
+-    private final ApiKeyMapper apiKeyMapper;
+     private final WidgetService widgetService;
+ 
+-    public WidgetController(ApiKeyMapper apiKeyMapper, WidgetService widgetService) {
+-        this.apiKeyMapper = apiKeyMapper;
++    public WidgetController(WidgetService widgetService) {
+         this.widgetService = widgetService;
+     }
+ 
+-    @GetMapping(value = "/overview/{key}", produces = "application/json;charset=utf-8")
++    @GetMapping(value = "/overview", produces = "application/json;charset=utf-8")
+     public ApiResponse<Map<String, Object>> overview(
+-            @PathVariable String key,
+             @RequestParam(value = "scheduleId", required = false) Long scheduleId,
+             HttpServletResponse response) {
+         response.setHeader("Cache-Control", "no-store");
+-        if (key.isBlank()) {
+-            throw new BusinessException(400, "缺少 key 参数");
+-        }
+-        if (apiKeyMapper.selectById(key.trim()) == null) {
+-            throw new BusinessException(401, "API Key 无效");
+-        }
+-        return ApiResponse.success(widgetService.overview(key.trim(), scheduleId));
++        return ApiResponse.success(widgetService.overview(RequestContext.getApiKey(), scheduleId));
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/backend/src/main/java/com/timetable/service/AiService.java b/backend/src/main/java/com/timetable/service/AiService.java
+index 939ba81..eea7da1 100644
+--- a/backend/src/main/java/com/timetable/service/AiService.java
++++ b/backend/src/main/java/com/timetable/service/AiService.java
+@@ -37,6 +37,14 @@ public interface AiService {
+ 
+         /** 正文结束，开始解析操作提案 */
+         void onPlanning();
++
++        /**
++         * 客户端是否已断开。实现方在推送事件失败时置为 true；
++         * 服务端据此中断上游调用，避免继续为一个已被遗弃的请求消耗资源与落库。
++         */
++        default boolean isCancelled() {
++            return false;
++        }
+     }
+ 
+     AiMessageResponse executeAction(Long conversationId, Long actionId, String apiKey);
+diff --git a/backend/src/main/java/com/timetable/service/DeepSeekClient.java b/backend/src/main/java/com/timetable/service/DeepSeekClient.java
+index af95b19..8ee25d4 100644
+--- a/backend/src/main/java/com/timetable/service/DeepSeekClient.java
++++ b/backend/src/main/java/com/timetable/service/DeepSeekClient.java
+@@ -36,7 +36,24 @@ public interface DeepSeekClient {
+     /**
+      * 流式调用，边接收边回调，最终返回拼接完成的完整原始输出。
+      */
+-    String chatJsonStream(List<Message> messages, StreamListener listener);
++    default String chatJsonStream(List<Message> messages, StreamListener listener) {
++        return chatJsonStream(messages, listener, () -> false);
++    }
++
++    /**
++     * 可取消的流式调用。{@code cancelled} 返回 true 时立刻中断读取并抛出异常。
++     *
++     * 客户端断开后必须停止上游调用：否则工作线程会一直读到上游自然结束（最长
++     * timeout-seconds），期间白占线程池额度，而且结束之后还会把用户永远看不到的
++     * 回复与提案写进库。
++     *
++     * @param messages 完整对话上下文
++     * @param listener 增量回调
++     * @param cancelled 取消判定，每个数据块前检查一次
++     * @return 拼接完成的完整原始输出
++     */
++    String chatJsonStream(List<Message> messages, StreamListener listener,
++                          java.util.function.BooleanSupplier cancelled);
+ 
+     boolean isConfigured();
+ }
+diff --git a/backend/src/main/java/com/timetable/service/impl/AiServiceImpl.java b/backend/src/main/java/com/timetable/service/impl/AiServiceImpl.java
+index 3e38b11..ae3aa53 100644
+--- a/backend/src/main/java/com/timetable/service/impl/AiServiceImpl.java
++++ b/backend/src/main/java/com/timetable/service/impl/AiServiceImpl.java
+@@ -248,40 +248,74 @@ public class AiServiceImpl implements AiService {
+      * 因此改一个待办不会让课表相关的提案失效，反之亦然。
+      */
+     private String fingerprintOf(String scope, Long scheduleId, String apiKey) {
+-        StringBuilder sb = new StringBuilder();
+         if (SCOPE_COURSE.equals(scope)) {
+-            sb.append("S").append(scheduleId).append('|');
+-            if (scheduleId != null) {
+-                for (Course c : courseService.listByScheduleId(scheduleId, apiKey)) {
+-                    sb.append(c.getId()).append(':').append(c.getName()).append(':')
+-                            .append(c.getDayOfWeek()).append(':').append(c.getStartPeriod()).append('-')
+-                            .append(c.getEndPeriod()).append(':').append(c.getWeeks()).append(':')
+-                            .append(c.getLocation()).append(':').append(c.getTeacher()).append(';');
+-                }
+-                sb.append("|E|");
+-                for (Exam e : examService.listByScheduleId(scheduleId, apiKey)) {
+-                    sb.append(e.getId()).append(':')
+-                            .append(e.getName()).append(':').append(e.getExamDate()).append(':')
+-                            .append(e.getStartTime()).append(':').append(e.getEndTime()).append(':')
+-                            .append(e.getLocation()).append(';');
+-                }
+-            }
+-        } else {
+-            for (Todo t : todoService.list(apiKey)) {
+-                sb.append(t.getId()).append(':').append(t.getTitle()).append(':')
+-                        .append(t.getDdl()).append(':').append(t.getCompleted()).append(';');
++            List<Course> courses = scheduleId == null
++                    ? Collections.emptyList() : courseService.listByScheduleId(scheduleId, apiKey);
++            List<Exam> exams = scheduleId == null
++                    ? Collections.emptyList() : examService.listByScheduleId(scheduleId, apiKey);
++            return sha256(courseFingerprintInput(scheduleId, courses, exams));
++        }
++        return sha256(todoFingerprintInput(todoService.list(apiKey), recurringTodoService.list(apiKey)));
++    }
++
++    /**
++     * 课表作用域的指纹输入（纯函数，不查库）。
++     * 与 {@link #fingerprintOf} 共用，保证「查库现算」与「用快照算」得到同一结果。
++     */
++    private String courseFingerprintInput(Long scheduleId, List<Course> courses, List<Exam> exams) {
++        StringBuilder sb = new StringBuilder();
++        sb.append("S").append(scheduleId).append('|');
++        if (scheduleId != null) {
++            for (Course c : courses) {
++                sb.append(c.getId()).append(':').append(c.getName()).append(':')
++                        .append(c.getDayOfWeek()).append(':').append(c.getStartPeriod()).append('-')
++                        .append(c.getEndPeriod()).append(':').append(c.getWeeks()).append(':')
++                        .append(c.getLocation()).append(':').append(c.getTeacher()).append(';');
+             }
+-            sb.append("|R|");
+-            for (RecurringTodo r : recurringTodoService.list(apiKey)) {
+-                sb.append(r.getId()).append(':').append(r.getTitle()).append(':')
+-                        .append(r.getFrequency()).append(':').append(r.getDayOfWeek()).append(':')
+-                        .append(r.getDayOfMonth()).append(':').append(r.getTriggerTime()).append(':')
+-                        .append(r.getScript()).append(':')
+-                        .append(r.getDdlOffsetMinutes()).append(':').append(r.getEnabled()).append(':')
+-                        .append(r.getChainAfterComplete()).append(';');
++            sb.append("|E|");
++            for (Exam e : exams) {
++                sb.append(e.getId()).append(':')
++                        .append(e.getName()).append(':').append(e.getExamDate()).append(':')
++                        .append(e.getStartTime()).append(':').append(e.getEndTime()).append(':')
++                        .append(e.getLocation()).append(';');
+             }
+         }
+-        return sha256(sb.toString());
++        return sb.toString();
++    }
++
++    /** 待办作用域的指纹输入（纯函数，不查库），与 {@link #fingerprintOf} 共用 */
++    private String todoFingerprintInput(List<Todo> todos, List<RecurringTodo> rules) {
++        StringBuilder sb = new StringBuilder();
++        for (Todo t : todos) {
++            sb.append(t.getId()).append(':').append(t.getTitle()).append(':')
++                    .append(t.getDdl()).append(':').append(t.getCompleted()).append(';');
++        }
++        sb.append("|R|");
++        for (RecurringTodo r : rules) {
++            sb.append(r.getId()).append(':').append(r.getTitle()).append(':')
++                    .append(r.getFrequency()).append(':').append(r.getDayOfWeek()).append(':')
++                    .append(r.getDayOfMonth()).append(':').append(r.getTriggerTime()).append(':')
++                    .append(r.getScript()).append(':')
++                    .append(r.getDdlOffsetMinutes()).append(':').append(r.getEnabled()).append(':')
++                    .append(r.getChainAfterComplete()).append(';');
++        }
++        return sb.toString();
++    }
++
++    /**
++     * 在**调用模型之前**、用已经加载好（并即将写进 Prompt 与 _before）的数据算出的指纹。
++     *
++     * 关键：不能等到落库时再查库现算 —— 模型思考期间（数十秒）发生的数据变化会被算入基线，
++     * 于是 executeAction 的复查会通过，一个基于旧数据推理的提案被施加到新数据之上，
++     * 而 _before 展示给用户的又是旧值，两者自相矛盾。
++     */
++    private Map<String, String> fingerprintSnapshot(Long scheduleId, List<Course> courses,
++                                                    List<Exam> exams, List<Todo> todos,
++                                                    List<RecurringTodo> rules) {
++        Map<String, String> snapshot = new HashMap<>();
++        snapshot.put(SCOPE_COURSE, sha256(courseFingerprintInput(scheduleId, courses, exams)));
++        snapshot.put(SCOPE_TODO, sha256(todoFingerprintInput(todos, rules)));
++        return snapshot;
+     }
+ 
+     private String sha256(String input) {
+@@ -407,6 +441,11 @@ public class AiServiceImpl implements AiService {
+         List<RecurringTodo> recurringTodos = recurringTodoService.list(apiKey);
+         List<PeriodConfig> periods = periodConfigService.list();
+ 
++        // 指纹必须与即将写进 Prompt / _before 的数据取自同一时刻，且必须在调用模型之前算好。
++        // 若等到落库时再查库现算，模型思考期间的数据变化就会进入基线，使过期提案通过复查。
++        Map<String, String> fingerprintSnapshot =
++                fingerprintSnapshot(scheduleId, courses, exams, todos, recurringTodos);
++
+         AiMessage userMessage = new AiMessage();
+         userMessage.setConversationId(conversationId);
+         userMessage.setRole("user");
+@@ -489,7 +528,9 @@ public class AiServiceImpl implements AiService {
+                         callback.onPlanning();
+                     }
+                 }
+-            });
++                // 客户端断开（推送事件失败）时中断上游读取，避免为一个已被遗弃的请求
++                // 持续占用线程与连接；中断后向上抛出，回复不会落库
++            }, callback::isCancelled);
+             if (!planningNotified[0]) {
+                 callback.onPlanning();
+             }
+@@ -508,14 +549,15 @@ public class AiServiceImpl implements AiService {
+         final List<Exam> finalExams = exams;
+         return transactionTemplate.execute(status -> persistAssistantResult(
+                 conversationId, apiKey, scheduleId, conversation, root, finalText,
+-                finalCourses, todos, recurringTodos, finalExams));
++                finalCourses, todos, recurringTodos, finalExams, fingerprintSnapshot));
+     }
+ 
+     /** 在事务内落库 AI 回复与提案，并让同作用域旧提案失效 */
+     private AiMessageResponse persistAssistantResult(Long conversationId, String apiKey, Long scheduleId,
+                                                      AiConversation conversation, JsonNode root, String text,
+                                                      List<Course> courses, List<Todo> todos,
+-                                                     List<RecurringTodo> recurringTodos, List<Exam> exams) {
++                                                     List<RecurringTodo> recurringTodos, List<Exam> exams,
++                                                     Map<String, String> fingerprintSnapshot) {
+         AiMessage assistantMessage = new AiMessage();
+         assistantMessage.setConversationId(conversationId);
+         assistantMessage.setRole("assistant");
+@@ -535,8 +577,6 @@ public class AiServiceImpl implements AiService {
+ 
+         // 本次提案涉及的作用域，仅让这些作用域内的旧提案失效
+         int order = 0;
+-        // 指纹按作用域计算一次即可，避免在循环里反复全量扫描
+-        Map<String, String> fingerprintCache = new HashMap<>();
+         List<AiAction> created = new ArrayList<>();
+         for (JsonNode node : actionNodes) {
+             String type = node.path("type").asText("");
+@@ -565,8 +605,8 @@ public class AiServiceImpl implements AiService {
+                 } catch (Exception e) {
+                     throw new BusinessException(502, "AI 返回的操作数据无法序列化");
+                 }
+-                action.setDataFingerprint(
+-                        fingerprintCache.computeIfAbsent(scope, sc -> fingerprintOf(sc, scheduleId, apiKey)));
++                action.setDataFingerprint(fingerprintSnapshot.getOrDefault(scope,
++                        fingerprintOf(scope, scheduleId, apiKey)));
+                 action.setSortOrder(order++);
+                 created.add(action);
+             }
+diff --git a/backend/src/main/java/com/timetable/service/impl/DeepSeekClientImpl.java b/backend/src/main/java/com/timetable/service/impl/DeepSeekClientImpl.java
+index 7e4188f..10d8c97 100644
+--- a/backend/src/main/java/com/timetable/service/impl/DeepSeekClientImpl.java
++++ b/backend/src/main/java/com/timetable/service/impl/DeepSeekClientImpl.java
+@@ -46,12 +46,18 @@ public class DeepSeekClientImpl implements DeepSeekClient {
+ 
+     @Override
+     public String chatJson(List<Message> messages) {
+-        return execute(messages, null);
++        return execute(messages, null, () -> false);
+     }
+ 
+     @Override
+     public String chatJsonStream(List<Message> messages, StreamListener listener) {
+-        return execute(messages, listener);
++        return execute(messages, listener, () -> false);
++    }
++
++    @Override
++    public String chatJsonStream(List<Message> messages, StreamListener listener,
++                                 java.util.function.BooleanSupplier cancelled) {
++        return execute(messages, listener, cancelled);
+     }
+ 
+     private ObjectNode buildBody(List<Message> messages, boolean stream) {
+@@ -75,7 +81,8 @@ public class DeepSeekClientImpl implements DeepSeekClient {
+         return body;
+     }
+ 
+-    private String execute(List<Message> messages, StreamListener listener) {
++    private String execute(List<Message> messages, StreamListener listener,
++                           java.util.function.BooleanSupplier cancelled) {
+         if (!isConfigured()) {
+             throw new BusinessException(503, "未配置 DeepSeek API Key，AI 功能不可用");
+         }
+@@ -83,6 +90,9 @@ public class DeepSeekClientImpl implements DeepSeekClient {
+         ObjectNode body = buildBody(messages, stream);
+ 
+         try {
++            if (cancelled.getAsBoolean()) {
++                throw new BusinessException(499, "客户端已断开，未发起 AI 请求");
++            }
+             HttpRequest request = HttpRequest.newBuilder()
+                     .uri(URI.create(properties.getBaseUrl() + "/chat/completions"))
+                     .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
+@@ -117,6 +127,11 @@ public class DeepSeekClientImpl implements DeepSeekClient {
+                     new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+                 String line;
+                 while ((line = reader.readLine()) != null) {
++                    // 每个数据块前检查一次：客户端断开后立即退出循环，
++                    // try-with-resources 会关闭响应流，从而中断上游请求并释放连接
++                    if (cancelled.getAsBoolean()) {
++                        throw new BusinessException(499, "客户端已断开，已停止本次流式请求");
++                    }
+                     if (!line.startsWith("data:")) {
+                         continue;
+                     }
+diff --git a/backend/src/main/java/com/timetable/service/impl/RecurringScriptEvaluator.java b/backend/src/main/java/com/timetable/service/impl/RecurringScriptEvaluator.java
+index b17b5f3..0e28975 100644
+--- a/backend/src/main/java/com/timetable/service/impl/RecurringScriptEvaluator.java
++++ b/backend/src/main/java/com/timetable/service/impl/RecurringScriptEvaluator.java
+@@ -1,11 +1,15 @@
+ package com.timetable.service.impl;
+ 
+ import org.mozilla.javascript.ClassShutter;
++import org.mozilla.javascript.CompilerEnvirons;
+ import org.mozilla.javascript.Context;
+ import org.mozilla.javascript.ContextFactory;
+ import org.mozilla.javascript.EvaluatorException;
++import org.mozilla.javascript.Parser;
+ import org.mozilla.javascript.Scriptable;
+ import org.mozilla.javascript.ScriptableObject;
++import org.mozilla.javascript.ast.AstRoot;
++import org.mozilla.javascript.ast.RegExpLiteral;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.springframework.stereotype.Component;
+@@ -16,6 +20,8 @@ import java.time.temporal.ChronoUnit;
+ import java.time.temporal.IsoFields;
+ import java.util.HashMap;
+ import java.util.Map;
++import java.util.concurrent.Semaphore;
++import java.util.concurrent.atomic.AtomicInteger;
+ 
+ /**
+  * 用户自定义循环规则的脚本执行器（沙箱）。
+@@ -24,10 +30,20 @@ import java.util.Map;
+  *
+  * 安全措施（执行不可信代码，必须全部具备）：
+  * 1. ClassShutter 阻断所有 Java 类访问 —— 杜绝 java.lang.Runtime 等反射逃逸
+- * 2. 指令计数中断 —— 防死循环 / 长时间占用 CPU
+- * 3. 独立线程 + 超时强制终止 —— 兜住极端情况
+- * 4. 密封的顶层作用域，禁用 Rhino 的 JavaAdapter / importClass 等桥接能力
+- * 5. 脚本长度上限，避免存入超大文本
++ * 2. safe standard objects —— 作用域内不含 Packages/java/getClass/JavaAdapter/importClass
++ *    等 LiveConnect 桥接（该保护与是否密封无关；本类特意不密封，见第 3 条）
++ * 3. 消除无界原生执行入口 —— 源码层拒绝正则字面量，运行时顶替 RegExp/eval/Function
++ *    与 RegExp.prototype.test/exec、String.prototype.match/search
++ * 4. 指令计数中断 —— 防死循环 / 长时间占用 CPU
++ * 5. 解释器栈深限制 + 堆增长哨兵 + 工作线程内捕获 OOM/StackOverflow
++ * 6. 脚本长度上限
++ * 7. 并发许可 —— 每个求值占用一个许可，被遗弃的线程不归还许可，因此失控脚本的数量有硬上限
++ *
++ * <p><b>已知限制（不要在文档里宣称已完全解决）</b>：JVM 无法安全抢占一次正在执行的原生
++ * （Java）调用，因此单靠进程内手段无法保证「超时即终止」。本类通过第 3 条关掉已证实的
++ * 无界原生入口、通过第 7 条把最坏情况限制在 {@link #MAX_CONCURRENT_EVALUATIONS} 个
++ * 失控线程以内（用满后求值失败关闭，不再接受新脚本），从而把「无界资源耗尽」降级为
++ * 「有界且可告警」。彻底的方案是把求值移出本进程（独立 JVM，可强杀），见 TODO。
+  */
+ @Component
+ public class RecurringScriptEvaluator {
+@@ -38,6 +54,8 @@ public class RecurringScriptEvaluator {
+     private static final int MAX_INSTRUCTIONS = 2_000_000;
+     /** 单次执行墙钟超时 */
+     private static final long TIMEOUT_MS = 1500L;
++    /** 超时后等待线程自行退出的宽限期，仍不退则视为遗弃 */
++    private static final long ABANDON_GRACE_MS = 300L;
+     public static final int MAX_SCRIPT_LENGTH = 4000;
+     /** 脚本运行期允许新增的堆内存上限，防「字符串炸弹」等内存耗尽攻击 */
+     private static final long MAX_HEAP_GROWTH_BYTES = 64L * 1024 * 1024;
+@@ -48,9 +66,18 @@ public class RecurringScriptEvaluator {
+     private static final int OBSERVER_THRESHOLD = 200;
+     /** 解释器调用栈深度上限，防无限递归耗尽堆内存 */
+     private static final int MAX_STACK_DEPTH = 256;
++    /**
++     * 同时进行的脚本求值上限。被遗弃（无法终止）的线程不归还许可，
++     * 因此失控线程总数不会超过该值 —— 最坏情况下丢一个核心，而不是无限增长。
++     */
++    private static final int MAX_CONCURRENT_EVALUATIONS = 2;
+ 
+     private static final String FUNCTION_NAME = "shouldTrigger";
+ 
++    /** 用来顶替 RegExp / eval / Function 的桩函数：正则与动态代码直接抛错 */
++    private static final String BLOCKED_STUB_JS =
++            "(function(){ throw new Error('沙箱内禁止使用正则表达式与动态代码（RegExp / eval / Function）'); })";
++
+     /**
+      * 沙箱 ContextFactory：开启指令观察以支持中断。
+      */
+@@ -112,6 +139,10 @@ public class RecurringScriptEvaluator {
+     /** 只允许脚本引擎自身必需的类，其余 Java 类全部拒绝 */
+     private static final ClassShutter SHUTTER = fullClassName -> false;
+ 
++    /** 并发许可：被遗弃的求值不归还许可，用于给失控脚本数量设硬上限 */
++    private final Semaphore permits = new Semaphore(MAX_CONCURRENT_EVALUATIONS);
++    private final AtomicInteger abandonedCount = new AtomicInteger();
++
+     /**
+      * 试运行（用于前端「测试脚本」与保存前校验），不抛异常，返回结构化结果。
+      */
+@@ -119,35 +150,87 @@ public class RecurringScriptEvaluator {
+         return run(script, now, lastTriggeredAt);
+     }
+ 
+-    public record ScriptResult(boolean ok, boolean triggered, String error) {}
++    /**
++     * 脚本求值结果。
++     *
++     * @param ok           脚本本身是否正常执行完（语法/返回值/运行期错误均为 false）
++     * @param triggered    shouldTrigger 的返回值（仅 ok 为 true 时有意义）
++     * @param error        面向用户的错误说明，ok 为 true 时为 null
++     * @param unavailable  是否因沙箱自身不可用（并发饱和 / 已出现无法终止的脚本）而失败；
++     *                     调用方不应据此停用用户规则，那不是脚本的错
++     */
++    public record ScriptResult(boolean ok, boolean triggered, String error, boolean unavailable) {
++
++        static ScriptResult ok(boolean triggered) {
++            return new ScriptResult(true, triggered, null, false);
++        }
++
++        static ScriptResult invalid(String error) {
++            return new ScriptResult(false, false, error, false);
++        }
++
++        static ScriptResult unavailable(String error) {
++            return new ScriptResult(false, false, error, true);
++        }
++    }
+ 
+     private ScriptResult run(String script, LocalDateTime now, LocalDateTime lastTriggeredAt) {
+         if (script == null || script.isBlank()) {
+-            return new ScriptResult(false, false, "脚本内容不能为空");
++            return ScriptResult.invalid("脚本内容不能为空");
+         }
+         if (script.length() > MAX_SCRIPT_LENGTH) {
+-            return new ScriptResult(false, false,
+-                    "脚本过长（上限 " + MAX_SCRIPT_LENGTH + " 字符）");
++            return ScriptResult.invalid("脚本过长（上限 " + MAX_SCRIPT_LENGTH + " 字符）");
++        }
++        // 正则字面量必须在求值前拦掉：它是唯一还能造出正则对象的途径（RegExp 构造器已被桩掉），
++        // 而任何正则对象一旦传给 test/exec/replace/split，就会在单次原生调用里无界回溯。
++        if (containsRegExpLiteral(script)) {
++            return ScriptResult.invalid("脚本中不能使用正则表达式（沙箱不支持 RegExp）");
++        }
++
++        // 并发许可：拿不到说明已有脚本没能终止（许可被永久占用），此时拒绝新求值而不是继续泄漏
++        if (!permits.tryAcquire()) {
++            log.warn("Recurring script rejected: sandbox saturated ({} evaluation(s) never terminated)",
++                    abandonedCount.get());
++            return ScriptResult.unavailable("脚本沙箱繁忙：已有脚本无法终止，暂不接受新的脚本求值");
+         }
+ 
+-        // 独立线程执行，超时可强制放弃等待
+         final ScriptResult[] holder = new ScriptResult[1];
+         Thread worker = new Thread(() -> holder[0] = doRun(script, now, lastTriggeredAt),
+                 "recurring-script");
+         worker.setDaemon(true);
+         worker.start();
++
++        boolean terminated = joinQuietly(worker, TIMEOUT_MS + 500);
++        if (terminated) {
++            permits.release();
++            return holder[0] != null ? holder[0] : ScriptResult.invalid("脚本执行失败");
++        }
++
++        // 超时：先尝试打断（对可中断的原生调用有效），仍不退则遗弃线程并永久占用许可
++        worker.interrupt();
++        terminated = joinQuietly(worker, ABANDON_GRACE_MS);
++        if (terminated) {
++            permits.release();
++            return ScriptResult.invalid("脚本执行超时（上限 " + TIMEOUT_MS + "ms）");
++        }
++
++        int total = abandonedCount.incrementAndGet();
++        log.error("Recurring script did not terminate and was abandoned ({} total); "
++                + "sandbox permits {}/{} still held",
++                total, MAX_CONCURRENT_EVALUATIONS - permits.availablePermits(),
++                MAX_CONCURRENT_EVALUATIONS);
++        return ScriptResult.invalid("脚本执行超时（上限 " + TIMEOUT_MS + "ms）");
++    }
++
++    /** 等待线程结束；被中断时同样按「未结束」处理并恢复中断标记 */
++    private static boolean joinQuietly(Thread worker, long millis) {
+         try {
+-            worker.join(TIMEOUT_MS + 500);
++            worker.join(millis);
+         } catch (InterruptedException e) {
+             Thread.currentThread().interrupt();
+-            return new ScriptResult(false, false, "脚本执行被中断");
+-        }
+-        if (worker.isAlive()) {
+-            log.warn("Recurring script did not finish in time, abandoning thread");
+-            return new ScriptResult(false, false, "脚本执行超时（上限 " + TIMEOUT_MS + "ms）");
++            return !worker.isAlive();
+         }
+-        return holder[0] != null ? holder[0]
+-                : new ScriptResult(false, false, "脚本执行失败");
++        return !worker.isAlive();
+     }
+ 
+     private ScriptResult doRun(String script, LocalDateTime now, LocalDateTime lastTriggeredAt) {
+@@ -163,8 +246,12 @@ public class RecurringScriptEvaluator {
+             cx.putThreadLocal(Counter.KEY, counter);
+             cx.putThreadLocal("startAt", System.currentTimeMillis());
+ 
+-            // initSafeStandardObjects(sealed=true)：不含 JavaAdapter/Packages，且顶层对象密封
+-            ScriptableObject scope = cx.initSafeStandardObjects(null, true);
++            // initSafeStandardObjects(sealed=false)：不含 JavaAdapter/Packages/getClass 等
++            // LiveConnect 桥接（这一点与 sealed 无关），但不密封标准对象 —— 只有不密封，
++            // 才能覆写 String.prototype.match/search 与 RegExp.prototype.test/exec。
++            // 不密封的代价仅限脚本能改自己的标准对象，它无法借此逃逸到 Java（已实测）。
++            ScriptableObject scope = cx.initSafeStandardObjects(null, false);
++            neutraliseUnboundedNatives(cx, scope);
+ 
+             Scriptable ctx = toScriptable(cx, scope, buildContext(now, lastTriggeredAt));
+             scope.putConst("ctx", scope, ctx);
+@@ -173,39 +260,108 @@ public class RecurringScriptEvaluator {
+ 
+             Object fn = scope.get(FUNCTION_NAME, scope);
+             if (!(fn instanceof org.mozilla.javascript.Function function)) {
+-                return new ScriptResult(false, false,
++                return ScriptResult.invalid(
+                         "脚本中必须定义 function " + FUNCTION_NAME + "(ctx) 函数");
+             }
+             Object out = function.call(cx, scope, scope, new Object[]{ctx});
+             if (out == null || out == Context.getUndefinedValue()) {
+-                return new ScriptResult(false, false,
++                return ScriptResult.invalid(
+                         FUNCTION_NAME + " 必须返回 true 或 false，当前返回了空值");
+             }
+             if (!(out instanceof Boolean b)) {
+                 // 明确要求布尔，避免 "0"/"" 之类的隐式转换造成误触发
+-                return new ScriptResult(false, false,
++                return ScriptResult.invalid(
+                         FUNCTION_NAME + " 必须返回布尔值，当前返回类型为 " + describeType(out));
+             }
+-            return new ScriptResult(true, b, null);
++            return ScriptResult.ok(b);
+         } catch (ScriptAbortError e) {
+-            return new ScriptResult(false, false, e.getMessage());
++            return ScriptResult.invalid(e.getMessage());
+         } catch (EvaluatorException e) {
+-            return new ScriptResult(false, false, "脚本语法错误：" + e.details()
++            return ScriptResult.invalid("脚本语法错误：" + e.details()
+                     + "（第 " + e.lineNumber() + " 行）");
+         } catch (StackOverflowError e) {
+-            return new ScriptResult(false, false, "脚本递归层数过深（可能存在无限递归）");
++            return ScriptResult.invalid("脚本递归层数过深（可能存在无限递归）");
+         } catch (OutOfMemoryError e) {
+             // 无限递归 / 超大分配可能耗尽堆，必须在工作线程内消化掉，
+             // 否则会波及主线程导致整个服务不可用
+-            return new ScriptResult(false, false, "脚本占用内存过多，已终止");
++            return ScriptResult.invalid("脚本占用内存过多，已终止");
+         } catch (Exception e) {
+             String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+-            return new ScriptResult(false, false, "脚本运行出错：" + msg);
++            return ScriptResult.invalid("脚本运行出错：" + msg);
+         } finally {
+             Context.exit();
+         }
+     }
+ 
++    /**
++     * 顶替一切能把执行带进无界原生代码或动态代码的入口。
++     *
++     * 已逐项实测（Rhino 1.7.14）：
++     * - 顶替全局 {@code RegExp} 后，{@code new RegExp(...)} 抛错，且**正则字面量创建出的对象
++     *   会连原型链上的 test/exec 一起失效**（字面量的原型来自全局 RegExp）。
++     * - {@code String.prototype.match/search} 传字符串时**不走全局 RegExp**，因此必须单独覆写；
++     *   它们所在的原型对象在 sealed=true 时是密封的，这正是这里改用 sealed=false 的原因。
++     * - {@code eval}/{@code Function} 顶替后，连 {@code globalThis['eval'](...)} 这类间接调用
++     *   也会被拦下；动态代码是绕过源码检查（见 {@link #containsRegExpLiteral}）的唯一途径。
++     *
++     * 覆写按属性名生效，因此 {@code s['ma'+'tch'](...)} 这种计算属性访问同样被挡住。
++     */
++    private void neutraliseUnboundedNatives(Context cx, ScriptableObject scope) {
++        Object blocked = cx.evaluateString(scope, BLOCKED_STUB_JS, "sandboxInit", 1, null);
++        ScriptableObject.putProperty(scope, "RegExp", blocked);
++        ScriptableObject.putProperty(scope, "eval", blocked);
++        ScriptableObject.putProperty(scope, "Function", blocked);
++        overrideOnPrototype(scope, "RegExp", "test", blocked);
++        overrideOnPrototype(scope, "RegExp", "exec", blocked);
++        overrideOnPrototype(scope, "String", "match", blocked);
++        overrideOnPrototype(scope, "String", "search", blocked);
++    }
++
++    /** 把某个内建对象原型上的方法替换为桩函数 */
++    private void overrideOnPrototype(ScriptableObject scope, String ctorName,
++                                     String methodName, Object stub) {
++        Object ctor = scope.get(ctorName, scope);
++        if (!(ctor instanceof Scriptable ctorScriptable)) {
++            return;
++        }
++        Object proto = ScriptableObject.getProperty(ctorScriptable, "prototype");
++        if (proto instanceof Scriptable protoScriptable) {
++            ScriptableObject.putProperty(protoScriptable, methodName, stub);
++        }
++    }
++
++    /**
++     * 用 Rhino 自己的解析器判断脚本里是否含正则字面量。
++     *
++     * 不能用字符扫描代替：{@code /} 同时是除号，注释与字符串里也可能出现斜杠。
++     * 解析失败（语法错误）时返回 false，交由求值阶段报出准确的语法错误。
++     * 由于 eval/Function 已被桩掉，本检查不存在绕过路径。
++     */
++    private boolean containsRegExpLiteral(String script) {
++        CompilerEnvirons env = new CompilerEnvirons();
++        env.setLanguageVersion(Context.VERSION_ES6);
++        AstRoot root;
++        try {
++            root = new Parser(env).parse(script, "userScript", 1);
++        } catch (Exception e) {
++            return false;
++        }
++        boolean[] found = {false};
++        root.visit(node -> {
++            if (node instanceof RegExpLiteral) {
++                found[0] = true;
++                return false;
++            }
++            return true;
++        });
++        return found[0];
++    }
++
++    /** 当前是否还有未能终止的脚本线程（供健康检查/测试观察） */
++    public boolean isSaturated() {
++        return permits.availablePermits() < MAX_CONCURRENT_EVALUATIONS;
++    }
++
+     private String describeType(Object out) {
+         if (out instanceof Number) return "数字";
+         if (out instanceof CharSequence) return "字符串";
+@@ -254,22 +410,22 @@ public class RecurringScriptEvaluator {
+     public static final String SCRIPT_TEMPLATE = """
+             // 返回 true 表示此刻应该触发，生成一条待办
+             // 系统每分钟检查一次；同一分钟内只会触发一次
++            // 沙箱内不可使用正则表达式，也不可使用 eval / Function
+             function shouldTrigger(ctx) {
+               // 可用字段：
+               //   ctx.year / ctx.month / ctx.day
+               //   ctx.dayOfWeek        1=周一 ... 7=周日
+               //   ctx.hour / ctx.minute
+-              //   ctx.weekOfYear       ISO 周序号
++              //   ctx.weekOfYear       ISO 周序号（注意：不是学期教学周）
+               //   ctx.dayOfYear / ctx.daysInMonth
+               //   ctx.isLastDayOfMonth / ctx.isWeekend
+               //   ctx.daysSinceLastTrigger   距上次触发天数（从未触发为 -1）
+               //   ctx.neverTriggered
+ 
+-              // 示例：每逢双周的周五 12:00
++              // 示例：每周五 12:00
+               return ctx.dayOfWeek === 5
+                   && ctx.hour === 12
+-                  && ctx.minute === 0
+-                  && ctx.weekOfYear % 2 === 0;
++                  && ctx.minute === 0;
+             }
+             """;
+ }
+diff --git a/backend/src/main/java/com/timetable/service/impl/RecurringTodoServiceImpl.java b/backend/src/main/java/com/timetable/service/impl/RecurringTodoServiceImpl.java
+index b8bf76c..ece25da 100644
+--- a/backend/src/main/java/com/timetable/service/impl/RecurringTodoServiceImpl.java
++++ b/backend/src/main/java/com/timetable/service/impl/RecurringTodoServiceImpl.java
+@@ -1,6 +1,7 @@
+ package com.timetable.service.impl;
+ 
+ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
++import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+ import com.timetable.dto.RecurringTodoRequest;
+ import com.timetable.entity.RecurringTodo;
+ import com.timetable.entity.Todo;
+@@ -10,6 +11,7 @@ import com.timetable.mapper.TodoMapper;
+ import com.timetable.service.RecurringTodoService;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
++import org.springframework.dao.DuplicateKeyException;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
+@@ -86,6 +88,10 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
+         if (RecurringScheduleCalculator.CUSTOM.equals(rule.getFrequency())) {
+             RecurringScriptEvaluator.ScriptResult probe =
+                     scriptEvaluator.test(rule.getScript(), LocalDateTime.now(), null);
++            if (probe.unavailable()) {
++                // 沙箱自身繁忙/已饱和，不是脚本的问题，如实告知并让用户稍后重试
++                throw new BusinessException(503, "脚本沙箱暂时不可用：" + probe.error());
++            }
+             if (!probe.ok()) {
+                 throw new BusinessException(400, "脚本校验失败：" + probe.error());
+             }
+@@ -120,17 +126,13 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
+     @Transactional
+     public void delete(Long id, String apiKey) {
+         getById(id, apiKey);
+-        // 已生成的待办保留，仅解除关联，避免用户丢失历史记录
+-        LambdaQueryWrapper<Todo> wrapper = new LambdaQueryWrapper<>();
+-        wrapper.eq(Todo::getRecurringId, id);
+-        for (Todo todo : todoMapper.selectList(wrapper)) {
+-            todo.setRecurringId(null);
+-            // updateById 会忽略 null，这里用 UpdateWrapper 显式置空
+-            todoMapper.update(null,
+-                    com.baomidou.mybatisplus.core.toolkit.Wrappers.<Todo>lambdaUpdate()
+-                            .eq(Todo::getId, todo.getId())
+-                            .set(Todo::getRecurringId, null));
+-        }
++        // 已生成的待办保留，仅解除关联，避免用户丢失历史记录。
++        // 必须显式带 apiKey 条件：recurring_id 是全局自增，缺了它这条更新会跨租户命中。
++        // updateById 会忽略 null，所以用 lambdaUpdate 显式置空；一次批量更新代替逐行循环。
++        todoMapper.update(null, Wrappers.<Todo>lambdaUpdate()
++                .eq(Todo::getRecurringId, id)
++                .eq(Todo::getApiKey, apiKey)
++                .set(Todo::getRecurringId, null));
+         recurringMapper.deleteById(id);
+     }
+ 
+@@ -138,13 +140,18 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
+     public RecurringTodo toggleEnabled(Long id, String apiKey) {
+         RecurringTodo rule = getById(id, apiKey);
+         boolean next = !Boolean.TRUE.equals(rule.getEnabled());
+-        rule.setEnabled(next);
++        LocalDateTime newNext = rule.getNextTriggerAt();
+         if (next) {
+             // 重新启用时从当前时间往后排，不补历史
+-            rule.setNextTriggerAt(
+-                    RecurringScheduleCalculator.nextTriggerAfter(rule, LocalDateTime.now()));
++            newNext = RecurringScheduleCalculator.nextTriggerAfter(rule, LocalDateTime.now());
+         }
+-        recurringMapper.updateById(rule);
++        // 只更新目标列：整行 updateById 会用扫描前的快照覆盖并发的用户修改
++        recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
++                .eq(RecurringTodo::getId, id)
++                .set(RecurringTodo::getEnabled, next)
++                .set(RecurringTodo::getNextTriggerAt, newNext));
++        rule.setEnabled(next);
++        rule.setNextTriggerAt(newNext);
+         return rule;
+     }
+ 
+@@ -153,11 +160,15 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
+     public RecurringTodo triggerNow(Long id, String apiKey) {
+         RecurringTodo rule = getById(id, apiKey);
+         LocalDateTime now = LocalDateTime.now();
++        LocalDateTime next = RecurringScheduleCalculator.nextTriggerAfter(rule, now);
+         spawnTodo(rule, now);
++        // 只更新目标列；CUSTOM 的 next 为 null，用 .set() 才能真的清空（updateById 会忽略 null）
++        recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
++                .eq(RecurringTodo::getId, id)
++                .set(RecurringTodo::getLastTriggeredAt, now)
++                .set(RecurringTodo::getNextTriggerAt, next));
+         rule.setLastTriggeredAt(now);
+-        // CUSTOM 无固定下次触发时间（返回 null），由脚本每分钟判断
+-        rule.setNextTriggerAt(RecurringScheduleCalculator.nextTriggerAfter(rule, now));
+-        recurringMapper.updateById(rule);
++        rule.setNextTriggerAt(next);
+         return rule;
+     }
+ 
+@@ -174,7 +185,14 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
+         todo.setDdl(RecurringScheduleCalculator.ddlOf(rule, triggeredAt));
+         todo.setCompleted(false);
+         todo.setRecurringId(rule.getId());
+-        todoMapper.insert(todo);
++        try {
++            todoMapper.insert(todo);
++        } catch (DuplicateKeyException e) {
++            // uk_todo_recurring_ddl 兜底：同一期已存在（多实例并发或异常重放），忽略即可。
++            // MySQL 下失败的 INSERT 不会污染当前事务，因此这里可以安全地继续。
++            log.warn("Duplicate recurring occurrence ignored: rule={} ddl={}",
++                    rule.getId(), todo.getDdl());
++        }
+     }
+ 
+     @Override
+@@ -199,8 +217,8 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
+                 .eq(RecurringTodo::getFrequency, RecurringScheduleCalculator.CUSTOM);
+ 
+         int generated = 0;
++        LocalDateTime minute = now.truncatedTo(ChronoUnit.MINUTES);
+         for (RecurringTodo rule : recurringMapper.selectList(wrapper)) {
+-            LocalDateTime minute = now.truncatedTo(ChronoUnit.MINUTES);
+             if (rule.getLastTriggeredAt() != null
+                     && !rule.getLastTriggeredAt().truncatedTo(ChronoUnit.MINUTES).isBefore(minute)) {
+                 continue;
+@@ -208,17 +226,30 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
+             RecurringScriptEvaluator.ScriptResult r =
+                     scriptEvaluator.test(rule.getScript(), now, rule.getLastTriggeredAt());
+             if (!r.ok()) {
+-                // 脚本出错则自动停用，避免每分钟反复报错
++                if (r.unavailable()) {
++                    // 沙箱自身不可用（并发饱和 / 已有脚本无法终止），这不是规则的问题，
++                    // 不能因此把用户的规则停掉
++                    log.warn("Custom recurring rule {} skipped, sandbox unavailable: {}",
++                            rule.getId(), r.error());
++                    continue;
++                }
++                // 脚本出错则自动停用，避免每分钟反复报错。
++                // 只改 enabled：整行 updateById 会把扫描开始时读到的快照写回，
++                // 从而覆盖用户在这期间的修改（例如刚把规则改回启用）。
+                 log.warn("Custom recurring rule {} disabled due to script error: {}",
+                         rule.getId(), r.error());
+-                rule.setEnabled(false);
+-                recurringMapper.updateById(rule);
++                recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
++                        .eq(RecurringTodo::getId, rule.getId())
++                        .set(RecurringTodo::getEnabled, false));
+                 continue;
+             }
+             if (r.triggered()) {
++                // 原子占位：以「last_triggered_at 仍早于本分钟」为条件推进，
++                // 同一分钟只会有一个扫描能成功，避免重复生成
++                if (!claimCustomOccurrence(rule.getId(), minute)) {
++                    continue;
++                }
+                 spawnTodo(rule, minute);
+-                rule.setLastTriggeredAt(minute);
+-                recurringMapper.updateById(rule);
+                 generated++;
+             }
+         }
+@@ -234,26 +265,58 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
+ 
+         int generated = 0;
+         for (RecurringTodo rule : recurringMapper.selectList(wrapper)) {
+-            LocalDateTime due = rule.getNextTriggerAt();
++            LocalDateTime cursor = rule.getNextTriggerAt();
+             int rounds = 0;
+-            // 补齐停机期间错过的触发点，但设上限防止刷屏
+-            while (due != null && !due.isAfter(now) && rounds < MAX_CATCH_UP) {
+-                spawnTodo(rule, due);
+-                rule.setLastTriggeredAt(due);
+-                due = RecurringScheduleCalculator.nextTriggerAfter(rule, due);
++            // 补齐停机期间错过的触发点，但设上限防止刷屏。
++            // 每一期都「先原子占位（把 next_trigger_at 从本期推进到下一期），再生成待办」，
++            // 因此并发的两次扫描（启动补扫与首轮定时任务重叠）或多实例部署都不会重复生成。
++            while (cursor != null && !cursor.isAfter(now) && rounds < MAX_CATCH_UP) {
++                LocalDateTime next = RecurringScheduleCalculator.nextTriggerAfter(rule, cursor);
++                if (!claimFixedOccurrence(rule.getId(), cursor, next)) {
++                    break;   // 已被其它扫描/实例抢先占位
++                }
++                spawnTodo(rule, cursor);
++                cursor = next;
+                 rounds++;
+                 generated++;
+             }
+-            // 若仍落后于当前时间（错过太多期），直接跳到下一个未来触发点
+-            if (due != null && !due.isAfter(now)) {
+-                due = RecurringScheduleCalculator.nextTriggerAfter(rule, now);
++            // 若仍落后于当前时间（错过太多期），带条件地跳到下一个未来触发点
++            if (cursor != null && !cursor.isAfter(now)) {
++                advanceNextTrigger(rule.getId(), cursor,
++                        RecurringScheduleCalculator.nextTriggerAfter(rule, now));
+             }
+-            rule.setNextTriggerAt(due);
+-            recurringMapper.updateById(rule);
+         }
+         return generated;
+     }
+ 
++    /** 原子占位一期（固定频率）：仅当 next_trigger_at 仍是扫描时读到的预期值时才推进 */
++    private boolean claimFixedOccurrence(Long ruleId, LocalDateTime expectedNext, LocalDateTime newNext) {
++        int rows = recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
++                .eq(RecurringTodo::getId, ruleId)
++                .eq(RecurringTodo::getNextTriggerAt, expectedNext)
++                .set(RecurringTodo::getNextTriggerAt, newNext)
++                .set(RecurringTodo::getLastTriggeredAt, expectedNext));
++        return rows == 1;
++    }
++
++    /** 原子占位一次（自定义频率）：仅当 last_triggered_at 仍早于本分钟时才推进 */
++    private boolean claimCustomOccurrence(Long ruleId, LocalDateTime minute) {
++        int rows = recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
++                .eq(RecurringTodo::getId, ruleId)
++                .and(w -> w.isNull(RecurringTodo::getLastTriggeredAt)
++                        .or().lt(RecurringTodo::getLastTriggeredAt, minute))
++                .set(RecurringTodo::getLastTriggeredAt, minute));
++        return rows == 1;
++    }
++
++    /** 带条件地推进 next_trigger_at，避免覆盖并发的修改 */
++    private void advanceNextTrigger(Long ruleId, LocalDateTime expectedNext, LocalDateTime newNext) {
++        recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
++                .eq(RecurringTodo::getId, ruleId)
++                .eq(RecurringTodo::getNextTriggerAt, expectedNext)
++                .set(RecurringTodo::getNextTriggerAt, newNext));
++    }
++
+     @Override
+     @Transactional
+     public void onTodoCompleted(Long recurringId, String apiKey) {
+@@ -269,8 +332,11 @@ public class RecurringTodoServiceImpl implements RecurringTodoService {
+         LocalDateTime base = rule.getNextTriggerAt() != null
+                 ? rule.getNextTriggerAt() : LocalDateTime.now();
+         spawnTodo(rule, base);
+-        rule.setLastTriggeredAt(LocalDateTime.now());
+-        rule.setNextTriggerAt(RecurringScheduleCalculator.nextTriggerAfter(rule, base));
+-        recurringMapper.updateById(rule);
++        // 只更新目标列，避免整行写回覆盖用户并发的修改
++        recurringMapper.update(null, Wrappers.<RecurringTodo>lambdaUpdate()
++                .eq(RecurringTodo::getId, recurringId)
++                .set(RecurringTodo::getLastTriggeredAt, LocalDateTime.now())
++                .set(RecurringTodo::getNextTriggerAt,
++                        RecurringScheduleCalculator.nextTriggerAfter(rule, base)));
+     }
+ }
+diff --git a/backend/src/main/resources/application.yml b/backend/src/main/resources/application.yml
+index a7bbdd1..a165eab 100644
+--- a/backend/src/main/resources/application.yml
++++ b/backend/src/main/resources/application.yml
+@@ -27,6 +27,8 @@ app:
+     allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:*}
+   # 可编辑全局作息时间表的账号 label（逗号分隔）
+   admin-labels: ${ADMIN_LABELS:Tangent0712}
++  # 首次启动且 api_key 表为空时，用它创建首个管理员账号；留空则随机生成并打印到日志
++  bootstrap-key: ${TANGENT_BOOTSTRAP_KEY:}
+ 
+ deepseek:
+   api:
+diff --git a/backend/src/main/resources/db/data.sql b/backend/src/main/resources/db/data.sql
+index 2f7ecd6..623ab81 100644
+--- a/backend/src/main/resources/db/data.sql
++++ b/backend/src/main/resources/db/data.sql
+@@ -1,4 +1,6 @@
+-INSERT IGNORE INTO api_key (api_key, label) VALUES ('demo-key-001', '默认用户');
++-- 不再内置固定的演示 API Key：公开仓库里的固定 Key 等于公开凭据。
++-- api_key 表为空时由 ApiKeyBootstrap 在启动后创建首个账号（Key 取自 TANGENT_BOOTSTRAP_KEY，
++-- 未配置则随机生成并打印到日志）。
+ 
+ INSERT IGNORE INTO period_config (period_number, start_time, end_time, category) VALUES
+ (1, '08:00', '08:45', 'MORNING'),
+diff --git a/backend/src/main/resources/db/schema.sql b/backend/src/main/resources/db/schema.sql
+index 41dbb72..b288fde 100644
+--- a/backend/src/main/resources/db/schema.sql
++++ b/backend/src/main/resources/db/schema.sql
+@@ -69,7 +69,10 @@ CREATE TABLE IF NOT EXISTS todo (
+     INDEX idx_ddl (ddl),
+     INDEX idx_completed (completed),
+     INDEX idx_todo_recurring (recurring_id),
+-    INDEX idx_todo_exam (exam_id)
++    INDEX idx_todo_exam (exam_id),
++    -- 同一循环规则同一次触发只能有一条待办。应用层已用条件更新原子占位，
++    -- 这条唯一键是多实例/异常路径下的兜底（recurring_id 为 NULL 的手工待办不受影响）。
++    UNIQUE KEY uk_todo_recurring_ddl (recurring_id, ddl)
+ );
+ 
+ CREATE TABLE IF NOT EXISTS ai_conversation (
+diff --git a/backend/src/test/java/com/timetable/service/impl/RecurringScriptEvaluatorTest.java b/backend/src/test/java/com/timetable/service/impl/RecurringScriptEvaluatorTest.java
+index 208facd..7f87f7e 100644
+--- a/backend/src/test/java/com/timetable/service/impl/RecurringScriptEvaluatorTest.java
++++ b/backend/src/test/java/com/timetable/service/impl/RecurringScriptEvaluatorTest.java
+@@ -79,4 +79,63 @@ class RecurringScriptEvaluatorTest {
+         var result = run("function shouldTrigger(ctx){ return shouldTrigger(ctx); }");
+         assertFalse(result.ok());
+     }
++
++    /**
++     * 回归用例：修复前这个脚本会在一次原生正则调用里无限回溯，墙钟检查只写在指令观察器里，
++     * 而原生调用根本不经过指令边界 —— 于是 test() 超时返回，工作线程却永不结束，
++     * 每次请求泄漏一个占满 CPU 的线程。现在正则字面量在求值前就被拒绝。
++     */
++    @Test
++    void catastrophicRegexIsRejectedBeforeEvaluation() {
++        long start = System.currentTimeMillis();
++        var result = run("function shouldTrigger(ctx){"
++                + " var s = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!';"
++                + " return /(a+)+$/.test(s); }");
++        long elapsed = System.currentTimeMillis() - start;
++        assertFalse(result.ok());
++        assertFalse(result.unavailable());
++        assertTrue(elapsed < 1000, "应求值前即被拒绝，实测耗时 " + elapsed + "ms");
++    }
++
++    /** 正则字面量是唯一还能造出正则对象的途径，必须从源码层拦死 */
++    @Test
++    void regexLiteralIsRejected() {
++        assertFalse(run("function shouldTrigger(ctx){ return /x/.test('x'); }").ok());
++        assertFalse(run("function shouldTrigger(ctx){ var r = /abc/gi; return r.source.length > 0; }").ok());
++    }
++
++    /** 构造器入口：即使绕过源码检查，运行时也被桩函数挡下 */
++    @Test
++    void regExpConstructorIsBlocked() {
++        assertFalse(run("function shouldTrigger(ctx){ return new RegExp('a').test('a'); }").ok());
++    }
++
++    /**
++     * match/search 传字符串时不走全局 RegExp，是仅有的、能穿透指令计数的另一条路径，
++     * 因此必须单独覆写 String.prototype（这也是改用非密封标准对象的原因）。
++     */
++    @Test
++    void stringMatchAndSearchCannotReachTheRegexEngine() {
++        assertFalse(run("function shouldTrigger(ctx){ return 'aaa'.match('a+') !== null; }").ok());
++        assertFalse(run("function shouldTrigger(ctx){ return 'aaa'.search('a+') >= 0; }").ok());
++        // 计算属性访问也绕不过去：覆写是按属性名生效的
++        assertFalse(run("function shouldTrigger(ctx){ return 'aaa'['ma'+'tch']('a+') !== null; }").ok());
++    }
++
++    /** 动态代码是绕过源码检查的唯一途径，必须关闭（含间接调用） */
++    @Test
++    void dynamicCodeIsBlocked() {
++        assertFalse(run("function shouldTrigger(ctx){ return eval('1') === 1; }").ok());
++        assertFalse(run("function shouldTrigger(ctx){ return Function('return 1')() === 1; }").ok());
++        assertFalse(run("function shouldTrigger(ctx){ return globalThis['eval']('1') === 1; }").ok());
++    }
++
++    /** 关闭正则不能误伤日常字符串操作 */
++    @Test
++    void plainStringAndMathOperationsStillWork() {
++        assertTrue(run("function shouldTrigger(ctx){ return ctx.dateStr.split('-').length === 3; }").triggered());
++        assertTrue(run("function shouldTrigger(ctx){ return ctx.dateStr.replace('-', '/').length > 0; }").triggered());
++        assertTrue(run("function shouldTrigger(ctx){ return Math.floor(ctx.daysInMonth / 2) >= 14; }").triggered());
++        assertTrue(run("function shouldTrigger(ctx){ return ctx.dateStr.indexOf('-') === 4; }").triggered());
++    }
+ }
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 45a38ee..3c679ff 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -81,10 +81,10 @@ Controller → Service(接口) → ServiceImpl → Mapper (MyBatis-Plus) → MyS
+ 
+ ## 4. 认证与安全
+ 
+-- 除 `/api/auth/verify` 与只读的 `/api/widget/**` 外，所有接口需 `X-API-Key`。
++- 除 `/api/auth/verify` 外，所有接口（含只读的 `/api/widget/**`）需 `X-API-Key` 请求头。
+ - 统一响应：`{ code, message, data }`。
+ - AI 执行层复用各业务 Service，所有权校验自动生效。
+-- 自定义循环脚本运行于 Rhino 沙箱，具备 ClassShutter、指令计数、栈深限制、堆哨兵与脚本长度上限五层防护。
++- 自定义循环脚本运行于 Rhino 沙箱：ClassShutter 全量拒绝 Java 类、源码拒绝正则字面量、运行时顶替 `RegExp`/`eval`/`Function` 及相关原型方法，另有指令计数、栈深限制、堆哨兵、并发许可与脚本长度上限。注意进程内无法抢占正在执行的原生调用，因此该防护是「有界 + 失败关闭」，不是绝对的执行超时（详见 `AGENTS.md` §10.1）。
+ 
+ ---
+ 
+diff --git a/docs/DEPLOYMENT.md b/docs/DEPLOYMENT.md
+index 4b1d159..cf27ca0 100644
+--- a/docs/DEPLOYMENT.md
++++ b/docs/DEPLOYMENT.md
+@@ -58,6 +58,17 @@ server:
+ 
+ ### 2.3 systemd 服务
+ 
++先创建环境文件。`application-prod.yml` 里的 `${TANGENT_COMMON_PASSWORD}` 就是从这里读的；
++systemd 的 `EnvironmentFile` 只认 `KEY=value` 行，**不能写 `export`**：
++
++```bash
++sudo tee <APP_DIR>/.env >/dev/null <<'EOF'
++TANGENT_COMMON_PASSWORD=你的数据库密码
++DEEPSEEK_API_KEY=sk-xxx
++EOF
++sudo chmod 600 <APP_DIR>/.env
++```
++
+ `/etc/systemd/system/timetable-backend.service`：
+ 
+ ```ini
+@@ -163,11 +174,17 @@ INSERT IGNORE INTO api_key (api_key, label, avatar_url)
+ VALUES ('tt_xxx', '用户名', '头像URL');
+ ```
+ 
++> 首次部署时 `api_key` 表为空，应用启动后会**自动创建首个账号**并把 Key 打印到日志
++> （也可用环境变量 `TANGENT_BOOTSTRAP_KEY` 预先指定）。建议用 ≥128 位随机串作为 Key，
++> 不要沿用任何文档里的示例值。仓库不再内置演示 Key。
++
+ > **schema 变更需手动 ALTER**：`CREATE TABLE IF NOT EXISTS` 只会创建不存在的表，
+ > **不会给已存在的表补列**。因此每次修改 `schema.sql` 后，已有数据库需手动执行 `ALTER`。
+ > 改前先 `SHOW CREATE TABLE <表名>` 确认外键/索引名。示例：
+ > ```sql
+ > ALTER TABLE todo ADD COLUMN exam_id BIGINT NULL, ADD INDEX idx_todo_exam (exam_id);
++> -- 同一循环规则同一次触发只能有一条待办（应用层已用条件更新原子占位，此为多实例兜底）
++> ALTER TABLE todo ADD UNIQUE KEY uk_todo_recurring_ddl (recurring_id, ddl);
+ > ```
+ 
+ ---
+diff --git a/docs/WEBVIEW_WIDGET.md b/docs/WEBVIEW_WIDGET.md
+index b53a224..b96ed29 100644
+--- a/docs/WEBVIEW_WIDGET.md
++++ b/docs/WEBVIEW_WIDGET.md
+@@ -21,12 +21,12 @@
+ 
+ ```
+ iPad / Android 桌面小组件（WebView 组件）
+-  │  加载  https://<站点>/widget?key=<APIKEY>&scheduleId=<ID>
++  │  加载  https://<站点>/widget#key=<APIKEY>&scheduleId=<ID>
+   ▼
+ 前端展示页  /widget  (WidgetPreviewPage.tsx，公开只读，无需登录)
+-  │  fetch 每 60 秒轮询 + 页面可见时刷新
++  │  fetch 每 60 秒轮询 + 页面可见时刷新（Key 走 X-API-Key 请求头）
+   ▼
+-后端接口  GET /api/widget/overview/{key}?scheduleId=<ID>
++后端接口  GET /api/widget/overview?scheduleId=<ID>
+   │  实时聚合
+   ▼
+ 紧凑 JSON（今日课程 / 考试 / 待办 / 周次）
+@@ -34,12 +34,13 @@ iPad / Android 桌面小组件（WebView 组件）
+ 
+ ### 1.2 展示页 `/widget`
+ 
+-- 路由：`/widget`，在 `App.tsx` 中注册，**早于登录判断**，公开访问、不依赖登录态。
+-- 参数（URL Query）：
++- 路由：`/widget`，在 `App.tsx` 中以早于登录判断的提前返回实现（不是 `<Route>`），公开访问、不依赖登录态。
++- 参数（URL **fragment** 优先，query 形式继续兼容）：
+   | 参数 | 必填 | 说明 |
+   |------|------|------|
+-  | `key` | 是 | API Key，用于鉴权；缺省时回退到本地已存 Key 或演示 Key |
++  | `key` | 是 | API Key，用于鉴权；缺省时回退到本地已存 Key，**没有内置演示 Key** |
+   | `scheduleId` | 否 | 指定课表；不传则默认该账号第一个课表 |
++- **为什么用 `#` 而不是 `?`**：fragment 不会随请求发往服务端，也不会进入 `Referer`；query 形式会留在访问日志与浏览器历史里。
+ - 行为：每 60 秒轮询一次；`visibilitychange` / 窗口 `focus` 时立即刷新。
+ - 样式：暗色只读双栏布局（左：课程与考试；右：待办与 DDL 倒计时），样式在 `index.css` 的 `.widget-*`。
+ - 设置页「小组件 / WebView 网页地址」卡片可一键复制带 `key` 与当前课表的完整地址。
+@@ -47,11 +48,13 @@ iPad / Android 桌面小组件（WebView 组件）
+ ### 1.3 后端接口
+ 
+ ```
+-GET /api/widget/overview/{key}?scheduleId={id}
++GET /api/widget/overview?scheduleId={id}
++X-API-Key: <APIKEY>
+ ```
+ 
+-- 鉴权：Key 通过 **URL 路径** 传入，`WidgetController` 内手动校验
+-  （`apiKeyMapper.selectById`）；该路径已在 `WebMvcConfig` 加入拦截器白名单。
++- 鉴权：与其它接口一致，走 `X-API-Key` 请求头，由 `ApiKeyInterceptor` 统一校验
++  （`/api/widget/**` **不再**是拦截器白名单）。此前 Key 放在 URL 路径里，会让凭据落入
++  nginx 访问日志、浏览器历史与 `Referer`，已移除该形式。
+ - 响应头：`Cache-Control: no-store`；`Content-Type: application/json;charset=utf-8`。
+ - 响应结构（`ApiResponse`）：
+ 
+@@ -115,16 +118,21 @@ GET /api/widget/overview/{key}?scheduleId={id}
+ 
+ ## 3. 安全注意事项（小组件）
+ 
+-- **Key 出现在 URL 中**：会进入浏览器/代理访问日志与历史记录，属于已知风险。
+-  建议仅在个人设备使用；后续可考虑改用短期 token。
++- **Key 仍会出现在展示页地址里**：为保证 WebView 无登录态也能取数，`/widget#key=...`
++  必须携带凭据。已把 Key 从 API 请求 URL 移到请求头，并优先使用 fragment（不进访问日志与
++  `Referer`），但展示页地址本身仍会留在设备本地的浏览历史中。建议仅在个人设备使用，
++  后续可考虑改用短期只读 token。
+ - 接口只返回展示所需的汇总字段，不返回敏感明细。
+-- `/api/widget/**` 位于鉴权拦截器白名单，鉴权由 Controller 手动完成。
++- `/api/widget/**` **不再**位于鉴权白名单：与其它接口一样由 `ApiKeyInterceptor` 校验
++  `X-API-Key`，Controller 内不再手工查 Key。
+ 
+ ---
+ 
+ ## 4. 验收清单
+ 
+-- [ ] `curl '<站点>/api/widget/overview/<key>'` 能直接拿到 JSON（不依赖 JS）。
++- [ ] `curl -H 'X-API-Key: <key>' '<站点>/api/widget/overview'` 能直接拿到 JSON（不依赖 JS）。
++- [ ] 不带 `X-API-Key` 时返回 401。
++- [ ] 旧的 `/api/widget/overview/<key>` 路径形式已不可用（不再接受 URL 里的 Key）。
+ - [ ] 返回 `charset=utf-8`，中文正常。
+ - [ ] 响应体精简，字段简短，适合小组件展示。
+ - [ ] 无效 Key 返回 401；空数据不报错。
+diff --git a/frontend/src/pages/LoginPage.tsx b/frontend/src/pages/LoginPage.tsx
+index fb1bc0c..936dd28 100644
+--- a/frontend/src/pages/LoginPage.tsx
++++ b/frontend/src/pages/LoginPage.tsx
+@@ -51,7 +51,7 @@ export default function LoginPage() {
+             >
+               <Input
+                 prefix={<KeyOutlined />}
+-                placeholder="例如 demo-key-001"
++                placeholder="请输入你的 API Key"
+                 autoFocus
+                 allowClear
+               />
+diff --git a/frontend/src/pages/SettingsPage.tsx b/frontend/src/pages/SettingsPage.tsx
+index 45f475a..4331425 100644
+--- a/frontend/src/pages/SettingsPage.tsx
++++ b/frontend/src/pages/SettingsPage.tsx
+@@ -53,8 +53,9 @@ export default function SettingsPage() {
+   const [rows, setRows] = useState<PeriodConfig[]>([])
+   const [widgetKey] = useState(() => getApiKey() ?? '')
+ 
+-  // 桌面小组件只读展示页地址（含 key 与当前课表）
+-  const widgetPageUrl = `${WIDGET_API_BASE}/widget?key=${encodeURIComponent(widgetKey)}${
++  // 桌面小组件只读展示页地址（含 key 与当前课表）。
++  // Key 放在 fragment（#）而不是 query（?）：fragment 不会随请求发往服务端，也不进 Referer。
++  const widgetPageUrl = `${WIDGET_API_BASE}/widget#key=${encodeURIComponent(widgetKey)}${
+     activeScheduleId ? `&scheduleId=${activeScheduleId}` : ''
+   }`
+ 
+diff --git a/frontend/src/pages/WidgetPreviewPage.tsx b/frontend/src/pages/WidgetPreviewPage.tsx
+index d4a7a55..c84fade 100644
+--- a/frontend/src/pages/WidgetPreviewPage.tsx
++++ b/frontend/src/pages/WidgetPreviewPage.tsx
+@@ -58,8 +58,11 @@ const REFRESH_MS = 60 * 1000
+ 
+ function parseQuery(): { key?: string; scheduleId?: number } {
+   const params = new URLSearchParams(window.location.search)
+-  const key = params.get('key')?.trim() || undefined
+-  const sidRaw = params.get('scheduleId')
++  // Key 优先从 URL fragment（#key=...）读取：fragment 不会随请求发往服务端，
++  // 也不进 Referer，比 query 更安全；query 形式继续兼容旧的小组件地址。
++  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
++  const key = (hash.get('key') ?? params.get('key'))?.trim() || undefined
++  const sidRaw = hash.get('scheduleId') ?? params.get('scheduleId')
+   const scheduleId = sidRaw ? Number(sidRaw) : undefined
+   return { key, scheduleId: Number.isFinite(scheduleId) ? scheduleId : undefined }
+ }
+@@ -72,7 +75,9 @@ export default function WidgetPreviewPage() {
+   const [error, setError] = useState('')
+   const timer = useRef<number>()
+ 
+-  const apiKey = key || getApiKey() || 'demo-key-001'
++  // 不再回落到任何内置 Key：固定 Key 一旦写进前端产物就等于公开凭据。
++  // 没有 Key 时明确报错，而不是拿一个演示账号去试探。
++  const apiKey = key || getApiKey() || ''
+ 
+   // 拉取该 key 下的课表列表，供选择
+   const loadSchedules = useCallback(async (k: string) => {
+@@ -88,11 +93,17 @@ export default function WidgetPreviewPage() {
+   }, [])
+ 
+   const load = useCallback(async (k: string, sid?: number) => {
++    if (!k) {
++      setError('缺少 API Key：请在小组件地址里带上 #key=<你的 Key>')
++      return
++    }
+     setLoading(true)
+     setError('')
+     try {
+-      const path = `/widget/overview/${encodeURIComponent(k)}${sid ? `?scheduleId=${sid}` : ''}`
+-      const res = await fetch(`${BASE_URL}${path}`)
++      // Key 走请求头，不再放进 URL 路径
++      const res = await fetch(`${BASE_URL}/widget/overview${sid ? `?scheduleId=${sid}` : ''}`, {
++        headers: { 'X-API-Key': k },
++      })
+       const payload = await res.json()
+       if (payload.code !== 200) throw new Error(payload.message || '请求失败')
+       setData(payload.data)
+-- 
+2.55.0.windows.5
+
