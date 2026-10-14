@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
+  Alert,
   Button,
   Card,
   Checkbox,
@@ -36,6 +38,7 @@ import { dayjs, formatCountdown } from '../utils/schedule'
 type Filter = 'active' | 'completed' | 'all'
 
 export default function TodosPage() {
+  const navigate = useNavigate()
   const { todos, recurringTodos, refreshTodos, refreshRecurring } = useApp()
   const [filter, setFilter] = useState<Filter>('active')
   const [tick, setTick] = useState(0)
@@ -245,6 +248,29 @@ export default function TodosPage() {
 
   return (
     <>
+      <Alert
+        type="info"
+        showIcon
+        closable
+        style={{ marginBottom: 12 }}
+        message="待办与任务是两套清单"
+        description={
+          <>
+            这里管理日常琐事（买东西、取快递）；作业、实验报告、备考等学习事项请到
+            「首页 · 今日任务」查看，或让 AI 助手从通知/材料中自动生成。
+          </>
+        }
+        action={
+          <Space size={4}>
+            <Button size="small" type="link" onClick={() => navigate('/')}>
+              去首页
+            </Button>
+            <Button size="small" type="link" onClick={() => navigate('/ai')}>
+              问 AI
+            </Button>
+          </Space>
+        }
+      />
       <Tabs
         items={[
           { key: 'todos', label: '待办事项', children: todoTab },

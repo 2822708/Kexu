@@ -6,6 +6,7 @@ import {
   CalendarOutlined,
   CheckSquareOutlined,
   DesktopOutlined,
+  HomeOutlined,
   MenuOutlined,
   MessageOutlined,
   ReloadOutlined,
@@ -17,6 +18,7 @@ import { formatWeekInfo } from '../utils/schedule'
 import QuickImportWidget from './QuickImportWidget'
 
 const NAV_ITEMS = [
+  { key: '/', icon: <HomeOutlined />, label: '首页' },
   { key: '/timetable', icon: <CalendarOutlined />, label: '课表' },
   { key: '/todos', icon: <CheckSquareOutlined />, label: '待办' },
   { key: '/ai', icon: <MessageOutlined />, label: 'AI 助手' },
@@ -47,8 +49,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return formatWeekInfo(activeSchedule.periodStartDate, activeSchedule.periodEndDate)
   }, [activeSchedule])
 
+  // 「/」会前缀匹配所有路径，必须精确比较；其余按前缀归属
   const selectedKey =
-    NAV_ITEMS.find((item) => location.pathname.startsWith(item.key))?.key ?? '/timetable'
+    NAV_ITEMS.find((item) =>
+      item.key === '/' ? location.pathname === '/' : location.pathname.startsWith(item.key),
+    )?.key ?? '/'
 
   const activeTodos = todos.filter((t) => !t.completed).length
 
@@ -64,7 +69,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           >
             <MenuOutlined />
           </div>
-          <div className="app-topbar-title" onClick={() => navigate('/timetable')}>
+          <div className="app-topbar-title" onClick={() => navigate('/')}>
             大切课程表
           </div>
         </div>

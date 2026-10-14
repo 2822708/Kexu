@@ -26,7 +26,11 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -159,6 +163,78 @@ class TaskEndpointIntegrationTest {
                         .content("{\"imageDataUrl\":\"data:image/png;base64,###\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
+    void taskCrudOverHttpWithOwnershipIsolation() throws Exception {
+        register(FIRST).andExpect(status().isOk());
+        register(SECOND).andExpect(status().isOk());
+
+        // 创建（AI 草稿确认同路径）
+        String created = mvc.perform(post("/api/tasks").header("X-API-Key", FIRST)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"tasks":[{"title":"提交高等数学第三次作业","type":"COURSE_WORK",
+                                "deadline":"2026-10-15T23:59:00","priority":1,"description":"提交到学习通"}]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].source").value("AI_PARSE"))
+                .andExpect(jsonPath("$.data[0].status").value("PENDING"))
+                .andReturn().getResponse().getContentAsString();
+        long taskId = json.readTree(created).path("data").get(0).path("id").asLong();
+
+        // 列表与筛选（本人可见；他人不可见）
+        mvc.perform(get("/api/tasks").header("X-API-Key", FIRST))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data", hasSize(1)));
+        mvc.perform(get("/api/tasks").header("X-API-Key", SECOND))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data", hasSize(0)));
+        mvc.perform(get("/api/tasks").header("X-API-Key", FIRST)
+                        .param("status", "PENDING").param("type", "COURSE_WORK"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data", hasSize(1)));
+        mvc.perform(get("/api/tasks").header("X-API-Key", FIRST).param("status", "DONE"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data", hasSize(0)));
+        mvc.perform(get("/api/tasks").header("X-API-Key", FIRST)
+                        .param("deadlineAfter", "2026-10-01T00:00:00"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data", hasSize(1)));
+        mvc.perform(get("/api/tasks").header("X-API-Key", FIRST).param("status", "FLYING"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value(400));
+
+        // 越权读写一律 404
+        mvc.perform(get("/api/tasks/{id}", taskId).header("X-API-Key", SECOND))
+                .andExpect(status().isNotFound());
+        mvc.perform(put("/api/tasks/{id}", taskId).header("X-API-Key", SECOND)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"篡改\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(delete("/api/tasks/{id}", taskId).header("X-API-Key", SECOND))
+                .andExpect(status().isNotFound());
+
+        // 状态流转
+        mvc.perform(patch("/api/tasks/{id}/status", taskId).header("X-API-Key", FIRST)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"DONE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DONE"));
+        mvc.perform(patch("/api/tasks/{id}/status", taskId).header("X-API-Key", FIRST)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"MAYBE\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value(400));
+
+        // 修改（补丁语义：未提供的字段保持原值，deadline 显式清除）
+        mvc.perform(put("/api/tasks/{id}", taskId).header("X-API-Key", FIRST)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"提交高等数学第三次作业（修订）","deadline":null,"description":""}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("提交高等数学第三次作业（修订）"))
+                .andExpect(jsonPath("$.data.deadline").value(nullValue()))
+                .andExpect(jsonPath("$.data.type").value("COURSE_WORK"))
+                .andExpect(jsonPath("$.data.priority").value(1));
+
+        // 删除后 404
+        mvc.perform(delete("/api/tasks/{id}", taskId).header("X-API-Key", FIRST))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/tasks/{id}", taskId).header("X-API-Key", FIRST))
+                .andExpect(status().isNotFound());
     }
 
     private ResultActions register(String key) throws Exception {

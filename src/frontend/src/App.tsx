@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import DeviceConnectionPage from './pages/DeviceConnectionPage'
+import DashboardPage from './pages/DashboardPage'
 import TimetablePage from './pages/TimetablePage'
 import TodosPage from './pages/TodosPage'
 import AiChatPage from './pages/AiChatPage'
@@ -33,12 +34,13 @@ export default function App() {
   return (
     <AppLayout>
       <Routes>
+        <Route path="/" element={<DashboardPage />} />
         <Route path="/timetable" element={<TimetablePage />} />
         <Route path="/todos" element={<TodosPage />} />
         <Route path="/ai" element={<AiChatPage />} />
         <Route path="/manual" element={<UserManualPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/timetable" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppLayout>
   )

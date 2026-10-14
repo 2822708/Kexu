@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
  *
  * 抽取产物与手动创建的输入共用同一结构：deadline 为 null 表示未设置
  * （AI 抽取时严禁猜测时间，见 prompts/task-extract.md）。
+ * status 仅在修改（update）时有意义：创建时服务端强制 PENDING。
  */
 public class TaskDraft {
 
@@ -15,6 +16,7 @@ public class TaskDraft {
     private LocalDateTime deadline;
     private Integer priority;
     private String description;
+    private String status;
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
@@ -30,4 +32,7 @@ public class TaskDraft {
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 }

@@ -9,6 +9,7 @@ import type {
   Course,
   CoursePayload,
   CursorPage,
+  DashboardData,
   Exam,
   ExamPayload,
   ParseHtmlResult,
@@ -111,6 +112,43 @@ export const taskApi = {
   /** 批量创建任务（草稿确认 / 手动创建），后端标注 source=AI_PARSE */
   create: (tasks: TaskDraft[]) =>
     request<Task[]>('/tasks', { method: 'POST', body: { tasks } }),
+  /** 任务列表：按截止升序（无截止排最后），可按状态/类型/截止窗口筛选 */
+  list: (filters: {
+    status?: string
+    type?: string
+    deadlineBefore?: string
+    deadlineAfter?: string
+  } = {}) => {
+    const params = new URLSearchParams()
+    if (filters.status) params.set('status', filters.status)
+    if (filters.type) params.set('type', filters.type)
+    if (filters.deadlineBefore) params.set('deadlineBefore', filters.deadlineBefore)
+    if (filters.deadlineAfter) params.set('deadlineAfter', filters.deadlineAfter)
+    const query = params.toString()
+    return request<Task[]>(`/tasks${query ? `?${query}` : ''}`)
+  },
+  get: (id: number) => request<Task>(`/tasks/${id}`),
+  /** 修改任务（补丁语义：title 必填，其余字段缺省保持原值，deadline=null 显式清除） */
+  update: (id: number, body: Partial<TaskDraft> & { status?: string }) =>
+    request<Task>(`/tasks/${id}`, { method: 'PUT', body }),
+  /** 状态流转：PENDING / IN_PROGRESS / DONE / CANCELLED */
+  updateStatus: (id: number, status: string) =>
+    request<Task>(`/tasks/${id}/status`, { method: 'PATCH', body: { status } }),
+  remove: (id: number) => request<null>(`/tasks/${id}`, { method: 'DELETE' }),
+}
+
+/**
+ * AI Dashboard 聚合（AI Campus Agent V1.0 Step 5）。
+ * 一次请求返回首页所需的档案/今日课程/今日任务/48h 截止/考试倒计时/规则重点。
+ */
+export const dashboardApi = {
+  get: (params: { date?: string; scheduleId?: number | null } = {}) => {
+    const query = new URLSearchParams()
+    if (params.date) query.set('date', params.date)
+    if (params.scheduleId != null) query.set('scheduleId', String(params.scheduleId))
+    const suffix = query.toString()
+    return request<DashboardData>(`/dashboard${suffix ? `?${suffix}` : ''}`)
+  },
 }
 
 export const periodApi = {

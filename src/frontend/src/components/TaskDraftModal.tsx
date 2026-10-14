@@ -3,22 +3,13 @@ import { Alert, Button, DatePicker, Input, Modal, Select, Space, Typography } fr
 import { DeleteOutlined } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
 import { dayjs } from '../utils/schedule'
-import type { TaskDraft, TaskExtractResult, TaskType } from '../types'
+import { TASK_PRIORITY_LABELS, TASK_TYPE_OPTIONS } from '../utils/task'
+import type { TaskDraft, TaskExtractResult } from '../types'
 
-const TYPE_OPTIONS: { value: TaskType; label: string }[] = [
-  { value: 'COURSE_WORK', label: '课程作业' },
-  { value: 'LAB_REPORT', label: '实验报告' },
-  { value: 'ONLINE_COURSE', label: '网课' },
-  { value: 'EXAM', label: '考试' },
-  { value: 'COMPETITION', label: '竞赛' },
-  { value: 'OTHER', label: '其他' },
-]
-
-const PRIORITY_OPTIONS = [
-  { value: 1, label: '高优先级' },
-  { value: 2, label: '中优先级' },
-  { value: 3, label: '低优先级' },
-]
+const PRIORITY_OPTIONS = [1, 2, 3].map((value) => ({
+  value,
+  label: `${TASK_PRIORITY_LABELS[value]}优先级`,
+}))
 
 interface TaskDraftModalProps {
   open: boolean
@@ -117,7 +108,7 @@ export default function TaskDraftModal({
               <Select
                 aria-label="任务类型"
                 value={draft.type}
-                options={TYPE_OPTIONS}
+                options={TASK_TYPE_OPTIONS}
                 style={{ width: 110 }}
                 onChange={(value) => patch(index, { type: value })}
               />

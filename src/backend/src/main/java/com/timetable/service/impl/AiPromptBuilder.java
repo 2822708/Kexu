@@ -122,6 +122,8 @@ public final class AiPromptBuilder {
                 .append("- UPDATE_TODO: {\"todos\":[{\"id\":待办id,\"title\":\"标题\",\"ddl\":\"yyyy-MM-dd HH:mm\"}]}\n")
                 .append("- DELETE_TODO: {\"todoIds\":[待办id数组]}\n")
                 .append("- TOGGLE_TODO: {\"todoIds\":[待办id数组]}\n")
+                .append("- CREATE_TASK: {\"tasks\":[{\"title\":\"动宾结构标题\",\"type\":\"COURSE_WORK|LAB_REPORT|ONLINE_COURSE|EXAM|COMPETITION|OTHER\",\"deadline\":\"yyyy-MM-dd HH:mm 或 null\",\"priority\":1|2|3,\"description\":\"补充说明或空字符串\"}]}\n")
+                .append("- UPDATE_TASK: {\"tasks\":[{\"id\":任务id,\"title\":\"动宾结构标题\",\"type\":\"...\",\"deadline\":\"yyyy-MM-dd HH:mm 或 null\",\"priority\":1|2|3,\"description\":\"...\",\"status\":\"PENDING|IN_PROGRESS|DONE|CANCELLED\"}]}\n")
                 .append("- CREATE_RECURRING: {\"rules\":[{\"title\":\"标题\",\"frequency\":\"DAILY|WEEKLY|MONTHLY|CUSTOM\",")
                 .append("\"dayOfWeek\":1-7（WEEKLY 必填）,\"dayOfMonth\":1-31（MONTHLY 必填）,")
                 .append("\"triggerTime\":\"HH:mm\"（CUSTOM 不需要）,\"ddlOffsetMinutes\":从触发到截止的分钟数,")
@@ -132,6 +134,17 @@ public final class AiPromptBuilder {
                 .append("- CREATE_EXAM: {\"exams\":[{\"name\":\"考试名\",\"location\":\"地点或null\",\"examDate\":\"yyyy-MM-dd\",\"startTime\":\"HH:mm\",\"endTime\":\"HH:mm\"}]}\n")
                 .append("- UPDATE_EXAM: {\"exams\":[{\"id\":考试id, 其余字段同 CREATE_EXAM（需携带完整字段）}]}\n")
                 .append("- DELETE_EXAM: {\"examIds\":[考试id数组]}\n\n");
+
+        sb.append("## 任务模块说明（与待办相互独立）\n")
+                .append("任务（task）与待办（todo）是两个独立模块：todo 是轻量提醒（标题+截止）；")
+                .append("任务有类型、优先级、状态与来源，用于作业、实验报告、网课、考试、竞赛等需要跟踪进度的事项。\n")
+                .append("- 用户说「任务」「项目」「计划」或需要类型/优先级/状态管理时，用 CREATE_TASK；")
+                .append("只是一句提醒（「明天记得带伞」）才用 CREATE_TODO\n")
+                .append("- CREATE_TASK 的 deadline 只取明确写出的日期/时间；没有任何明确时间必须填 null，严禁猜测、严禁补全\n")
+                .append("- priority：1=高（临近截止、用户强调、学分权重高），2=中（默认），3=低\n")
+                .append("- UPDATE_TASK 可携带 status 流转状态：用户说「做完了」「完成了」→ DONE；")
+                .append("「先放着」→ PENDING；「不做了」→ CANCELLED。用下面【当前任务】里的真实 id\n")
+                .append("- title 用动宾结构，如「提交高等数学第三次作业」\n\n");
 
         sb.append("## 考试记录说明\n")
                 .append("考试记录用于期末周等场景，**不按课时计算时间**，直接指定日期和起止时间，")

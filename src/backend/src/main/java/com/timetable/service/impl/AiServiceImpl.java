@@ -102,9 +102,10 @@ public class AiServiceImpl implements AiService {
 
     public static final String SCOPE_COURSE = "COURSE";
     public static final String SCOPE_TODO = "TODO";
-    /** AI Campus Agent V1.0 新增作用域：学生档案 / 长期记忆。 */
+    /** AI Campus Agent V1.0 新增作用域：学生档案 / 长期记忆 / 任务。 */
     public static final String SCOPE_PROFILE = "PROFILE";
     public static final String SCOPE_MEMORY = "MEMORY";
+    public static final String SCOPE_TASK = "TASK";
 
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper messageMapper;
@@ -342,11 +343,15 @@ public class AiServiceImpl implements AiService {
     /**
      * 按 action 类型判定作用域。
      * COURSE 类归课表域；TODO 与 RECURRING 类同归待办域（循环规则是待办的来源，语义相连）；
+     * TASK 类归任务域（Step 5 起 AI 可提案创建/修改任务，与待办相互独立）；
      * SAVE_MEMORY / UPDATE_PROFILE 分别归记忆域与档案域（AI Campus Agent V1.0）。
      */
     private String scopeOf(String actionType) {
         if (actionType.contains("COURSE") || actionType.contains("EXAM")) {
             return SCOPE_COURSE;
+        }
+        if (actionType.contains("TASK")) {
+            return SCOPE_TASK;
         }
         if ("SAVE_MEMORY".equals(actionType)) {
             return SCOPE_MEMORY;
@@ -368,13 +373,16 @@ public class AiServiceImpl implements AiService {
         if (SCOPE_MEMORY.equals(scope)) {
             return "记忆";
         }
+        if (SCOPE_TASK.equals(scope)) {
+            return "任务";
+        }
         return "待办";
     }
 
     /**
      * 计算指定作用域的数据指纹。课表与待办分别独立计算，
      * 因此改一个待办不会让课表相关的提案失效，反之亦然。
-     * 档案与记忆同样独立：设置页改档案不会让课表提案失效。
+     * 档案、记忆、任务同样独立：设置页改档案不会让课表提案失效。
      */
     private String fingerprintOf(String scope, Long scheduleId, String apiKey) {
         if (SCOPE_COURSE.equals(scope)) {
@@ -389,6 +397,9 @@ public class AiServiceImpl implements AiService {
         }
         if (SCOPE_MEMORY.equals(scope)) {
             return sha256(memoryFingerprintInput(memoryService.listActive(apiKey)));
+        }
+        if (SCOPE_TASK.equals(scope)) {
+            return sha256(taskFingerprintInput(taskService.list(apiKey)));
         }
         return sha256(todoFingerprintInput(todoService.list(apiKey), recurringTodoService.list(apiKey)));
     }
@@ -460,6 +471,22 @@ public class AiServiceImpl implements AiService {
     }
 
     /**
+     * 任务作用域的指纹输入（纯函数，不查库）。
+     * 覆盖全部任务（不限状态）：任何字段变化——包括完成/取消——都必须让待确认的
+     * CREATE_TASK / UPDATE_TASK 提案失效，避免把旧推理施加到新数据上。
+     */
+    private String taskFingerprintInput(List<Task> tasks) {
+        StringBuilder sb = new StringBuilder("TASK|");
+        for (Task t : tasks) {
+            sb.append(t.getId()).append(':').append(t.getTitle()).append(':')
+                    .append(t.getType()).append(':').append(t.getDeadline()).append(':')
+                    .append(t.getPriority()).append(':').append(t.getStatus()).append(':')
+                    .append(t.getDescription()).append(';');
+        }
+        return sb.toString();
+    }
+
+    /**
      * 在**调用模型之前**、用已经加载好（并即将写进 Prompt 与 _before）的数据算出的指纹。
      *
      * 关键：不能等到落库时再查库现算 —— 模型思考期间（数十秒）发生的数据变化会被算入基线，
@@ -469,12 +496,14 @@ public class AiServiceImpl implements AiService {
     private Map<String, String> fingerprintSnapshot(Long scheduleId, List<Course> courses,
                                                     List<Exam> exams, List<Todo> todos,
                                                     List<RecurringTodo> rules,
-                                                    StudentProfile profile, List<Memory> memories) {
+                                                    StudentProfile profile, List<Memory> memories,
+                                                    List<Task> tasks) {
         Map<String, String> snapshot = new HashMap<>();
         snapshot.put(SCOPE_COURSE, sha256(courseFingerprintInput(scheduleId, courses, exams)));
         snapshot.put(SCOPE_TODO, sha256(todoFingerprintInput(todos, rules)));
         snapshot.put(SCOPE_PROFILE, sha256(profileFingerprintInput(profile)));
         snapshot.put(SCOPE_MEMORY, sha256(memoryFingerprintInput(memories)));
+        snapshot.put(SCOPE_TASK, sha256(taskFingerprintInput(tasks)));
         return snapshot;
     }
 
@@ -664,6 +693,8 @@ public class AiServiceImpl implements AiService {
         StudentProfile profile = studentProfileService.find(apiKey);
         List<Memory> memories = memoryService.listActive(apiKey);
         List<Task> openTasks = taskService.listOpen(apiKey, LocalDateTime.now(clock));
+        // 任务指纹覆盖全部任务（任何字段变化都必须被察觉），与 _before 富化共用同一份加载
+        List<Task> allTasks = taskService.list(apiKey);
 
         // 未配置任何可用 provider 时立刻失败，避免白跑一轮数据库写入
         LlmClient client = llmClients.active();
@@ -671,7 +702,8 @@ public class AiServiceImpl implements AiService {
         // 指纹必须与即将写进 Prompt / _before 的数据取自同一时刻，且必须在调用模型之前算好。
         // 若等到落库时再查库现算，模型思考期间的数据变化就会进入基线，使过期提案通过复查。
         Map<String, String> fingerprintSnapshot =
-                fingerprintSnapshot(scheduleId, courses, exams, todos, recurringTodos, profile, memories);
+                fingerprintSnapshot(scheduleId, courses, exams, todos, recurringTodos, profile, memories,
+                        allTasks);
 
         AiMessage userMessage = new AiMessage();
         userMessage.setConversationId(conversationId);
@@ -771,7 +803,7 @@ public class AiServiceImpl implements AiService {
                 throw new BusinessException(499, "客户端已断开，已停止本次请求");
             }
             return persistAssistantResult(conversationId, apiKey, scheduleId, finalConversation, root, finalText,
-                    finalCourses, todos, recurringTodos, finalExams, finalProfile, fingerprintSnapshot);
+                    finalCourses, todos, recurringTodos, finalExams, finalProfile, fingerprintSnapshot, allTasks);
         });
 
         // 记忆提炼：回复落库后，从对话窗口提炼跨天有效的事实，生成 SAVE_MEMORY /
@@ -859,7 +891,7 @@ public class AiServiceImpl implements AiService {
 
             // 提炼只产生记忆/档案提案，_before 只需要档案快照，其余上下文传空集合
             ProposalContext context = new ProposalContext(scheduleId, apiKey, fingerprintSnapshot,
-                    List.of(), List.of(), List.of(), List.of(), profile);
+                    List.of(), List.of(), List.of(), List.of(), profile, List.of());
             BuiltActions built = buildProposalActions(assistantMessage.getId(), proposals, context);
             if (built.actions().isEmpty()) {
                 if (built.invalidCount() > 0) {
@@ -887,7 +919,7 @@ public class AiServiceImpl implements AiService {
                                    Map<String, String> fingerprintSnapshot,
                                    List<Course> courses, List<Todo> todos,
                                    List<RecurringTodo> recurringTodos, List<Exam> exams,
-                                   StudentProfile profile) {
+                                   StudentProfile profile, List<Task> tasks) {
     }
 
     private record BuiltActions(List<AiAction> actions, int invalidCount) {
@@ -953,7 +985,8 @@ public class AiServiceImpl implements AiService {
                                              List<Course> courses, List<Todo> todos,
                                              List<RecurringTodo> recurringTodos, List<Exam> exams,
                                              StudentProfile profile,
-                                             Map<String, String> fingerprintSnapshot) {
+                                             Map<String, String> fingerprintSnapshot,
+                                             List<Task> tasks) {
         AiMessage assistantMessage = new AiMessage();
         assistantMessage.setConversationId(conversationId);
         assistantMessage.setRole("assistant");
@@ -972,7 +1005,7 @@ public class AiServiceImpl implements AiService {
         }
 
         ProposalContext context = new ProposalContext(scheduleId, apiKey, fingerprintSnapshot,
-                courses, todos, recurringTodos, exams, profile);
+                courses, todos, recurringTodos, exams, profile, tasks);
         BuiltActions built = buildProposalActions(assistantMessage.getId(), actionNodes, context);
         List<AiAction> created = built.actions();
 
@@ -1076,6 +1109,14 @@ public class AiServiceImpl implements AiService {
                             .ifPresent(t -> before.add(todoSnapshot(t)));
                 }
             }
+            case "UPDATE_TASK" -> {
+                for (JsonNode node : data.path("tasks")) {
+                    if (!node.hasNonNull("id")) continue;
+                    long id = node.get("id").asLong();
+                    context.tasks().stream().filter(t -> t.getId() == id).findFirst()
+                            .ifPresent(t -> before.add(taskSnapshot(t)));
+                }
+            }
             case "DELETE_TODO", "TOGGLE_TODO" -> {
                 for (JsonNode node : data.path("todoIds")) {
                     long id = node.asLong();
@@ -1167,6 +1208,18 @@ public class AiServiceImpl implements AiService {
         node.put("title", t.getTitle());
         node.put("ddl", t.getDdl() == null ? null : t.getDdl().toString());
         node.put("completed", t.getCompleted());
+        return node;
+    }
+
+    private ObjectNode taskSnapshot(Task t) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("id", t.getId());
+        node.put("title", t.getTitle());
+        node.put("type", t.getType());
+        node.put("description", t.getDescription());
+        node.put("deadline", t.getDeadline() == null ? null : t.getDeadline().toString());
+        node.put("priority", t.getPriority());
+        node.put("status", t.getStatus());
         return node;
     }
 
@@ -1360,6 +1413,22 @@ public class AiServiceImpl implements AiService {
                     todoService.toggleComplete(node.asLong(), apiKey);
                 }
             }
+            case "CREATE_TASK" -> {
+                // AI Campus Agent：AI 提案创建的任务同样走 human-in-the-loop，
+                // source=AI_PARSE + sourceRef=messageId 便于审计与追溯
+                for (JsonNode node : arrayOf(data, "tasks")) {
+                    taskService.create(apiKey, toTaskDraft(node),
+                            Task.SOURCE_AI_PARSE, "message:" + messageId);
+                }
+            }
+            case "UPDATE_TASK" -> {
+                for (JsonNode node : arrayOf(data, "tasks")) {
+                    if (!node.hasNonNull("id")) {
+                        throw new BusinessException(400, "修改任务缺少 id");
+                    }
+                    taskService.update(node.get("id").asLong(), toTaskDraft(node), apiKey);
+                }
+            }
             case "CREATE_RECURRING" -> {
                 for (JsonNode node : arrayOf(data, "rules")) {
                     recurringTodoService.create(toRecurringRequest(node), apiKey);
@@ -1460,6 +1529,7 @@ public class AiServiceImpl implements AiService {
             case "DELETE_COURSE" -> idField = "courseIds";
             case "CREATE_TODO", "UPDATE_TODO" -> recordField = "todos";
             case "DELETE_TODO", "TOGGLE_TODO" -> idField = "todoIds";
+            case "CREATE_TASK", "UPDATE_TASK" -> recordField = "tasks";
             case "CREATE_RECURRING", "UPDATE_RECURRING" -> recordField = "rules";
             case "DELETE_RECURRING", "TOGGLE_RECURRING" -> idField = "recurringIds";
             case "CREATE_EXAM", "UPDATE_EXAM" -> recordField = "exams";
@@ -1510,6 +1580,7 @@ public class AiServiceImpl implements AiService {
             case "DELETE_COURSE" -> "courseIds";
             case "CREATE_TODO", "UPDATE_TODO" -> "todos";
             case "DELETE_TODO", "TOGGLE_TODO" -> "todoIds";
+            case "CREATE_TASK", "UPDATE_TASK" -> "tasks";
             case "CREATE_RECURRING", "UPDATE_RECURRING" -> "rules";
             case "DELETE_RECURRING", "TOGGLE_RECURRING" -> "recurringIds";
             case "CREATE_EXAM", "UPDATE_EXAM" -> "exams";
@@ -1642,6 +1713,53 @@ public class AiServiceImpl implements AiService {
                             return false;
                         }
                     }
+                    case "CREATE_TASK", "UPDATE_TASK" -> {
+                        // 与 TaskServiceImpl.create/update 同一套规则：标题必填、类型/优先级/状态白名单、
+                        // deadline 必须可解析（无法解析的截止时间不生成提案，避免用户确认后执行才报错）
+                        String title = item.path("title").asText("");
+                        if (title.isBlank() || title.length() > 500) {
+                            return false;
+                        }
+                        if (item.hasNonNull("type")) {
+                            String taskType = item.path("type").asText("").toUpperCase();
+                            if (!Task.TYPE_COURSE_WORK.equals(taskType) && !Task.TYPE_LAB_REPORT.equals(taskType)
+                                    && !Task.TYPE_ONLINE_COURSE.equals(taskType) && !Task.TYPE_EXAM.equals(taskType)
+                                    && !Task.TYPE_COMPETITION.equals(taskType) && !Task.TYPE_OTHER.equals(taskType)) {
+                                return false;
+                            }
+                        }
+                        if (item.hasNonNull("priority")) {
+                            if (!item.path("priority").isIntegralNumber()
+                                    || !item.path("priority").canConvertToInt()) {
+                                return false;
+                            }
+                            int priority = item.path("priority").asInt();
+                            if (priority < Task.PRIORITY_HIGH || priority > Task.PRIORITY_LOW) {
+                                return false;
+                            }
+                        }
+                        if (item.hasNonNull("status")) {
+                            String status = item.path("status").asText("").toUpperCase();
+                            if (!Task.STATUS_PENDING.equals(status) && !Task.STATUS_IN_PROGRESS.equals(status)
+                                    && !Task.STATUS_DONE.equals(status) && !Task.STATUS_CANCELLED.equals(status)) {
+                                return false;
+                            }
+                        }
+                        if (item.hasNonNull("deadline") && !item.path("deadline").isNull()) {
+                            String deadline = item.path("deadline").asText("");
+                            if (!deadline.isBlank()) {
+                                try {
+                                    parseDateTime(deadline);
+                                } catch (BusinessException unparsable) {
+                                    return false;
+                                }
+                            }
+                        }
+                        if ("UPDATE_TASK".equals(type)) {
+                            // 目标任务必须存在且属于当前账号，异常由外层 catch 转为无效提案
+                            taskService.get(item.path("id").asLong(), apiKey);
+                        }
+                    }
                     default -> {
                         return false;
                     }
@@ -1655,12 +1773,16 @@ public class AiServiceImpl implements AiService {
 
     private boolean hasValidJsonFieldTypes(JsonNode item) {
         for (String field : List.of("name", "title", "location", "teacher", "ddl", "examDate",
-                "startTime", "endTime", "frequency", "triggerTime", "script")) {
+                "startTime", "endTime", "frequency", "triggerTime", "script",
+                "description", "deadline", "type", "status")) {
             if (item.hasNonNull(field) && !item.path(field).isTextual()) return false;
         }
-        for (String field : List.of("dayOfWeek", "startPeriod", "endPeriod", "dayOfMonth", "ddlOffsetMinutes")) {
+        for (String field : List.of("dayOfWeek", "startPeriod", "endPeriod", "dayOfMonth", "ddlOffsetMinutes",
+                "priority")) {
             if (item.hasNonNull(field) && (!item.path(field).isIntegralNumber()
-                    || !item.path(field).canConvertToInt())) return false;
+                    || !item.path(field).canConvertToInt())) {
+                return false;
+            }
         }
         for (String field : List.of("enabled", "chainAfterComplete")) {
             if (item.hasNonNull(field) && !item.path(field).isBoolean()) return false;
@@ -1717,6 +1839,23 @@ public class AiServiceImpl implements AiService {
         }
         req.setDdl(parseDateTime(ddl));
         return req;
+    }
+
+    /**
+     * AI 提案节点 → 任务草稿。与 task-extract.md 的字段约定一致：
+     * deadline 只认明确时间（复用 parseDateTime 的宽松格式），缺失/无法解析按「无截止」处理；
+     * status 仅 UPDATE_TASK 场景有意义（AI 可借此流转状态），创建时服务端强制 PENDING。
+     */
+    private TaskDraft toTaskDraft(JsonNode node) {
+        TaskDraft draft = new TaskDraft();
+        draft.setTitle(node.path("title").asText(""));
+        draft.setType(node.path("type").asText(""));
+        draft.setPriority(node.hasNonNull("priority") ? node.get("priority").asInt() : null);
+        draft.setDescription(node.path("description").asText(""));
+        draft.setStatus(node.path("status").asText(null));
+        String deadline = node.path("deadline").asText(null);
+        draft.setDeadline(deadline == null || deadline.isBlank() ? null : parseDateTime(deadline));
+        return draft;
     }
 
     private ExamRequest toExamRequest(JsonNode node) {

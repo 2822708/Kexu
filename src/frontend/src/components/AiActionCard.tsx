@@ -2,6 +2,7 @@ import { Button, Card, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { AiAction, AiActionScope } from '../types'
 import { formatWeeks, weekDayName } from '../utils/schedule'
+import { taskPriorityLabel, taskTypeLabel } from '../utils/task'
 import { describeOffset } from '../utils/recurring'
 
 const ACTION_LABELS: Record<string, string> = {
@@ -12,6 +13,8 @@ const ACTION_LABELS: Record<string, string> = {
   UPDATE_TODO: '修改待办',
   DELETE_TODO: '删除待办',
   TOGGLE_TODO: '切换待办状态',
+  CREATE_TASK: '添加任务',
+  UPDATE_TASK: '修改任务',
   CREATE_RECURRING: '添加循环任务',
   UPDATE_RECURRING: '修改循环任务',
   DELETE_RECURRING: '删除循环任务',
@@ -27,6 +30,7 @@ const ACTION_LABELS: Record<string, string> = {
 const SCOPE_TAGS: Record<AiActionScope, { color: string; label: string }> = {
   COURSE: { color: 'geekblue', label: '课表' },
   TODO: { color: 'purple', label: '待办' },
+  TASK: { color: 'cyan', label: '任务' },
   PROFILE: { color: 'gold', label: '档案' },
   MEMORY: { color: 'magenta', label: '记忆' },
 }
@@ -75,7 +79,7 @@ export default function AiActionCard({ action, executing, onExecute, onReject, d
   const data = (action.data ?? {}) as Dict
   const pending = action.status === 'PENDING'
   const stale = action.status === 'STALE'
-  const affected = ['courses', 'todos', 'rules', 'exams', 'courseIds', 'todoIds', 'recurringIds', 'examIds', 'memories']
+  const affected = ['courses', 'todos', 'tasks', 'rules', 'exams', 'courseIds', 'todoIds', 'recurringIds', 'examIds', 'memories']
     .map((key) => data[key]).find(Array.isArray) as unknown[] | undefined
   const scopeTag = SCOPE_TAGS[action.scope] ?? { color: 'purple', label: action.scope }
   const scopeLabel = action.scope === 'TODO' && action.type.includes('RECURRING') ? '循环任务' : scopeTag.label
@@ -133,7 +137,9 @@ export default function AiActionCard({ action, executing, onExecute, onReject, d
             ? '作用范围：当前账号的学生档案'
             : action.scope === 'MEMORY'
               ? '作用范围：当前账号的长期记忆'
-              : '作用范围：当前账号的待办（所有课表共用）'}
+              : action.scope === 'TASK'
+                ? '作用范围：当前账号的学习任务（与待办相互独立）'
+                : '作用范围：当前账号的待办（所有课表共用）'}
         {' · '}
         {action.scope === 'PROFILE'
           ? `更新 ${Object.keys(data).filter((k) => k !== '_before').length} 个档案字段`
@@ -341,6 +347,51 @@ function renderBody(type: string, data: Dict) {
     )
   }
 
+  if (type === 'CREATE_TASK') {
+    const tasks = (data.tasks as Dict[]) ?? []
+    return (
+      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          学长想把以下事项记为学习任务（与待办相互独立），确认后创建：
+        </Typography.Text>
+        {tasks.map((t, i) => (
+          <div key={i}>
+            <Typography.Text strong>{str(t.title)}</Typography.Text>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{taskLine(t)}</div>
+          </div>
+        ))}
+      </Space>
+    )
+  }
+
+  if (type === 'UPDATE_TASK') {
+    const after = (data.tasks as Dict[]) ?? []
+    return (
+      <Space direction="vertical" style={{ width: '100%' }} size={12}>
+        {after.map((a, i) => {
+          const b = before.find((x) => x.id === a.id) ?? {}
+          const changedRows = taskDiff(b, a).filter((r) => r.changed)
+          return (
+            <div key={i}>
+              <Typography.Text strong>{str(a.title ?? b.title)}</Typography.Text>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{taskLine(a)}</div>
+              {changedRows.length > 0 && (
+                <Table
+                  size="small"
+                  rowKey="key"
+                  columns={DIFF_COLUMNS}
+                  dataSource={changedRows}
+                  pagination={false}
+                  style={{ marginTop: 6 }}
+                />
+              )}
+            </div>
+          )
+        })}
+      </Space>
+    )
+  }
+
   if (type === 'CREATE_COURSE') {
     const courses = (data.courses as Dict[]) ?? []
     return (
@@ -535,6 +586,36 @@ function todoDiff(b: Dict, a: Dict): DiffRow[] {
   const rows: [string, string, string][] = [
     ['标题', str(b.title), str(a.title)],
     ['截止时间', str(b.ddl), str(a.ddl)],
+  ]
+  return rows.map(([field, before, after]) => ({
+    key: field,
+    field,
+    before,
+    after,
+    changed: before !== after,
+  }))
+}
+
+/** 任务摘要行：类型 · 截止 · 优先级（创建卡片与 diff 卡片共用）。 */
+function taskLine(t: Dict): string {
+  const parts = [taskTypeLabel(t.type == null ? null : String(t.type))]
+  parts.push(t.deadline ? `截止 ${str(t.deadline)}` : '无截止')
+  parts.push(`${taskPriorityLabel(Number(t.priority))}优先级`)
+  return parts.join(' · ')
+}
+
+function taskDiff(b: Dict, a: Dict): DiffRow[] {
+  const rows: [string, string, string][] = [
+    ['标题', str(b.title), str(a.title)],
+    ['类型', b.type ? taskTypeLabel(String(b.type)) : '未指定', taskTypeLabel(a.type == null ? null : String(a.type))],
+    ['截止时间', str(b.deadline), str(a.deadline)],
+    [
+      '优先级',
+      b.priority ? `${taskPriorityLabel(Number(b.priority))}优先级` : '未指定',
+      a.priority ? `${taskPriorityLabel(Number(a.priority))}优先级` : '未指定',
+    ],
+    ['状态', b.status ? String(b.status) : '未指定', str(a.status)],
+    ['描述', str(b.description), str(a.description)],
   ]
   return rows.map(([field, before, after]) => ({
     key: field,

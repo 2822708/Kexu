@@ -197,6 +197,20 @@ class AiCampusAgentPromptTest {
     }
 
     @Test
+    void chatPromptProtocolDocumentsTaskActionsAndModuleRules() {
+        AiPromptBuilder.ChatPrompt built = chatPrompt(null, List.of(), List.of());
+
+        // Step 5：任务域进入动作协议，与待办域明确区分
+        assertThat(built.prompt()).contains("- CREATE_TASK: {\"tasks\":[");
+        assertThat(built.prompt()).contains("- UPDATE_TASK: {\"tasks\":[");
+        assertThat(built.prompt()).contains("## 任务模块说明（与待办相互独立）");
+        assertThat(built.prompt()).contains("deadline 只取明确写出的日期/时间");
+        assertThat(built.prompt()).contains("status\":\"PENDING|IN_PROGRESS|DONE|CANCELLED\"");
+        // 任务域六类型白名单在协议里可查
+        assertThat(built.prompt()).contains("COURSE_WORK|LAB_REPORT|ONLINE_COURSE|EXAM|COMPETITION|OTHER");
+    }
+
+    @Test
     void summarizeContextAppliesBudgetsAndProfilePresence() {
         StudentProfile empty = new StudentProfile();
         assertThat(AiPromptBuilder.summarizeContext(empty, 5, 3, 2).isProfilePresent()).isFalse();
