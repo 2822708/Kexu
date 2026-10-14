@@ -1,5 +1,6 @@
 package com.timetable.service.impl;
 
+import com.timetable.dto.DailyPlanDto;
 import com.timetable.dto.DashboardDto;
 import com.timetable.entity.Course;
 import com.timetable.entity.Exam;
@@ -7,6 +8,7 @@ import com.timetable.entity.StudentProfile;
 import com.timetable.entity.Task;
 import com.timetable.service.CourseService;
 import com.timetable.service.DashboardService;
+import com.timetable.service.DailyPlanService;
 import com.timetable.service.ExamService;
 import com.timetable.service.ScheduleService;
 import com.timetable.service.StudentProfileService;
@@ -34,16 +36,19 @@ public class DashboardServiceImpl implements DashboardService {
     private final ExamService examService;
     private final TaskService taskService;
     private final StudentProfileService studentProfileService;
+    private final DailyPlanService dailyPlanService;
     private final Clock clock;
 
     public DashboardServiceImpl(ScheduleService scheduleService, CourseService courseService,
                                 ExamService examService, TaskService taskService,
-                                StudentProfileService studentProfileService, Clock clock) {
+                                StudentProfileService studentProfileService,
+                                DailyPlanService dailyPlanService, Clock clock) {
         this.scheduleService = scheduleService;
         this.courseService = courseService;
         this.examService = examService;
         this.taskService = taskService;
         this.studentProfileService = studentProfileService;
+        this.dailyPlanService = dailyPlanService;
         this.clock = clock;
     }
 
@@ -145,7 +150,10 @@ public class DashboardServiceImpl implements DashboardService {
         }
         dto.setTodayHighlights(highlights);
 
-        // planSummary：Step 6「AI 每日计划」接入前保持 null，前端隐藏该卡片
+        // 当日计划：只读缓存（首页加载永不烧 token）；用户点「生成」才走 POST /api/plans/daily
+        DailyPlanDto plan = dailyPlanService.get(apiKey, today);
+        dto.setPlan(plan);
+        dto.setPlanSummary(plan == null ? null : plan.getSummary());
         return dto;
     }
 }

@@ -9,6 +9,7 @@ import type {
   Course,
   CoursePayload,
   CursorPage,
+  DailyPlan,
   DashboardData,
   Exam,
   ExamPayload,
@@ -149,6 +150,17 @@ export const dashboardApi = {
     const suffix = query.toString()
     return request<DashboardData>(`/dashboard${suffix ? `?${suffix}` : ''}`)
   },
+}
+
+/**
+ * AI 每日计划（AI Campus Agent V1.0 Step 6）。
+ * GET 只读缓存（首页加载不烧 token）；POST 触发生成，同一天第二次命中缓存。
+ */
+export const planApi = {
+  get: (date?: string) =>
+    request<DailyPlan | null>(`/plans/daily${date ? `?date=${date}` : ''}`),
+  generate: (body: { date?: string; scheduleId?: number | null } = {}) =>
+    request<DailyPlan>('/plans/daily', { method: 'POST', body }),
 }
 
 export const periodApi = {

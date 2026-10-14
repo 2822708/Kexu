@@ -240,6 +240,29 @@ export interface TaskExtractResult {
   note: string
 }
 
+/** 每日计划块类型：课程 / 任务 / 休息 / 建议 */
+export type DailyPlanItemType = 'COURSE' | 'TASK' | 'BREAK' | 'SUGGESTION'
+
+export interface DailyPlanItem {
+  /** HH:mm */
+  start: string
+  /** HH:mm */
+  end: string
+  type: DailyPlanItemType
+  title: string
+  /** COURSE→课程 id，TASK→任务 id，BREAK/SUGGESTION→null */
+  refId: number | null
+  note: string
+}
+
+/** AI 每日计划（Step 6）；cached=true 表示来自缓存（同一天已生成过） */
+export interface DailyPlan {
+  date: string
+  items: DailyPlanItem[]
+  summary: string
+  cached: boolean
+}
+
 /** 学生档案（AI Campus Agent V1.0 Step 2 起由 AI 提案 + 设置页维护） */
 export interface StudentProfile {
   id: number
@@ -276,6 +299,8 @@ export interface DashboardData {  /** 聚合日期（用户请求的 date，缺�
   upcomingExams: Exam[]
   /** 规则计算的今日重点（确定性，不烧 token） */
   todayHighlights: string[]
-  /** Step 6 占位：AI 每日计划摘要，暂为 null */
+  /** 已生成的当日计划（未生成为 null） */
+  plan: DailyPlan | null
+  /** 计划摘要（plan.summary 的便捷字段，无计划时 null） */
   planSummary: string | null
 }

@@ -15,16 +15,19 @@ import {
   message,
 } from 'antd'
 import {
+  BulbOutlined,
   CalendarOutlined,
   ClockCircleOutlined,
   ExclamationCircleOutlined,
   MessageOutlined,
   PlusOutlined,
   ReadOutlined,
+  ReloadOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
-import { dashboardApi } from '../api'
+import { dashboardApi, planApi } from '../api'
+import PlanTimeline from '../components/PlanTimeline'
 import TaskCard from '../components/TaskCard'
 import { useApp } from '../store/AppContext'
 import type { Course, DashboardData, Exam, Task } from '../types'
@@ -42,6 +45,8 @@ export default function DashboardPage() {
   const { activeScheduleId, activeSchedule } = useApp()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState('')
   const [now, setNow] = useState<Dayjs>(() => dayjs())
 
   const load = useCallback(async () => {
@@ -52,6 +57,21 @@ export default function DashboardPage() {
       message.error('首页数据加载失败，请稍后重试')
     } finally {
       setLoading(false)
+    }
+  }, [activeScheduleId])
+
+  /** 生成当日计划：命中缓存时服务端直接返回，不重复消耗 token */
+  const generate = useCallback(async () => {
+    setGenerating(true)
+    setError('')
+    try {
+      const plan = await planApi.generate({ scheduleId: activeScheduleId })
+      setData((prev) => (prev == null ? prev : { ...prev, plan, planSummary: plan.summary }))
+      message.success('今日计划已生成')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '生成计划失败，请稍后重试')
+    } finally {
+      setGenerating(false)
     }
   }, [activeScheduleId])
 
@@ -285,20 +305,62 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* AI 建议：Step 6 每日计划上线前为占位引导 */}
-      <Card size="small" title="AI 学长建议" style={{ marginTop: 12 }}>
-        {data?.planSummary ? (
-          <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
-            {data.planSummary}
-          </Typography.Paragraph>
+      {/* AI 学长建议：已生成计划 → 时间线 + 总评；未生成 → 生成入口 */}
+      <Card
+        size="small"
+        title={
+          <Space>
+            <BulbOutlined />
+            <span>AI 学长建议</span>
+            {data?.plan?.cached && <Tag color="green">今日已生成</Tag>}
+          </Space>
+        }
+        extra={
+          data?.plan ? (
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={generating}
+              onClick={() => void load()}
+            >
+              刷新
+            </Button>
+          ) : null
+        }
+        style={{ marginTop: 12 }}
+      >
+        {error && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={error}
+            description="计划由模型生成，偶发不合规会被服务端拦下。稍等几秒重试即可，不会写入无效内容。"
+          />
+        )}
+        {data?.plan ? (
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <Typography.Paragraph style={{ marginBottom: 0, fontSize: 15 }}>
+              {data.plan.summary}
+            </Typography.Paragraph>
+            <PlanTimeline plan={data.plan} />
+          </Space>
         ) : (
           <Space direction="vertical" style={{ width: '100%' }}>
             <Typography.Text type="secondary">
-              把课程、任务和截止时间丢给 AI 学长，让它帮你排个优先级；
-              也可以直接上传作业通知，自动生成任务草稿。
+              让学长把今天的课程、任务和休息排成一条时间线——课程块直接取自课表，
+              任务块只排未完成的那些，全天至少留一段休息。
             </Typography.Text>
             <Space wrap>
-              <Button type="primary" icon={<MessageOutlined />} onClick={() => navigate('/ai')}>
+              <Button
+                type="primary"
+                icon={<BulbOutlined />}
+                loading={generating}
+                onClick={() => void generate()}
+              >
+                生成今日计划
+              </Button>
+              <Button icon={<MessageOutlined />} onClick={() => navigate('/ai')}>
                 去聊天
               </Button>
               <Button icon={<PlusOutlined />} onClick={() => navigate('/todos')}>

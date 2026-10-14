@@ -31,7 +31,9 @@ public class DashboardDto {
     private List<Exam> upcomingExams = new ArrayList<>();
     /** 规则计算的今日重点（不烧 token，保证确定性）：逾期 / 48h 截止 / 考试倒计时。 */
     private List<String> todayHighlights = new ArrayList<>();
-    /** Step 6 占位：AI 每日计划摘要。 */
+    /** 已生成的当日计划（读缓存，未生成为 null）；生成走 POST /api/plans/daily。 */
+    private DailyPlanDto plan;
+    /** 计划摘要（plan.summary 的便捷字段，无计划时 null）。 */
     private String planSummary;
 
     public LocalDate getDate() { return date; }
@@ -70,6 +72,9 @@ public class DashboardDto {
     public void setTodayHighlights(List<String> todayHighlights) {
         this.todayHighlights = todayHighlights == null ? new ArrayList<>() : todayHighlights;
     }
+
+    public DailyPlanDto getPlan() { return plan; }
+    public void setPlan(DailyPlanDto plan) { this.plan = plan; }
 
     public String getPlanSummary() { return planSummary; }
     public void setPlanSummary(String planSummary) { this.planSummary = planSummary; }

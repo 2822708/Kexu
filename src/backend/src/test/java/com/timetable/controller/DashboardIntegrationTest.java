@@ -69,7 +69,8 @@ class DashboardIntegrationTest {
 
     @BeforeEach
     void clearDisposableAccounts() {
-        for (String table : List.of("task", "exam", "course", "schedule", "student_profile", "api_key")) {
+        for (String table : List.of("daily_plan", "task", "exam", "course", "schedule",
+                "student_profile", "api_key")) {
             sql.update("DELETE FROM " + table);
         }
         when(provider.isConfigured()).thenReturn(true);
@@ -116,6 +117,26 @@ class DashboardIntegrationTest {
                 .andExpect(jsonPath("$.data.todayHighlights[3]").value("「数据结构期末考试」还有 7 天考试"))
                 // Step 6 占位：AI 每日计划摘要暂为 null
                 .andExpect(jsonPath("$.data.planSummary").value(nullValue()));
+    }
+
+    @Test
+    void dashboardCarriesCachedDailyPlanSummary() throws Exception {
+        register(FIRST).andExpect(status().isOk());
+        Long scheduleId = createSchedule(FIRST, "Plan dashboard schedule");
+        // 模拟已生成的计划缓存（首页只读缓存，不触发生成）
+        sql.update("INSERT INTO daily_plan(api_key,plan_date,content,summary) VALUES (?,?,?,?)",
+                FIRST, java.sql.Date.valueOf(TODAY),
+                "{\"items\":[{\"type\":\"COURSE\",\"title\":\"高等数学\",\"start\":\"08:00\",\"end\":\"09:35\","
+                        + "\"refId\":7,\"note\":\"\"}]}",
+                "先把上午的课上好");
+
+        mvc.perform(get("/api/dashboard").header("X-API-Key", FIRST)
+                        .param("date", TODAY.toString()).param("scheduleId", scheduleId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.planSummary").value("先把上午的课上好"))
+                .andExpect(jsonPath("$.data.plan.cached").value(true))
+                .andExpect(jsonPath("$.data.plan.items", hasSize(1)))
+                .andExpect(jsonPath("$.data.plan.items[0].type").value("COURSE"));
     }
 
     @Test

@@ -14,6 +14,7 @@ import com.timetable.entity.AiMessage;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -456,6 +457,130 @@ public final class AiPromptBuilder {
 
     /** 聊天 system prompt 与同步算出的上下文摘要（单一数据源，避免 chips 与实际注入不一致）。 */
     public record ChatPrompt(String prompt, AiContextSummary summary) {}
+
+    /**
+     * 每日计划的模型输入（AI Campus Agent V1.0 Step 6）。
+     *
+     * 只提供真实数据：日期/星期/教学周、作息表、今日课程（已按节次换算成真实起止时刻）、
+     * 未完成任务、学生档案。课程时刻由服务端换算而非交给模型推算——校验时据此判定
+     * 「课程块是否与课表一致」，保证时间线不会凭空生成上课时间。
+     */
+    public static String buildDailyPlanInput(LocalDate date, Schedule schedule, List<Course> courses,
+                                             List<PeriodConfig> periods, List<Task> tasks,
+                                             StudentProfile profile) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("【日期】").append(date.format(DATE_FMT)).append(' ')
+                .append(weekDayName(date.getDayOfWeek().getValue()));
+        if (schedule != null) {
+            int currentWeek = weekOf(schedule.getPeriodStartDate(), date);
+            sb.append("（第 ").append(currentWeek).append(" 周 / 共 ")
+                    .append(weekOf(schedule.getPeriodStartDate(), schedule.getPeriodEndDate())).append(" 周）");
+        }
+        sb.append('\n');
+        if (schedule != null) {
+            sb.append("【课表】").append(brief(schedule.getName(), 100)).append(' ')
+                    .append(schedule.getPeriodStartDate().format(DATE_FMT)).append(" ~ ")
+                    .append(schedule.getPeriodEndDate().format(DATE_FMT)).append('\n');
+        }
+
+        sb.append("\n【作息表】\n");
+        if (periods == null || periods.isEmpty()) {
+            sb.append("（未提供，课程时刻见下方今日课程）\n");
+        } else {
+            for (PeriodConfig p : periods) {
+                sb.append("第").append(p.getPeriodNumber()).append("节 ")
+                        .append(p.getStartTime()).append("-").append(p.getEndTime()).append('\n');
+            }
+        }
+
+        sb.append("\n【今日课程】\n");
+        if (courses == null || courses.isEmpty()) {
+            sb.append("（今天没有课）\n");
+        } else {
+            for (Course c : courses) {
+                sb.append("- id=").append(c.getId()).append(' ').append(brief(c.getName(), 60))
+                        .append(' ').append(courseTimeRange(c, periods));
+                if (c.getLocation() != null && !c.getLocation().isBlank()) {
+                    sb.append(" 地点=").append(c.getLocation());
+                }
+                if (c.getTeacher() != null && !c.getTeacher().isBlank()) {
+                    sb.append(" 教师=").append(c.getTeacher());
+                }
+                sb.append('\n');
+            }
+        }
+
+        sb.append("\n【未完成任务】\n");
+        if (tasks == null || tasks.isEmpty()) {
+            sb.append("（无）\n");
+        } else {
+            for (Task task : tasks) {
+                sb.append("- id=").append(task.getId()).append(' ').append(brief(task.getTitle(), 60))
+                        .append(" [").append(taskTypeLabel(task.getType())).append('·')
+                        .append(taskPriorityLabel(task.getPriority())).append("优先级]")
+                        .append(" 截止=").append(task.getDeadline() == null
+                                ? "未设置" : task.getDeadline().format(DATETIME_FMT))
+                        .append(" 状态=").append(taskStatusLabel(task.getStatus()));
+                if (task.getDescription() != null && !task.getDescription().isBlank()) {
+                    sb.append(" 说明=").append(brief(task.getDescription(), 100));
+                }
+                sb.append('\n');
+            }
+        }
+
+        sb.append("\n【学生档案】\n");
+        if (profile == null || !hasProfileContent(profile)) {
+            sb.append("（尚未填写，不需要追问，按普通大学生节奏安排即可）\n");
+        } else {
+            StringBuilder fields = new StringBuilder();
+            appendField(fields, "姓名", profile.getName());
+            appendField(fields, "专业", profile.getMajor());
+            appendField(fields, "年级", profile.getGrade());
+            appendField(fields, "目标", profile.getGoal());
+            appendField(fields, "学习风格", profile.getLearningStyle());
+            sb.append(fields.length() == 0 ? "（尚未填写）" : fields.toString().strip()).append('\n');
+        }
+        return sb.toString();
+    }
+
+    /** 课程节次 → 起止时刻字符串（如 "08:00-09:40"）；作息表缺失时退回「第X-Y节」。 */
+    public static String courseTimeRange(Course course, List<PeriodConfig> periods) {
+        return courseTimeRange(course.getStartPeriod(), course.getEndPeriod(), periods);
+    }
+
+    /** 起止节次 → 起止时刻字符串；作息表缺任一节次时退回「第X-Y节」。 */
+    public static String courseTimeRange(Integer startPeriod, Integer endPeriod,
+                                         List<PeriodConfig> periods) {
+        LocalTime start = periodStart(periods, startPeriod);
+        LocalTime end = periodEnd(periods, endPeriod);
+        if (start == null || end == null) {
+            return "第" + (startPeriod == null ? "?" : startPeriod) + "-"
+                    + (endPeriod == null ? "?" : endPeriod) + "节";
+        }
+        return start + "-" + end;
+    }
+
+    /** 节次 → 开始时刻；作息表未覆盖该节次时返回 null。 */
+    public static LocalTime periodStart(List<PeriodConfig> periods, Integer periodNumber) {
+        return periodTime(periods, periodNumber, true);
+    }
+
+    /** 节次 → 结束时刻；作息表未覆盖该节次时返回 null。 */
+    public static LocalTime periodEnd(List<PeriodConfig> periods, Integer periodNumber) {
+        return periodTime(periods, periodNumber, false);
+    }
+
+    private static LocalTime periodTime(List<PeriodConfig> periods, Integer periodNumber, boolean start) {
+        if (periods == null || periodNumber == null) {
+            return null;
+        }
+        for (PeriodConfig p : periods) {
+            if (p.getPeriodNumber() != null && p.getPeriodNumber().intValue() == periodNumber.intValue()) {
+                return start ? p.getStartTime() : p.getEndTime();
+            }
+        }
+        return null;
+    }
 
     private static boolean hasProfileContent(StudentProfile profile) {
         return notBlank(profile.getName()) || notBlank(profile.getSchool()) || notBlank(profile.getMajor())
