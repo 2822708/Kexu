@@ -199,3 +199,41 @@ export interface ParseHtmlResult {
   note: string
   diagnostics?: { row: number; message: string }[]
 }
+
+/** 任务类型（与后端白名单一致） */
+export type TaskType = 'COURSE_WORK' | 'LAB_REPORT' | 'ONLINE_COURSE' | 'EXAM' | 'COMPETITION' | 'OTHER'
+
+export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED'
+
+/**
+ * 任务草稿：AI 抽取产物与手动创建共用同一结构。
+ * deadline 为 null 表示未设置——AI 抽取时严禁猜测时间。
+ */
+export interface TaskDraft {
+  title: string
+  type: TaskType
+  deadline: string | null
+  priority: number
+  description: string
+}
+
+/** 任务实体（草稿经用户确认后落库） */
+export interface Task {
+  id: number
+  title: string
+  type: TaskType
+  description: string | null
+  deadline: string | null
+  priority: number
+  status: TaskStatus
+  source: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** 任务抽取结果：草稿不落库，confidence < 0.6 时前端强制逐条核对 */
+export interface TaskExtractResult {
+  tasks: TaskDraft[]
+  confidence: number
+  note: string
+}

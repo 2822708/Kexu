@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Checkbox, Collapse, FloatButton, Input, Modal, Space, Typography, Upload } from 'antd'
+import { Alert, Button, Checkbox, Collapse, FloatButton, Input, message, Modal, Space, Typography, Upload } from 'antd'
 import type { UploadProps } from 'antd'
 import { AudioOutlined, FileImageOutlined, ImportOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { aiApi } from '../api'
+import { aiApi, taskApi } from '../api'
 import { useApp } from '../store/AppContext'
 import { useSpeechConsent, useSpeechInput } from '../hooks/useSpeechInput'
 import { extractImportFileText, isSupportedImage, MAX_IMAGE_BYTES, MAX_IMPORT_TEXT_CHARS } from '../utils/importFiles'
 import { readChatImage } from '../utils/chatImport'
+import TaskDraftModal from './TaskDraftModal'
+import type { TaskDraft, TaskExtractResult } from '../types'
 
 const { Dragger } = Upload
 
@@ -26,6 +28,8 @@ export default function QuickImportWidget() {
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [speechConsent, setSpeechConsent] = useSpeechConsent()
   const [error, setError] = useState('')
+  const [draftResult, setDraftResult] = useState<TaskExtractResult | null>(null)
+  const [createError, setCreateError] = useState('')
   const textBeforeRecordingRef = useRef('')
   const { recording, start, stop, abort, supported } = useSpeechInput({
     onStart: () => {
@@ -128,6 +132,41 @@ export default function QuickImportWidget() {
     }
   }
 
+  /** 材料 → 任务草稿（不落库）：截图走视觉模型直提，文本直接抽取。 */
+  const extractTasks = async () => {
+    if (busy || recording) return
+    setError('')
+    setCreateError('')
+    setBusy(true)
+    try {
+      const result = imageFile
+        ? await taskApi.extract({ imageDataUrl: await readChatImage(imageFile) })
+        : await taskApi.extract({ text: text.trim() })
+      setDraftResult(result)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '任务抽取失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** 草稿核对确认后才落库（human-in-the-loop）。 */
+  const confirmDrafts = async (drafts: TaskDraft[]) => {
+    setBusy(true)
+    setCreateError('')
+    try {
+      const created = await taskApi.create(drafts)
+      message.success(`已创建 ${created.length} 个任务，AI 助手的每日计划会参考它们`)
+      setDraftResult(null)
+      setOpen(false)
+      reset()
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : '任务创建失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const close = () => {
     if (busy) return
     abort()
@@ -148,9 +187,23 @@ export default function QuickImportWidget() {
         open={open}
         onCancel={close}
         footer={
-          <Button type="primary" loading={busy} disabled={!text.trim() || !!imageFile || recording} onClick={sendToAi}>
-            转交 AI 助手（先生成提案）
-          </Button>
+          <Space>
+            <Button
+              type="primary"
+              loading={busy}
+              disabled={!text.trim() || !!imageFile || recording}
+              onClick={sendToAi}
+            >
+              转交 AI 助手（先生成提案）
+            </Button>
+            <Button
+              loading={busy}
+              disabled={(!text.trim() && !imageFile) || recording}
+              onClick={extractTasks}
+            >
+              抽取为任务草稿
+            </Button>
+          </Space>
         }
         width={560}
         centered
@@ -159,7 +212,7 @@ export default function QuickImportWidget() {
       >
         <Space direction="vertical" size={10} style={{ display: 'flex' }}>
           <Typography.Paragraph type="secondary" className="quick-import-context">
-            先检查材料，再由 AI 生成待确认提案。当前课表：{activeSchedule?.name ?? '未选择'}
+            先检查材料，再选择去向：转交 AI 助手生成提案，或直接抽取为任务草稿（截图可免识别直接抽取，确认后才落库）。当前课表：{activeSchedule?.name ?? '未选择'}
           </Typography.Paragraph>
           <Dragger
             accept=".txt,.md,.csv,.ics,.html,.htm,.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif"
@@ -236,6 +289,17 @@ export default function QuickImportWidget() {
           {error && <Alert type="error" showIcon message={error} />}
         </Space>
       </Modal>
+      <TaskDraftModal
+        open={draftResult !== null}
+        result={draftResult}
+        confirming={busy}
+        error={createError}
+        onCancel={() => {
+          setDraftResult(null)
+          setCreateError('')
+        }}
+        onConfirm={(drafts) => void confirmDrafts(drafts)}
+      />
     </>
   )
 }

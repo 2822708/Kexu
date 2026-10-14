@@ -18,6 +18,9 @@ import type {
   RecurringTodo,
   RecurringTodoPayload,
   Schedule,
+  Task,
+  TaskDraft,
+  TaskExtractResult,
   Todo,
 } from '../types'
 
@@ -95,6 +98,19 @@ export const examApi = {
     request<Exam>(`/schedules/${scheduleId}/exams`, { method: 'POST', body }),
   update: (id: number, body: ExamPayload) => request<Exam>(`/exams/${id}`, { method: 'PUT', body }),
   remove: (id: number) => request<null>(`/exams/${id}`, { method: 'DELETE' }),
+}
+
+export const taskApi = {
+  /**
+   * 材料 → 任务草稿（AI Campus Agent V1.0 Step 4）。
+   * 二选一：text（客户端已提取的文本）或 imageDataUrl（截图，视觉模型直提）。
+   * 草稿不落库，用户核对/编辑后调 create。
+   */
+  extract: (body: { text?: string; imageDataUrl?: string }) =>
+    request<TaskExtractResult>('/tasks/extract', { method: 'POST', body }),
+  /** 批量创建任务（草稿确认 / 手动创建），后端标注 source=AI_PARSE */
+  create: (tasks: TaskDraft[]) =>
+    request<Task[]>('/tasks', { method: 'POST', body: { tasks } }),
 }
 
 export const periodApi = {

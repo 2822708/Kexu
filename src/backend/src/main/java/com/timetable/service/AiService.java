@@ -5,6 +5,8 @@ import com.timetable.dto.AiConversationRequest;
 import com.timetable.dto.AiMessageRequest;
 import com.timetable.dto.AiMessageResponse;
 import com.timetable.dto.CursorPage;
+import com.timetable.dto.TaskExtractRequest;
+import com.timetable.dto.TaskExtractResult;
 import com.timetable.entity.AiConversation;
 
 import java.util.List;
@@ -76,6 +78,13 @@ public interface AiService {
      * 解析教务系统 HTML，返回 {"courses": [...]} 结构供前端预览。
      */
     Map<String, Object> parseHtml(String html, Long scheduleId, String apiKey);
+
+    /**
+     * 从材料（文本或截图）抽取任务草稿（AI Campus Agent V1.0 Step 4）。
+     * **不落库**：草稿经用户核对/编辑后由 POST /api/tasks 创建。
+     * deadline 无明确时间一律为 null（严禁猜测）；模型输出非法字段在此清洗。
+     */
+    TaskExtractResult extractTasks(TaskExtractRequest request, String apiKey);
 
     /** Transcribes one ephemeral image; the image is never persisted by the application. */
     String parseImageText(String imageDataUrl);
