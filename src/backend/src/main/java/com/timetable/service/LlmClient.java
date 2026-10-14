@@ -2,7 +2,18 @@ package com.timetable.service;
 
 import java.util.List;
 
-public interface DeepSeekClient {
+/**
+ * LLM 客户端抽象（AI Campus Agent V1.0）。
+ *
+ * 现有 DeepSeek 直连调用收敛到本接口：所有 AI 调用（对话、解析、提炼）只依赖
+ * {@code LlmClient}，不感知具体厂商。协议是 OpenAI 兼容的 chat/completions，
+ * 未来接入同族模型（或其它兼容服务）只需新增一个实现并注册 providerId，
+ * 由 {@link LlmClientRegistry} 按 {@code app.llm.active-provider} 选择。
+ */
+public interface LlmClient {
+
+    /** provider 唯一标识，如 "deepseek"。 */
+    String providerId();
 
     class Message {
         private final String role;
@@ -36,7 +47,7 @@ public interface DeepSeekClient {
     }
 
     /**
-     * 以 JSON Mode 调用 DeepSeek，返回模型输出的原始字符串（应为 JSON 文本）。
+     * 以 JSON Mode 调用模型，返回模型输出的原始字符串（应为 JSON 文本）。
      */
     String chatJson(List<Message> messages);
 

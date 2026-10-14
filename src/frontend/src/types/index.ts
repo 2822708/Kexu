@@ -129,14 +129,18 @@ export type AiActionType =
   | 'CREATE_EXAM'
   | 'UPDATE_EXAM'
   | 'DELETE_EXAM'
+  | 'SAVE_MEMORY'
+  | 'UPDATE_PROFILE'
 
 export type AiActionStatus = 'PENDING' | 'EXECUTING' | 'EXECUTED' | 'REJECTED' | 'STALE'
+
+export type AiActionScope = 'COURSE' | 'TODO' | 'PROFILE' | 'MEMORY'
 
 export interface AiAction {
   actionId: number
   type: AiActionType
   status: AiActionStatus
-  scope: 'COURSE' | 'TODO'
+  scope: AiActionScope
   scheduleId?: number | null
   data: Record<string, unknown> | null
 }

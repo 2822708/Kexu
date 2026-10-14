@@ -5,7 +5,7 @@ import com.timetable.TimetableApplication;
 import com.timetable.config.ApiKeyBootstrap;
 import com.timetable.config.StandaloneAdminRoleUpgrade;
 import com.timetable.mapper.ApiKeyMapper;
-import com.timetable.service.DeepSeekClient;
+import com.timetable.service.LlmClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,7 +66,7 @@ class DeviceAuthIntegrationTest {
     @Autowired ApiKeyMapper accounts;
     @Autowired StandaloneAdminRoleUpgrade legacyUpgrade;
     @Autowired ThreadPoolTaskScheduler applicationTaskScheduler;
-    @MockBean DeepSeekClient provider;
+    @MockBean LlmClient provider;
 
     @BeforeEach
     void clearDisposableAccounts() {

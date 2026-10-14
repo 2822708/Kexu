@@ -17,6 +17,8 @@ public class DeepSeekProperties {
     private int maxTokens = 16384;
     /** 推理强度：low / medium / high。低强度可显著缩短思考时间 */
     private String reasoningEffort = "low";
+    /** 采样温度。默认 0.2 与原直连实现一致，保证严格 JSON 协议的行为不回退 */
+    private double temperature = 0.2;
 
     public String getKey() { return key; }
     public void setKey(String key) { this.key = key; }
@@ -32,4 +34,6 @@ public class DeepSeekProperties {
     public void setMaxTokens(int maxTokens) { this.maxTokens = maxTokens; }
     public String getReasoningEffort() { return reasoningEffort; }
     public void setReasoningEffort(String reasoningEffort) { this.reasoningEffort = reasoningEffort; }
+    public double getTemperature() { return temperature; }
+    public void setTemperature(double temperature) { this.temperature = temperature; }
 }

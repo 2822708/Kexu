@@ -1,6 +1,6 @@
 import { Button, Card, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { AiAction } from '../types'
+import type { AiAction, AiActionScope } from '../types'
 import { formatWeeks, weekDayName } from '../utils/schedule'
 import { describeOffset } from '../utils/recurring'
 
@@ -19,7 +19,38 @@ const ACTION_LABELS: Record<string, string> = {
   CREATE_EXAM: '添加考试',
   UPDATE_EXAM: '修改考试',
   DELETE_EXAM: '删除考试',
+  SAVE_MEMORY: '记住这个信息',
+  UPDATE_PROFILE: '更新学生档案',
 }
+
+/** 作用域标签：循环任务归待办域，但卡片上单独标明，避免与普通待办混淆。 */
+const SCOPE_TAGS: Record<AiActionScope, { color: string; label: string }> = {
+  COURSE: { color: 'geekblue', label: '课表' },
+  TODO: { color: 'purple', label: '待办' },
+  PROFILE: { color: 'gold', label: '档案' },
+  MEMORY: { color: 'magenta', label: '记忆' },
+}
+
+/** 长期记忆类型的中文名（与后端 Memory 类型白名单一致）。 */
+const MEMORY_TYPE_LABELS: Record<string, string> = {
+  GOAL: '目标',
+  INTEREST: '兴趣',
+  ABILITY: '能力',
+  HABIT: '习惯',
+  PREFERENCE: '偏好',
+}
+
+/** 档案字段的中文名（与后端档案白名单一致，顺序即展示顺序）。 */
+const PROFILE_FIELDS: [string, string][] = [
+  ['name', '姓名'],
+  ['school', '学校'],
+  ['major', '专业'],
+  ['grade', '年级'],
+  ['goal', '目标'],
+  ['learningStyle', '学习风格'],
+  ['interest', '兴趣'],
+  ['skills', '技能'],
+]
 
 interface Props {
   action: AiAction
@@ -44,8 +75,10 @@ export default function AiActionCard({ action, executing, onExecute, onReject, d
   const data = (action.data ?? {}) as Dict
   const pending = action.status === 'PENDING'
   const stale = action.status === 'STALE'
-  const affected = ['courses', 'todos', 'rules', 'exams', 'courseIds', 'todoIds', 'recurringIds', 'examIds']
+  const affected = ['courses', 'todos', 'rules', 'exams', 'courseIds', 'todoIds', 'recurringIds', 'examIds', 'memories']
     .map((key) => data[key]).find(Array.isArray) as unknown[] | undefined
+  const scopeTag = SCOPE_TAGS[action.scope] ?? { color: 'purple', label: action.scope }
+  const scopeLabel = action.scope === 'TODO' && action.type.includes('RECURRING') ? '循环任务' : scopeTag.label
 
   const statusTag =
     action.status === 'EXECUTED' ? (
@@ -70,13 +103,7 @@ export default function AiActionCard({ action, executing, onExecute, onReject, d
       title={
         <Space>
           <span>{ACTION_LABELS[action.type] ?? action.type}</span>
-          <Tag color={action.scope === 'COURSE' ? 'geekblue' : 'purple'}>
-            {action.scope === 'COURSE'
-              ? '课表'
-              : action.type.includes('RECURRING')
-                ? '循环任务'
-                : '待办'}
-          </Tag>
+          <Tag color={scopeTag.color}>{scopeLabel}</Tag>
           {statusTag}
         </Space>
       }
@@ -102,8 +129,15 @@ export default function AiActionCard({ action, executing, onExecute, onReject, d
       <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
         {action.scope === 'COURSE'
           ? `目标课表：${scheduleName ?? (action.scheduleId ? `课表 #${action.scheduleId}（已删除或不可用）` : '未绑定')}`
-          : '作用范围：当前账号的待办（所有课表共用）'}
-        {' · '}影响 {affected?.length ?? 0} 条记录
+          : action.scope === 'PROFILE'
+            ? '作用范围：当前账号的学生档案'
+            : action.scope === 'MEMORY'
+              ? '作用范围：当前账号的长期记忆'
+              : '作用范围：当前账号的待办（所有课表共用）'}
+        {' · '}
+        {action.scope === 'PROFILE'
+          ? `更新 ${Object.keys(data).filter((k) => k !== '_before').length} 个档案字段`
+          : `影响 ${affected?.length ?? 0} 条记录`}
         {action.type === 'DELETE_EXAM' && '；对应考试待办也会删除'}
       </Typography.Paragraph>
       {renderBody(action.type, data)}
@@ -399,6 +433,57 @@ function renderBody(type: string, data: Dict) {
     if (Array.isArray(ids)) return <span>目标 ID：{ids.join(', ')}</span>
   }
 
+  if (type === 'SAVE_MEMORY') {
+    const items = (data.memories as Dict[]) ?? []
+    return (
+      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          学长想把以下信息记入长期记忆，之后回答问题时会参考：
+        </Typography.Text>
+        {items.map((m, i) => (
+          <div key={i}>
+            <Space size={4}>
+              <Tag color="magenta">{MEMORY_TYPE_LABELS[String(m.type)] ?? String(m.type)}</Tag>
+              <Typography.Text strong>{str(m.content)}</Typography.Text>
+            </Space>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+              重要度 {'★'.repeat(Math.min(5, Math.max(1, Number(m.importance) || 3)))}
+              {'☆'.repeat(5 - Math.min(5, Math.max(1, Number(m.importance) || 3)))}（{Number(m.importance) || 3}/5）
+            </div>
+          </div>
+        ))}
+      </Space>
+    )
+  }
+
+  if (type === 'UPDATE_PROFILE') {
+    // 档案是单例：_before 是整份档案快照（对象而非数组），缺失表示新建档案。
+    // 只展示提案实际提到的字段——未提及的字段保持原值，不能显示成「将被清空」。
+    const snapshot = (data._before ?? null) as Dict | null
+    const rows = PROFILE_FIELDS.filter(([field]) => data[field] !== undefined && data[field] !== null)
+      .map(([field, label]) => ({
+        key: field,
+        field: label,
+        before: snapshot ? profileValue(snapshot[field]) : '（档案尚不存在）',
+        after: profileValue(data[field]),
+        changed: snapshot ? profileValue(snapshot[field]) !== profileValue(data[field]) : true,
+      }))
+    return (
+      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {snapshot ? '将把学生档案更新为：' : '将新建学生档案并填写：'}
+        </Typography.Text>
+        <Table
+          size="small"
+          rowKey="key"
+          columns={DIFF_COLUMNS}
+          dataSource={rows}
+          pagination={false}
+        />
+      </Space>
+    )
+  }
+
   // DELETE_COURSE / DELETE_TODO / TOGGLE_TODO：展示将被影响的原始记录
   if (before.length > 0) {
     return (
@@ -513,4 +598,11 @@ function weeksStr(v: unknown): string {
 function str(value: unknown): string {
   if (value === null || value === undefined || value === '') return '未指定'
   return String(value)
+}
+
+/** 档案字段值：数组（兴趣/技能）用顿号连接，空值统一显示「未填写」。 */
+function profileValue(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '未填写'
+  if (Array.isArray(v)) return v.length > 0 ? v.map(String).join('、') : '未填写'
+  return String(v)
 }

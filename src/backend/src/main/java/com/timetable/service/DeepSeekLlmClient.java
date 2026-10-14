@@ -1,4 +1,4 @@
-package com.timetable.service.impl;
+package com.timetable.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.timetable.config.DeepSeekProperties;
 import com.timetable.exception.BusinessException;
-import com.timetable.service.DeepSeekClient;
+import com.timetable.service.impl.DeepSeekKeyStore;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,9 +34,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 @Service
-public class DeepSeekClientImpl implements DeepSeekClient {
+public class DeepSeekLlmClient implements LlmClient {
 
-    private static final Logger log = LoggerFactory.getLogger(DeepSeekClientImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(DeepSeekLlmClient.class);
     private static final int MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
     private final DeepSeekProperties properties;
@@ -49,14 +49,19 @@ public class DeepSeekClientImpl implements DeepSeekClient {
         return thread;
     });
 
-    public DeepSeekClientImpl(DeepSeekProperties properties, DeepSeekKeyStore keyStore,
-                              ObjectMapper objectMapper) {
+    public DeepSeekLlmClient(DeepSeekProperties properties, DeepSeekKeyStore keyStore,
+                             ObjectMapper objectMapper) {
         this.properties = properties;
         this.keyStore = keyStore;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(15))
                 .build();
+    }
+
+    @Override
+    public String providerId() {
+        return LlmClientRegistry.DEEPSEEK;
     }
 
     @Override
@@ -88,7 +93,7 @@ public class DeepSeekClientImpl implements DeepSeekClient {
     private ObjectNode buildBody(List<Message> messages, boolean stream) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("model", properties.getModel());
-        body.put("temperature", 0.2);
+        body.put("temperature", properties.getTemperature());
         ArrayNode arr = body.putArray("messages");
         for (Message m : messages) {
             ObjectNode node = arr.addObject();

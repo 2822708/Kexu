@@ -33,6 +33,12 @@ app:
   admin-api-keys: ${ADMIN_API_KEYS:}
   # 可选：空库的初始管理员凭据；未配置时由设备自动注册普通工作区
   bootstrap-key: ${TANGENT_BOOTSTRAP_KEY:}
+  llm:
+    # 当前启用的 LLM 提供方（AI Campus Agent V1.0 抽象层开关）。
+    # deepseek = 走 DeepSeek 适配器；legacy-direct = 直接调用 DeepSeek（回滚开关，V1.0 行为等价）。
+    # 未来新增 provider（如 OpenAI/通义）只需实现 LlmClient 并在此切换，业务代码零改动。
+    # 未配置或不可用时会自动回退到任一已配置的 provider，全部不可用则返回 503。
+    active-provider: ${APP_LLM_ACTIVE_PROVIDER:deepseek}
 
 deepseek:
   api:

@@ -1,5 +1,6 @@
 package com.timetable.service.impl;
 
+import com.timetable.config.LlmProperties;
 import com.timetable.config.ValidatedFlywayMigration;
 import com.timetable.dto.*;
 import com.timetable.entity.*;
@@ -55,7 +56,9 @@ class OptimizationRegressionTest {
     @Import({ValidatedFlywayMigration.class, AdminAuthorizationService.class,
             RequestValidationService.class, ScheduleServiceImpl.class, CourseServiceImpl.class, ExamServiceImpl.class,
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
-            PeriodConfigServiceImpl.class, AiServiceImpl.class})
+            PeriodConfigServiceImpl.class, AiServiceImpl.class,
+            StudentProfileServiceImpl.class, MemoryServiceImpl.class,
+            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class})
     static class TestApplication {
         @Bean
         MutableClock clock() { return new MutableClock(); }
@@ -83,12 +86,12 @@ class OptimizationRegressionTest {
     @Autowired PeriodConfigService periods;
     @Autowired AdminAuthorizationService admins;
     @Autowired MutableClock clock;
-    @MockBean DeepSeekClient provider;
+    @MockBean LlmClient provider;
 
     @BeforeEach
     void resetDisposableDatabase() {
         for (String table : List.of("ai_action", "ai_message", "ai_conversation", "todo", "recurring_todo",
-                "course", "exam", "schedule", "api_key")) {
+                "course", "exam", "schedule", "api_key", "student_profile", "student_memory", "task", "daily_plan")) {
             sql.update("DELETE FROM " + table);
         }
         sql.update("INSERT INTO api_key(api_key,label,account_role) VALUES (?,?,'ADMIN')", OWNER, "Administrator");
@@ -120,7 +123,7 @@ class OptimizationRegressionTest {
 
         assertThat(ai.parseImageText(image)).contains("期末考试");
         @SuppressWarnings({"unchecked", "rawtypes"})
-        ArgumentCaptor<List<DeepSeekClient.Message>> prompt =
+        ArgumentCaptor<List<LlmClient.Message>> prompt =
                 (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
         verify(provider).chatJson(prompt.capture());
         assertThat(prompt.getValue()).hasSize(2);

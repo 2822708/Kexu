@@ -2,10 +2,13 @@ package com.timetable.service.impl;
 
 import com.timetable.entity.Course;
 import com.timetable.entity.Exam;
+import com.timetable.entity.Memory;
 import com.timetable.entity.PeriodConfig;
 import com.timetable.entity.RecurringTodo;
 import com.timetable.entity.Schedule;
+import com.timetable.entity.StudentProfile;
 import com.timetable.entity.Todo;
+import com.timetable.entity.AiMessage;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -47,13 +50,20 @@ public final class AiPromptBuilder {
         return (int) Math.floorDiv(days, 7) + 1;
     }
 
+    /**
+     * 构建聊天 System Prompt：学长人格（persona 模板）+ JSON 提案协议 + 数据上下文。
+     *
+     * @param persona 人格段文本（来自 prompts/persona.md，按版本管理）；为空时跳过人格段，
+     *                协议与数据上下文仍然完整，聊天不中断
+     */
     public static String buildChatSystemPrompt(Schedule schedule,
                                                List<Course> courses,
                                                List<Exam> exams,
                                                List<Todo> todos,
                                                List<RecurringTodo> recurringTodos,
                                                List<PeriodConfig> periods,
-                                               LocalDate today) {
+                                               LocalDate today,
+                                               String persona) {
         int courseCount = courses == null ? 0 : courses.size();
         int examCount = exams == null ? 0 : exams.size();
         int todoCount = todos == null ? 0 : todos.size();
@@ -64,6 +74,9 @@ public final class AiPromptBuilder {
         recurringTodos = bounded(recurringTodos, MAX_RECURRING_RULES);
         periods = bounded(periods, 12);
         StringBuilder sb = new StringBuilder();
+        if (persona != null && !persona.isBlank()) {
+            sb.append("## 你是谁\n").append(persona.strip()).append("\n\n");
+        }
         sb.append("你是一个大学生课程表与待办事项管理助手。你需要理解用户的自然语言指令，")
                 .append("并输出严格的 JSON（不要包含 markdown 代码块），结构如下：\n")
                 .append("{\n")
@@ -338,6 +351,77 @@ public final class AiPromptBuilder {
             return values;
         }
         return values.subList(0, limit);
+    }
+
+    /**
+     * 记忆提炼的输入窗口：学生档案 + 已有长期记忆 + 最近对话（纯文本）。
+     * 与聊天上下文分离：这里只需要「已经聊过什么」，不需要课表/待办全量数据。
+     */
+    public static String buildMemoryRefineWindow(StudentProfile profile, List<Memory> memories,
+                                                 List<AiMessage> window) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("【学生档案】\n");
+        if (profile == null) {
+            sb.append("（未填写）\n");
+        } else {
+            StringBuilder fields = new StringBuilder();
+            appendField(fields, "姓名", profile.getName());
+            appendField(fields, "学校", profile.getSchool());
+            appendField(fields, "专业", profile.getMajor());
+            appendField(fields, "年级", profile.getGrade());
+            appendField(fields, "目标", profile.getGoal());
+            appendField(fields, "学习习惯", profile.getLearningStyle());
+            appendField(fields, "兴趣", profile.getInterest() == null || profile.getInterest().isEmpty()
+                    ? null : String.join("、", profile.getInterest()));
+            appendField(fields, "技能", profile.getSkills() == null || profile.getSkills().isEmpty()
+                    ? null : String.join("、", profile.getSkills()));
+            sb.append(fields.length() == 0 ? "（未填写）" : fields.toString().strip()).append('\n');
+        }
+
+        sb.append("\n【已有长期记忆】\n");
+        if (memories == null || memories.isEmpty()) {
+            sb.append("（无）\n");
+        } else {
+            for (Memory memory : memories) {
+                sb.append("- [").append(memory.getType()).append('·')
+                        .append(memory.getImportance()).append("] ")
+                        .append(memory.getContent()).append('\n');
+            }
+        }
+
+        sb.append("\n【对话窗口】\n");
+        int total = 0;
+        int shown = 0;
+        if (window != null) {
+            for (int i = window.size() - 1; i >= 0 && shown < 12; i--) {
+                AiMessage message = window.get(i);
+                String content = message.getContent() == null ? "" : message.getContent();
+                if (content.length() > 2000) {
+                    content = content.substring(0, 2000) + "…[截断]";
+                }
+                if (total + content.length() > 8000) {
+                    break;
+                }
+                total += content.length();
+                shown++;
+                sb.append("user".equals(message.getRole()) ? "用户：" : "学长：")
+                        .append(content).append('\n');
+            }
+        }
+        if (shown == 0) {
+            sb.append("（空）\n");
+        }
+        return sb.toString();
+    }
+
+    private static void appendField(StringBuilder target, String label, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        if (target.length() > 0) {
+            target.append(' ');
+        }
+        target.append(label).append('=').append(value);
     }
 
     public static String buildParseHtmlSystemPrompt(Schedule schedule, List<PeriodConfig> periods) {
