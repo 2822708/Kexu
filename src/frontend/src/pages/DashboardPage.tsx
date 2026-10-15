@@ -11,6 +11,7 @@ import {
   Skeleton,
   Space,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -312,19 +313,33 @@ export default function DashboardPage() {
           <Space>
             <BulbOutlined />
             <span>AI 学长建议</span>
-            {data?.plan?.cached && <Tag color="green">今日已生成</Tag>}
+            {data?.plan?.stale ? (
+              <Tooltip title="生成计划之后，你的课程 / 任务 / 档案又有改动，这条时间线可能不再准确">
+                <Tag color="orange">可能已过时</Tag>
+              </Tooltip>
+            ) : (
+              data?.plan?.cached && <Tag color="green">今日已生成</Tag>
+            )}
           </Space>
         }
         extra={
           data?.plan ? (
-            <Button
-              size="small"
-              icon={<ReloadOutlined />}
-              loading={generating}
-              onClick={() => void load()}
-            >
-              刷新
-            </Button>
+            // 已过时 → 走生成接口真正重算；否则纯刷新（命中缓存，不烧 token）
+            data.plan.stale ? (
+              <Button
+                size="small"
+                type="primary"
+                icon={<BulbOutlined />}
+                loading={generating}
+                onClick={() => void generate()}
+              >
+                重新生成
+              </Button>
+            ) : (
+              <Button size="small" icon={<ReloadOutlined />} loading={generating} onClick={() => void load()}>
+                刷新
+              </Button>
+            )
           ) : null
         }
         style={{ marginTop: 12 }}
@@ -336,6 +351,15 @@ export default function DashboardPage() {
             style={{ marginBottom: 12 }}
             message={error}
             description="计划由模型生成，偶发不合规会被服务端拦下。稍等几秒重试即可，不会写入无效内容。"
+          />
+        )}
+        {data?.plan?.stale && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="这份计划生成之后，你的课程、任务或档案又改过了"
+            description="旧计划仍然可用，但可能漏掉新加的任务或沿用旧的课程时间。点右上角「重新生成」会按最新数据重排一次（会消耗一次模型调用）。"
           />
         )}
         {data?.plan ? (

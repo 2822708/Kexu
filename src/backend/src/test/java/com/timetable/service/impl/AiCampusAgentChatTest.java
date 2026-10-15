@@ -242,6 +242,34 @@ class AiCampusAgentChatTest {
     }
 
     @Test
+    void rereadingHistoryShowsStaleProposalWithoutPersistingIt() {
+        Schedule schedule = schedule(OWNER, "Display stale memory");
+        AiConversation conversation = conversation(schedule.getId());
+        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+                {"memories":[{"type":"GOAL","content":"准备 12 月六级","importance":5}]}
+                """);
+        AiMessageResponse response = ai.sendMessage(conversation.getId(),
+                request(schedule.getId(), "我报了六级"), OWNER);
+        AiActionDto proposal = response.getActions().stream()
+                .filter(a -> "SAVE_MEMORY".equals(a.getType())).findFirst().orElseThrow();
+        assertThat(proposal.getStatus()).isEqualTo("PENDING");
+
+        // 用户手动改了记忆 → 重新打开对话时，这张待确认卡片应显示为「已失效」
+        memoryService.create(OWNER, Memory.TYPE_HABIT, "习惯晚饭后散步", 2, Memory.SOURCE_USER, null);
+
+        AiMessageResponse reread = ai.listMessages(conversation.getId(), OWNER).stream()
+                .filter(m -> m.getMessageId().equals(response.getMessageId())).findFirst().orElseThrow();
+        AiActionDto shown = reread.getActions().stream()
+                .filter(a -> a.getActionId().equals(proposal.getActionId())).findFirst().orElseThrow();
+        assertThat(shown.getStatus())
+                .as("展示态复核：数据已变，卡片先提示失效，用户不必点了才知道")
+                .isEqualTo("STALE");
+        // 只是展示态，落库仍然是 PENDING——真正失效仍发生在执行那一刻
+        assertThat(actions.selectById(proposal.getActionId()).getActionStatus()).isEqualTo("PENDING");
+        assertThat(memoryService.listActive(OWNER)).hasSize(1);
+    }
+
+    @Test
     void profileDataChangeMarksPendingProfileProposalStale() {
         Schedule schedule = schedule(OWNER, "Stale profile");
         AiConversation conversation = conversation(schedule.getId());

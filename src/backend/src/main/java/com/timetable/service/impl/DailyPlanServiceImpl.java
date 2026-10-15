@@ -22,6 +22,9 @@ import com.timetable.service.PeriodConfigService;
 import com.timetable.service.ScheduleService;
 import com.timetable.service.StudentProfileService;
 import com.timetable.service.TaskService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -47,6 +50,8 @@ import java.util.Set;
 @Service
 public class DailyPlanServiceImpl implements DailyPlanService {
 
+    private static final Logger log = LoggerFactory.getLogger(DailyPlanServiceImpl.class);
+
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
     private static final Set<String> ALLOWED_TYPES = Set.of("COURSE", "TASK", "BREAK", "SUGGESTION");
@@ -65,13 +70,14 @@ public class DailyPlanServiceImpl implements DailyPlanService {
     private final PromptTemplateRegistry promptTemplates;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final JdbcTemplate jdbc;
 
     public DailyPlanServiceImpl(DailyPlanMapper mapper, ScheduleService scheduleService,
                                 CourseService courseService, TaskService taskService,
                                 PeriodConfigService periodConfigService,
                                 StudentProfileService studentProfileService,
                                 LlmClientRegistry llmClients, PromptTemplateRegistry promptTemplates,
-                                ObjectMapper objectMapper, Clock clock) {
+                                ObjectMapper objectMapper, Clock clock, JdbcTemplate jdbc) {
         this.mapper = mapper;
         this.scheduleService = scheduleService;
         this.courseService = courseService;
@@ -82,6 +88,7 @@ public class DailyPlanServiceImpl implements DailyPlanService {
         this.promptTemplates = promptTemplates;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.jdbc = jdbc;
     }
 
     @Override
@@ -90,17 +97,75 @@ public class DailyPlanServiceImpl implements DailyPlanService {
             return null;
         }
         DailyPlan stored = select(apiKey, date == null ? LocalDate.now(clock) : date);
-        return stored == null ? null : toDto(stored, true);
+        if (stored == null) {
+            return null;
+        }
+        DailyPlanDto dto = toDto(stored, true);
+        // 输入数据变过就提示「可能过时」，但不自动重算——重新生成要花 token，决定权交给用户
+        dto.setStale(inputChangedSince(apiKey, stored.getCreatedAt()));
+        return dto;
+    }
+
+    /**
+     * 计划生成之后，课程/考试/任务/档案是否又改过。
+     *
+     * 用「数据最后更新时间 > 计划生成时间」判断，不需要额外表字段：
+     * daily_plan 只有 created_at，而各输入表都有 ON UPDATE 的 updated_at。
+     * 判定偏保守（改了下周的课也会提示），但宁可多提示一次，也不要让用户对着过时的计划安排一天。
+     */
+    private boolean inputChangedSince(String apiKey, LocalDateTime since) {
+        if (since == null) {
+            return false;
+        }
+        LocalDateTime latest = latestChange(apiKey);
+        return latest != null && latest.isAfter(since);
+    }
+
+    private LocalDateTime latestChange(String apiKey) {
+        // 任何一个来源都没有数据时 MAX() 返回 null，因此逐个累加而不是 List.of（不允许 null 元素）
+        String[] queries = {
+                "SELECT MAX(c.updated_at) FROM course c JOIN schedule s ON c.schedule_id = s.id "
+                        + "WHERE s.api_key = ?",
+                "SELECT MAX(e.updated_at) FROM exam e JOIN schedule s ON e.schedule_id = s.id "
+                        + "WHERE s.api_key = ?",
+                "SELECT MAX(updated_at) FROM task WHERE api_key = ?",
+                "SELECT MAX(updated_at) FROM student_profile WHERE api_key = ?",
+        };
+        LocalDateTime latest = null;
+        for (String sql : queries) {
+            LocalDateTime candidate = maxUpdatedAt(sql, apiKey);
+            if (candidate != null && (latest == null || candidate.isAfter(latest))) {
+                latest = candidate;
+            }
+        }
+        return latest;
+    }
+
+    private LocalDateTime maxUpdatedAt(String sql, String apiKey) {
+        try {
+            return jdbc.queryForObject(sql, LocalDateTime.class, apiKey);
+        } catch (Exception e) {
+            // 表或列缺失（旧库）不该让首页挂掉：拿不到更新时间就当作没变
+            log.warn("读取每日计划输入变更时间失败，按未变更处理: {}", e.toString());
+            return null;
+        }
     }
 
     @Override
     public DailyPlanDto generate(String apiKey, Long scheduleId, LocalDate date) {
         LocalDate planDate = date == null ? LocalDate.now(clock) : date;
 
-        // 命中缓存直接返回：同一天重复点「生成」不再烧 token
+        // 同一天重复点「生成」默认复用，避免重复烧 token。
+        // 但计划已被标记 stale（输入数据变过）时，用户主动点生成就是要重算——删掉旧行继续。
+        // 分工：get() 只读永不烧 token，只提示；generate() 由用户主动触发，允许真正重算。
         DailyPlan cached = select(apiKey, planDate);
         if (cached != null) {
-            return toDto(cached, true);
+            if (!inputChangedSince(apiKey, cached.getCreatedAt())) {
+                return toDto(cached, true);
+            }
+            mapper.delete(new LambdaQueryWrapper<DailyPlan>()
+                    .eq(DailyPlan::getApiKey, apiKey)
+                    .eq(DailyPlan::getPlanDate, planDate));
         }
 
         PromptTemplateRegistry.PromptTemplate template = promptTemplates.get("daily-plan");

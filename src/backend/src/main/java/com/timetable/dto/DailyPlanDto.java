@@ -17,6 +17,11 @@ public class DailyPlanDto {
     private String summary;
     /** true 表示来自缓存（同一天已生成过），false 表示本次新生成 */
     private boolean cached;
+    /**
+     * true 表示计划生成之后，课表/任务等输入数据又变过（计划可能已过时）。
+     * 只做提示，不阻止展示——重新生成由用户决定，避免偷偷烧 token。
+     */
+    private boolean stale;
 
     public LocalDate getDate() { return date; }
     public void setDate(LocalDate date) { this.date = date; }
@@ -33,6 +38,9 @@ public class DailyPlanDto {
 
     public boolean isCached() { return cached; }
     public void setCached(boolean cached) { this.cached = cached; }
+
+    public boolean isStale() { return stale; }
+    public void setStale(boolean stale) { this.stale = stale; }
 
     /** 时间线中的一个块。 */
     public static class DailyPlanItem {

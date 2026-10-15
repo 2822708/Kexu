@@ -255,12 +255,18 @@ export interface DailyPlanItem {
   note: string
 }
 
-/** AI 每日计划（Step 6）；cached=true 表示来自缓存（同一天已生成过） */
+/**
+ * AI 每日计划（Step 6）。
+ * cached=true 表示来自缓存（同一天已生成过，未重复消耗 token）；
+ * stale=true 表示生成后课程/考试/任务/档案又变过，计划可能过时——
+ * 只提示不自动重算，重新生成由用户点按钮触发。
+ */
 export interface DailyPlan {
   date: string
   items: DailyPlanItem[]
   summary: string
   cached: boolean
+  stale: boolean
 }
 
 /** 学生档案（AI Campus Agent V1.0 Step 2 起由 AI 提案 + 设置页维护） */

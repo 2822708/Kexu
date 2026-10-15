@@ -30,9 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -77,7 +75,9 @@ class AiCampusAgentDailyPlanTest {
     static class TestApplication {
         @Bean
         Clock clock() {
-            return Clock.fixed(Instant.parse("2026-09-27T02:06:00Z"), ZoneId.of("Asia/Shanghai"));
+            // 用系统时钟而不是固定时刻：stale 判定比较的是「计划 created_at」与各输入表 ON UPDATE
+            // 的时间戳，两者必须与 H2 的 NOW() 同源（默认时区），固定时刻会让判定恒为 true。
+            return Clock.systemDefaultZone();
         }
     }
 
@@ -170,6 +170,39 @@ class AiCampusAgentDailyPlanTest {
         assertThat(plans.get(OWNER, MONDAY)).isNotNull();
         // 另一天没有计划
         assertThat(plans.get(OWNER, MONDAY.plusDays(1))).isNull();
+    }
+
+    @Test
+    void cachedPlanIsFlaggedStaleAfterInputDataChanges() {
+        Schedule schedule = schedule();
+        Long courseId = seedCourse(schedule.getId(), "大学英语", 1, 1, 2);
+        when(provider.chatJson(any())).thenReturn(planJson("""
+                  {"type":"COURSE","start":"08:00","end":"09:35","title":"大学英语","ref_id":%d,"note":""},
+                  {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
+                """.formatted(courseId), "今天只有一节课"));
+
+        DailyPlanDto fresh = plans.generate(OWNER, schedule.getId(), MONDAY);
+        assertThat(fresh.isStale()).isFalse();
+        // 刚生成完立即读，不应误报过时
+        assertThat(plans.get(OWNER, MONDAY).isStale()).isFalse();
+
+        // 用户新增一个任务 → 计划的输入已经变了
+        taskService.create(OWNER, draft("临时插入的作业", Task.TYPE_COURSE_WORK), Task.SOURCE_MANUAL);
+        assertThat(plans.get(OWNER, MONDAY).isStale())
+                .as("数据变了应提示计划可能过时，但仍返回旧计划（不偷偷烧 token）")
+                .isTrue();
+        // 用户主动重新生成：stale 的缓存被覆盖重算，而不是继续返回旧计划
+        when(provider.chatJson(any())).thenReturn(planJson("""
+                  {"type":"COURSE","start":"08:00","end":"09:35","title":"大学英语","ref_id":%d,"note":""},
+                  {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
+                """.formatted(courseId), "重新排过"));
+        DailyPlanDto regenerated = plans.generate(OWNER, schedule.getId(), MONDAY);
+        assertThat(regenerated.isCached()).isFalse();
+        assertThat(regenerated.getSummary()).isEqualTo("重新排过");
+        assertThat(regenerated.isStale()).isFalse();
+        // 覆盖而不是叠加：同一天仍然只有一条计划
+        assertThat(rowCount()).isEqualTo(1);
+        verify(provider, times(2)).chatJson(any());
     }
 
     @Test

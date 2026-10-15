@@ -575,7 +575,7 @@ public class AiServiceImpl implements AiService {
                 messages.stream().map(AiMessage::getId).toList());
         List<AiMessageResponse> result = new ArrayList<>();
         for (AiMessage m : messages) {
-            result.add(toResponse(m, actionsByMessage.getOrDefault(m.getId(), List.of())));
+            result.add(toResponse(m, actionsByMessage.getOrDefault(m.getId(), List.of()), apiKey));
         }
         return result;
     }
@@ -607,20 +607,30 @@ public class AiServiceImpl implements AiService {
         Collections.reverse(page);
         Map<Long, List<AiAction>> actions = loadActionsGrouped(page.stream().map(AiMessage::getId).toList());
         return new CursorPage<>(page.stream()
-                .map(m -> toResponse(m, actions.getOrDefault(m.getId(), List.of()))).toList(), nextCursor);
+                .map(m -> toResponse(m, actions.getOrDefault(m.getId(), List.of()), apiKey)).toList(), nextCursor);
     }
 
-    private AiMessageResponse toResponse(AiMessage message) {
-        return toResponse(message, loadActions(message.getId()));
+    private AiMessageResponse toResponse(AiMessage message, String apiKey) {
+        return toResponse(message, loadActions(message.getId()), apiKey);
     }
 
-    private AiMessageResponse toResponse(AiMessage message, List<AiAction> actions) {
+    /**
+     * 组装消息响应。PENDING 提案会顺带做一次指纹复核：
+     * 数据已经变了的提案在响应里标记为 STALE，让前端立刻显示「已失效」，
+     * 而不是等用户点了「确认执行」才收到 409。
+     *
+     * <b>只读判定不落库</b>：库里的状态仍是 PENDING，真正失效仍在执行时写入
+     * （读请求不做写操作，避免刷新页面产生副作用）。
+     */
+    private AiMessageResponse toResponse(AiMessage message, List<AiAction> actions, String apiKey) {
         AiMessageResponse response = new AiMessageResponse();
         response.setMessageId(message.getId());
         response.setRole(message.getRole());
         response.setText(message.getContent());
         response.setCreatedAt(message.getCreatedAt());
 
+        // 同一次响应里每个作用域只算一次指纹，避免 N 条提案查 N 遍库
+        Map<String, String> fingerprints = new HashMap<>();
         List<AiActionDto> dtos = new ArrayList<>();
         for (AiAction action : actions) {
             JsonNode data = null;
@@ -632,10 +642,30 @@ public class AiServiceImpl implements AiService {
                 log.warn("Failed to parse stored action data of action {}", action.getId(), e);
             }
             dtos.add(new AiActionDto(action.getId(), action.getActionType(),
-                    action.getActionStatus(), action.getScope(), action.getScheduleId(), data));
+                    displayStatus(action, apiKey, fingerprints),
+                    action.getScope(), action.getScheduleId(), data));
         }
         response.setActions(dtos);
         return response;
+    }
+
+    /** 提案的展示状态：PENDING 且数据已变 → STALE（不改库）。 */
+    private String displayStatus(AiAction action, String apiKey, Map<String, String> fingerprints) {
+        if (!STATUS_PENDING.equals(action.getActionStatus()) || action.getDataFingerprint() == null) {
+            return action.getActionStatus();
+        }
+        String cacheKey = action.getScope() + "#" + action.getScheduleId();
+        String current = fingerprints.get(cacheKey);
+        if (current == null) {
+            try {
+                current = fingerprintOf(action.getScope(), action.getScheduleId(), apiKey);
+            } catch (RuntimeException unavailable) {
+                // 算不出指纹（如课表已删除）时不臆断失效，按原状态展示，交给执行时判
+                return action.getActionStatus();
+            }
+            fingerprints.put(cacheKey, current);
+        }
+        return action.getDataFingerprint().equals(current) ? STATUS_PENDING : STATUS_STALE;
     }
 
     // ==================== 发送消息 ====================
@@ -821,7 +851,7 @@ public class AiServiceImpl implements AiService {
             refineMemory(conversationId, apiKey, scheduleId, assistantMessage, client,
                     fingerprintSnapshot, finalProfile, memories);
             // 提炼提案已插入同一消息，重新加载 actions 后随 done 事件下发
-            return toResponse(assistantMessage);
+            return toResponse(assistantMessage, apiKey);
         }
         throw new BusinessException(500, "AI 回复保存失败");
     }
@@ -1299,7 +1329,7 @@ public class AiServiceImpl implements AiService {
             action.setActionStatus(STATUS_EXECUTED);
             actionMapper.updateById(action);
             invalidateOtherScopePending(apiKey, action, action.getScheduleId());
-            return new ActionExecution(toResponse(message), null);
+            return new ActionExecution(toResponse(message, apiKey), null);
         });
         if (outcome != null && outcome.error() != null) {
             throw outcome.error();
@@ -1372,7 +1402,7 @@ public class AiServiceImpl implements AiService {
                 && !STATUS_REJECTED.equals(action.getActionStatus())) {
             throw new BusinessException(409, "该操作已执行或正在执行，无法取消");
         }
-        return toResponse(message);
+        return toResponse(message, apiKey);
     }
 
     private void applyAction(String type, JsonNode data, Long scheduleId, String apiKey, Long messageId) {
