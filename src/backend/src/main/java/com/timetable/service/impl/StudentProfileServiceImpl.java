@@ -132,6 +132,24 @@ public class StudentProfileServiceImpl implements StudentProfileService {
     }
 
     @Override
+    public StudentProfile replace(String apiKey, StudentProfilePatch patch) {
+        StudentProfile profile = getOrCreate(apiKey);
+        profile.setName(patch.getName());
+        profile.setSchool(patch.getSchool());
+        profile.setMajor(patch.getMajor());
+        profile.setGrade(patch.getGrade());
+        profile.setGoal(patch.getGoal());
+        profile.setLearningStyle(patch.getLearningStyle());
+        // 标签数组不允许存 null：清空即空列表，避免后续读取处处判空
+        profile.setInterest(patch.getInterest() == null ? List.of() : patch.getInterest());
+        profile.setSkills(patch.getSkills() == null ? List.of() : patch.getSkills());
+        profile.setUpdatedBy(StudentProfile.UPDATED_BY_USER);
+        profile.setUpdatedAt(LocalDateTime.now());
+        mapper.updateById(profile);
+        return profile;
+    }
+
+    @Override
     public ObjectNode snapshot(StudentProfile profile) {
         ObjectNode node = objectMapper.createObjectNode();
         if (profile == null) {

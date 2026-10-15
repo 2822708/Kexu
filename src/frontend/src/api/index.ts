@@ -23,6 +23,7 @@ import type {
   RecurringTodo,
   RecurringTodoPayload,
   Schedule,
+  StudentProfile,
   Task,
   TaskDraft,
   TaskExtractResult,
@@ -164,6 +165,14 @@ export const planApi = {
     request<DailyPlan | null>(`/plans/daily${date ? `?date=${date}` : ''}`),
   generate: (body: { date?: string; scheduleId?: number | null } = {}) =>
     request<DailyPlan>('/plans/daily', { method: 'POST', body }),
+}
+
+export const profileApi = {
+  /** 当前档案；未建档返回 null */
+  get: () => request<StudentProfile | null>('/profile'),
+  /** 保存档案（全量覆盖表单语义）：清空的字段会被删除 */
+  update: (body: Partial<StudentProfile>) =>
+    request<StudentProfile>('/profile', { method: 'PUT', body }),
 }
 
 export const memoryApi = {
