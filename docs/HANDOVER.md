@@ -2,7 +2,7 @@
 
 > **本文件是项目的「当前状态唯一真相」。** WorkBuddy 与 Codex 交替开发同一份代码，任何 Agent 在开工前先读本文件，收工前必须更新本文件（至少更新「会话日志」与「当前状态快照」）。
 >
-> 最近更新：2026-10-14 ｜ 更新者：WorkBuddy ｜ 对应提交：`99d4f4c`
+> 最近更新：2026-10-14 ｜ 更新者：WorkBuddy ｜ 对应提交：`a39a5c7`
 
 ---
 
@@ -53,12 +53,12 @@ npm run build
 
 | 项 | 状态 |
 |---|---|
-| HEAD | `99d4f4c` Step 7: 长期记忆治理 |
-| 开发进度 | **Step 0–7 全部完成**（方案开发序列走完） |
-| 后端测试 | **130/130 通过**（0 失败 0 错误） |
+| HEAD | `a39a5c7` V1.0 收口(2/2): 用户手册 + README |
+| 开发进度 | **Step 0–7 全部完成**；**V1.0 收口第一轮完成**（档案端点 + 端到端旅程测试 + 用户手册 + README） |
+| 后端测试 | **132/132 通过**（0 失败 0 错误） |
 | 前端 | typecheck 通过；lint **0 错误 / 7 警告**（7 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 干净（无未提交改动） |
-| 当前阶段 | 进入 **V1.0 收口**：端到端验收 + 文档补齐 |
+| 当前阶段 | V1.0 收口剩余：STALE 提案提示、计划缓存失效、真机/浏览器人工走查 |
 
 **Step 完成表**
 
@@ -127,6 +127,9 @@ npm run build
 | `LlmClientRegistry.active()` 先抛 503 | 之后的 `isConfigured()` 分支是永远走不到的死代码 |
 | 前端 `client.ts` 方法白名单 | 新增 HTTP 方法（如 PATCH）要在 Options 白名单里补 |
 | 前端 `&&` 短路返回 `unknown` | `m.target_id != null` 才能拿到 boolean，否则 `isUpdate && <Tag>` 报 TS2322 |
+| MockMvc `getContentAsString()` 无参 | 按 ISO-8859-1 解码 UTF-8 响应 → 中文乱码。必须写 `getContentAsString(StandardCharsets.UTF_8)`（jsonPath 内部用 UTF-8，所以断言可能过、自己解析却乱码） |
+| 提案执行前动了同域数据 | 会让提案变 STALE（409）。这是设计：用户改过数据后旧提案不该再执行。写旅程测试时注意操作顺序 |
+| 档案补丁「null=保持原值」 | AI 提案语义如此；表单要「清空=删除」，走 `profileService.replace` 而不是 `applyPatch` |
 
 ---
 
@@ -143,7 +146,8 @@ npm run build
 | `service/impl/DashboardServiceImpl.java` | 首页规则聚合（今日课程/任务/48h/考试倒计时/今日重点） |
 | `service/LlmClientRegistry.java` | 多模型注册与回退（含 legacy-direct 回滚开关） |
 | `service/impl/PromptTemplateRegistry.java` | `resources/prompts/*.md` + front matter `version:N`；缺失返回 null 降级 |
-| `controller/` | `AiController`（聊天/提案执行）、`TaskController`、`DailyPlanController`、`DashboardController`、`MemoryController` |
+| `controller/` | `AiController`（聊天/提案执行）、`TaskController`、`DailyPlanController`、`DashboardController`、`MemoryController`、`StudentProfileController` |
+| `service/StudentProfileService` | 档案读写：`applyPatch`（AI 提案，null=保持）与 `replace`（表单，null=清空）**语义相反，别用错** |
 
 **Prompt 模板**（`src/backend/src/main/resources/prompts/`）
 
@@ -170,6 +174,17 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-14 · WorkBuddy · V1.0 收口第一轮（档案端点 + 端到端验收 + 文档）
+
+- **端到端验收驱动开发**：按方案 §2.11 的 9 条旅程写 `AiCampusAgentJourneyIntegrationTest`（HTTP 层，真实应用/鉴权/迁移，只 mock LLM），一条链路串起建档 → 课表 → AI 提案 → 材料解析 → 首页聚合 → 记忆累积 → 每日计划 → ai_action 审计。
+- **验收发现的真实缺口**：**没有学生档案的写端点**。首页有「去填写档案」引导，指向设置页却没有落点——档案此前只能靠 AI 提案写入，用户无法主动填。已补 `GET/PUT /api/profile` + 设置页 `ProfileForm` 卡片。
+  - 附带设计决策：AI 提案的补丁语义是「null = 没提到，保持原值」，而表单需要「清空 = 删除」。两者语义相反，因此新增 `StudentProfileService.replace`（表单全量覆盖），**不动** `applyPatch`，AI 路径零影响。
+- **体验缺口已补**：用户手册新增「AI 学长」章节（首页/档案/记忆/任务/每日计划），README 增 AI Campus Agent 能力表与配置项（含 `app.ai.memory-refine-enabled` 回滚开关）。
+- **测试踩坑 2 个**（都已修复，见第 3.6 节）：
+  1. MockMvc `getContentAsString()` 无参版按 ISO-8859-1 解码 UTF-8 响应 → 中文变乱码（jsonPath 内部用 UTF-8，所以先前没暴露）。必须写 `getContentAsString(StandardCharsets.UTF_8)`。
+  2. 旅程里先落库材料任务再执行 AI 提案 → 提案 409 STALE。这是**设计行为**（TASK 域数据变了），不是 bug；旅程顺序改为「先确认 AI 提案，再做材料解析」。
+- 结果：后端 132/132，前端三连通过。提交 `dd763c9`（档案端点 + 旅程测试）、`a39a5c7`（用户手册 + README）。
 
 ### 2026-10-14 · WorkBuddy · 建立交接文件 + 完成 Step 7
 
@@ -207,11 +222,12 @@ npm run build
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 1 | **V1.0 端到端验收** | 按方案 §2.11「可演示旅程」走查：建档 → 聊天 → 提案确认 → 材料解析成任务 → 每日计划 → 首页聚合 → 记忆自动累积且只留一条 |
-| 2 | **用户手册补 AI 章节** | `src/frontend/src/pages/UserManualPage.tsx` 目前未覆盖 AI 聊天/提案确认/记忆/每日计划 |
-| 3 | **README 更新** | 说明 AI Campus Agent 能力与配置项（含 `app.ai.memory-refine-enabled`） |
-| 4 | 记忆提案的 STALE 提示 | 卡片上说明「记忆已变更，请重新询问」，避免用户困惑 |
-| 5 | 每日计划缓存失效 | 数据变化（新增任务/改课程）时提示重新生成（当前当天不变动） |
+| 1 | 记忆/档案提案的 STALE 提示 | 卡片上说明「数据已变更，请重新询问」，避免用户点确认时收到 409 而不知所以 |
+| 2 | 每日计划缓存失效 | 数据变化（新增任务/改课程）时提示重新生成（当前当天不变动） |
+| 3 | 人工走查（浏览器/桌面端） | 自动化测试覆盖全链路，但 UI 交互与桌面端打包未做人工验证；建议跑一遍 `npm run dev` + 桌面冒烟 |
+| 4 | ~~V1.0 端到端验收~~ | ✅ 已完成：`AiCampusAgentJourneyIntegrationTest` 覆盖建档→提案→解析→聚合→记忆→计划→审计 |
+| 5 | ~~用户手册 AI 章节~~ | ✅ 已完成：UserManualPage 新增「AI 学长」章节 + 2 条 FAQ |
+| 6 | ~~README~~ | ✅ 已完成：AI Campus Agent 能力表 + 配置项 |
 
 **暂缓 / 明确不做（方案已排除）**：浏览器插件、桌面助手、爬学校系统、推荐算法、本地模型训练、知识库。
 
