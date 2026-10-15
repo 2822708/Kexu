@@ -2,7 +2,7 @@
 
 > **本文件是项目的「当前状态唯一真相」。** WorkBuddy 与 Codex 交替开发同一份代码，任何 Agent 在开工前先读本文件，收工前必须更新本文件（至少更新「会话日志」与「当前状态快照」）。
 >
-> 最近更新：2026-10-14 ｜ 更新者：WorkBuddy ｜ 对应提交：`a39a5c7`
+> 最近更新：2026-10-15 ｜ 更新者：WorkBuddy ｜ 对应提交：`c9cd72b`
 
 ---
 
@@ -53,12 +53,12 @@ npm run build
 
 | 项 | 状态 |
 |---|---|
-| HEAD | `a39a5c7` V1.0 收口(2/2): 用户手册 + README |
-| 开发进度 | **Step 0–7 全部完成**；**V1.0 收口第一轮完成**（档案端点 + 端到端旅程测试 + 用户手册 + README） |
-| 后端测试 | **132/132 通过**（0 失败 0 错误） |
+| HEAD | `c9cd72b` V1.0 收口(3/3): 展示态 STALE + 计划 stale 重算 |
+| 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
+| 后端测试 | **134/134 通过**（0 失败 0 错误） |
 | 前端 | typecheck 通过；lint **0 错误 / 7 警告**（7 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 干净（无未提交改动） |
-| 当前阶段 | V1.0 收口剩余：STALE 提案提示、计划缓存失效、真机/浏览器人工走查 |
+| 当前阶段 | V1.0 功能收口完成；剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 
 **Step 完成表**
 
@@ -72,6 +72,9 @@ npm run build
 | Step 5 | Task 全量 CRUD + TASK 作用域提案 + AI Dashboard 首页 | `2842472` | `..._STEP5.md` |
 | Step 6 | AI 每日计划（模板 + 生成 + 服务端强校验 + 缓存 + 首页时间线） | `6ffe864` | `..._STEP6.md` |
 | Step 7 | 长期记忆治理（去重合并 + importance 治理 + 设置页 UI + top-N + 提炼开关） | `99d4f4c` | `..._STEP7.md` |
+| 收口 1 | 档案端点 `GET/PUT /api/profile` + 设置页表单 + 端到端旅程测试 | `dd763c9` | — |
+| 收口 2 | 用户手册「AI 学长」章节 + README 能力与配置项 | `a39a5c7` | — |
+| 收口 3 | 提案展示态 STALE + 每日计划 stale 提示与覆盖重算 | `c9cd72b` | — |
 
 （报告全在 `docs/reviews/AI_CAMPUS_AGENT_STEP*.md`）
 
@@ -86,6 +89,7 @@ npm run build
 - **各作用域独立指纹**：改一个域的数据只让该域的 PENDING 提案变 STALE，不会连带失效其他域。
 - **指纹必须在调模型之前算**：否则模型思考期间的数据变化会进入基线，过期提案会通过复查。
 - **`_before` 快照**：提案里带执行前的数据快照供前端展示 diff；**执行时必须剥掉**（`UPDATE_PROFILE` 曾因未剥 `_before` 导致 parse 400，Step 2 修复）。
+- **展示态 STALE（只读判定，不落库）**：读消息时对 PENDING 提案做一次指纹复核，数据已变就在响应里返回 `STALE`，但**数据库里仍是 PENDING**。真正的失效写入仍发生在执行那一刻——展示只是提前告诉用户「这张卡别点了」，避免用户点了才收到 409。`executeAction` 的逻辑一行没动。
 
 ### 3.2 长期记忆（Step 7 重点）
 
@@ -102,6 +106,8 @@ npm run build
 - 不合规直接 **502，不做逐条降级**（半截计划比没有计划更糟）。
 - 节次→时刻由服务端换算后写进输入，校验用同一函数比对（输入所见＝校验所据）。
 - 生成即缓存，一天一条（uk(api_key, plan_date)）；`GET` 只读缓存，**永不烧 token**。
+- **stale 判定不加表字段**：用「输入表（course/exam/task/student_profile）`MAX(updated_at)` > `daily_plan.created_at`」判断。判定偏保守（改了下周的课也会提示），宁可多提示一次。
+- **`get()` 与 `generate()` 分工明确**：`get()` 只提示不重算（首页只读路径）；`generate()` 命中缓存但**已 stale 时删旧行覆盖重算**——用户主动点「重新生成」就是同意消耗这次 token。命中且未 stale 仍然直接返回缓存，一天不会重复烧额度。
 
 ### 3.4 数据库与迁移
 
@@ -113,6 +119,7 @@ npm run build
 ### 3.5 测试约定
 
 - **服务级集成**：`TestApplication` + `@Import` + 固定 Clock（`2026-09-27T02:06:00Z`，Asia/Shanghai）+ H2 mem `MODE=MySQL` + `@MockBean LlmClient`。真实事务、真实 Mapper、真实迁移，只 mock 外部 LLM。
+- **例外**：`AiCampusAgentDailyPlanTest` 用 `Clock.systemDefaultZone()`。**凡是要比较「应用层时间戳 vs 数据库 `ON UPDATE` 时间戳」的测试，都不能用固定 Clock**，必须让两者同源（见 3.6）。
 - **HTTP 层**：`@SpringBootTest(classes = TimetableApplication.class)` + `@ActiveProfiles("standalone")` + `@AutoConfigureMockMvc` + device 注册（`POST /api/auth/device`）取 key。
 - 测试是全项目的安全网：**改动后任何既有测试失败，先判断是「预期变化」还是「真实回归」**，属预期变化的要在报告「偏离记录」里写明。
 
@@ -130,6 +137,8 @@ npm run build
 | MockMvc `getContentAsString()` 无参 | 按 ISO-8859-1 解码 UTF-8 响应 → 中文乱码。必须写 `getContentAsString(StandardCharsets.UTF_8)`（jsonPath 内部用 UTF-8，所以断言可能过、自己解析却乱码） |
 | 提案执行前动了同域数据 | 会让提案变 STALE（409）。这是设计：用户改过数据后旧提案不该再执行。写旅程测试时注意操作顺序 |
 | 档案补丁「null=保持原值」 | AI 提案语义如此；表单要「清空=删除」，走 `profileService.replace` 而不是 `applyPatch` |
+| 固定 Clock 与数据库 `NOW()` 不同源 | `AiCampusAgentDailyPlanTest` 原来固定 2026-09-27，而 H2 `NOW()` 是真实当前时间（相差数周）→ stale 判定恒为 true，连「二次生成命中缓存」都失败。凡是比较应用层时间与 DB `ON UPDATE` 时间的逻辑，测试夹具必须用 `Clock.systemDefaultZone()` |
+| `List.of(...)` 不接受 null | `MAX(updated_at)` 无数据时返回 null，塞进 `List.of` 直接 NPE。改用 `String[]` 循环累加 |
 
 ---
 
@@ -174,6 +183,15 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-15 · WorkBuddy · V1.0 收口第三轮（展示态 STALE + 计划缓存失效）
+
+- 处理交接文件第 6 节剩下的两个体验缺口，都来自「自动化测试过了、但用户会困惑」：
+  1. **提案点了才知道失效**：`AiServiceImpl.toResponse` 增加只读指纹复核（`displayStatus`），PENDING 提案数据已变就在响应里返回 `STALE`，**库里仍是 PENDING**。真正失效写入仍在执行那一刻，执行逻辑一行没动。前端 `AiActionCard` 原本就渲染 STALE，直接复用。
+  2. **每日计划当天一成不变**：`DailyPlanDto` 增 `stale`；`get()` 用「输入表 MAX(updated_at) > 计划 created_at」判定（**不加表字段**），只提示不重算；`generate()` 命中缓存**但已 stale 时删旧行覆盖重算**——因为用户主动点「重新生成」就是同意花这次 token，而 `get()` 是首页只读路径，永不烧 token。首页：`可能已过时` 橙标签 + 告警条 + 「重新生成」按钮。
+- **测试踩坑（值得记住）**：`AiCampusAgentDailyPlanTest` 的固定 Clock（2026-09-27）与 H2 的 `NOW()`（真实当前时间）相差三周，导致 stale 恒为 true、「二次生成命中缓存」也失败。stale 判定本质依赖真实时间流逝，测试夹具改用 `Clock.systemDefaultZone()` 与数据库同源于默认时区。
+- 另修 `List.of` 不接受 null 的 NPE（`MAX()` 无数据返回 null）。
+- 新增 2 个测试固化行为：`rereadingHistoryShowsStaleProposalWithoutPersistingIt`（展示态不落库）、`cachedPlanIsFlaggedStaleAfterInputDataChanges`（提示 + 覆盖重算，一天仍只有一条）。132 → **134/134**，前端三连通过。提交 `c9cd72b`。
 
 ### 2026-10-14 · WorkBuddy · V1.0 收口第一轮（档案端点 + 端到端验收 + 文档）
 
@@ -222,12 +240,18 @@ npm run build
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 1 | 记忆/档案提案的 STALE 提示 | 卡片上说明「数据已变更，请重新询问」，避免用户点确认时收到 409 而不知所以 |
-| 2 | 每日计划缓存失效 | 数据变化（新增任务/改课程）时提示重新生成（当前当天不变动） |
-| 3 | 人工走查（浏览器/桌面端） | 自动化测试覆盖全链路，但 UI 交互与桌面端打包未做人工验证；建议跑一遍 `npm run dev` + 桌面冒烟 |
+| 1 | **人工走查（浏览器 / 桌面端）** | V1.0 功能已全部收口，剩下唯一未验证项是 UI 交互与桌面端打包；**需用户在本机执行**：`npm run dev` 走一遍首页/聊天/设置，再做一次桌面冒烟（沙箱无法做人工走查） |
+| 2 | ~~记忆/档案提案的 STALE 提示~~ | ✅ 已完成：展示态 STALE（不落库）+ 卡片提示「数据已变动，请重新向 AI 提问」 |
+| 3 | ~~每日计划缓存失效~~ | ✅ 已完成：stale 判定（不加表字段）+ 首页提示 + 「重新生成」覆盖重算 |
 | 4 | ~~V1.0 端到端验收~~ | ✅ 已完成：`AiCampusAgentJourneyIntegrationTest` 覆盖建档→提案→解析→聚合→记忆→计划→审计 |
-| 5 | ~~用户手册 AI 章节~~ | ✅ 已完成：UserManualPage 新增「AI 学长」章节 + 2 条 FAQ |
+| 5 | ~~用户手册 AI 章节~~ | ✅ 已完成：UserManualPage 新增「AI 学长」章节 + 2 条 FAQ（本轮补了 stale 与提案失效说明） |
 | 6 | ~~README~~ | ✅ 已完成：AI Campus Agent 能力表 + 配置项 |
+
+**V1.0 之后可考虑（未排期，需用户确认）**
+
+- 记忆语义级去重（"准备考研" vs "打算考研"）目前只能靠模型走 UPDATE，服务端归一化不做子串包含；想更准要引入向量相似度。
+- 每日计划 stale 判定偏保守：改了下周的课也会提示。若要精确，需要记录「计划生成时的输入快照」并比对当天数据。
+- 计划生成失败时的重试退避、模型超时降级文案目前是统一样式。
 
 **暂缓 / 明确不做（方案已排除）**：浏览器插件、桌面助手、爬学校系统、推荐算法、本地模型训练、知识库。
 
@@ -235,7 +259,7 @@ npm run build
 
 ## 7. 给 Codex 的接手提示
 
-- 开工前先跑一次 `cd src/backend && ./mvnw -B test -o` 确认基线是 130/130，再动手——避免把别人引入的问题算到自己头上。
+- 开工前先跑到 `docs/HANDOVER.md` 第 2 节看当前基线（现在是 134/134），跑一次 `cd src/backend && ./mvnw -B test -o` 确认，再动手——避免把别人引入的问题算到自己头上。
 - 本项目**不重写**：所有改动走模块化增量，保留课表/待办/循环规则的既有行为。
 - 新增 AI action 类型时，必须同步 4 处：`splitToSingleActions` 的 recordField、`isValidProposal` 的 switch、`applyAction` 的执行分支、前端 `AiActionCard` 的渲染。少一处就会出现「提案被静默丢弃」这类难查的 bug。
 - 涉及数据库结构：h2 与 mysql 两套迁移都要改，并补迁移测试。
