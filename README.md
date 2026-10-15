@@ -53,6 +53,31 @@ Tangent-Timetable/
 
 新仓库仅建立本地版本管理，没有配置远程，也没有推送或部署。原交付目录保持原状。
 
+## AI Campus Agent（AI 校园个人助手）V1.0
+
+在原课表/考试/待办能力之上增量升级为面向大学生的 AI 个人学习助手，AI 定位为「AI 大学学长」。**开发序列（Step 0–7）已全部完成**，当前状态见 [`docs/HANDOVER.md`](docs/HANDOVER.md)。
+
+| 能力 | 说明 |
+|---|---|
+| AI 聊天助手 | 五段式上下文（档案/课表/任务/记忆/问题），流式回复 |
+| 学生档案 | 专业、目标、学习习惯等；可手动填写，也可由 AI 从对话提炼 |
+| 任务管理 | 作业/实验报告/网课/考试/竞赛，类型 + 优先级 + 截止时间 + 状态流转 |
+| 材料解析 | PDF/图片/文本 → 任务草稿（可编辑）→ 确认后入库 |
+| 每日计划 | 按真实课表作息与未完成任务生成一天时间线，含休息，一天一条缓存 |
+| 长期记忆 | 记住跨天成立的事实；同一事实只留一条，可在设置页改/归档/删除 |
+| AI Dashboard | 首页一眼看完今日课程、今日任务、48h 截止、考试倒计时、今日重点 |
+
+**贯穿始终的边界：human-in-the-loop。** AI 只产出提案，用户逐条确认后才写库；每次写入都在 `ai_action` 表留下可查记录。
+
+相关文档：各步实施报告 [`docs/reviews/AI_CAMPUS_AGENT_STEP*.md`](docs/reviews/)；多 Agent 协作交接 [`docs/HANDOVER.md`](docs/HANDOVER.md)。
+
+**AI 相关配置项**
+
+| 配置 | 默认 | 说明 |
+|---|---|---|
+| `app.ai.legacy-direct` | `false` | 回退到改造前的直连 DeepSeek 实现 |
+| `app.ai.memory-refine-enabled` | `true` | 关闭后不再从对话提炼新记忆（已有记忆照常使用），出问题时的回滚开关 |
+
 ## Android 移动端规划
 
 Android 原生工程及首个离线业务切片已建立在 src/android/，包括课表/考试/待办本地功能和 JSON 文件交换。当前没有可验证的 APK；工具链限制及后续待办见 [Android 实施状态](docs/android/ANDROID_IMPLEMENTATION_STATUS.md)。完整产品边界、AI/提醒/小组件架构仍见 [Android 实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)。
