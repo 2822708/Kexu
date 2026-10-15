@@ -268,9 +268,10 @@ npm run build
 
 ---
 
-## 7. 给 Codex 的接手提示
+## 7. 给 Codex 接手提示
 
 - 开工前先跑到 `docs/HANDOVER.md` 第 2 节看当前基线（现在是 134/134），跑一次 `cd src/backend && ./mvnw -B test -o` 确认，再动手——避免把别人引入的问题算到自己头上。
+- **沙箱 Node 环境**：系统默认 `node` 是 **v22.13.1**（前端 typecheck/lint/build 均已验证通过）；另装了 nvm **v24.22.0**，需 `source ~/.nvm/nvm.sh && nvm use 24` 才能用（非交互 shell 里 `nvm` 不可直接调用）。**本项目代码两个版本都能构建**，不必主动切换；只有跑外部工具 REA 时才需要 ≥22.19。
 - 本项目**不重写**：所有改动走模块化增量，保留课表/待办/循环规则的既有行为。
 - 新增 AI action 类型时，必须同步 4 处：`splitToSingleActions` 的 recordField、`isValidProposal` 的 switch、`applyAction` 的执行分支、前端 `AiActionCard` 的渲染。少一处就会出现「提案被静默丢弃」这类难查的 bug。
 - 涉及数据库结构：h2 与 mysql 两套迁移都要改，并补迁移测试。
