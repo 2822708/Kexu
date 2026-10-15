@@ -184,6 +184,16 @@ npm run build
 
 ## 5. 会话日志（倒序，最新在最上）
 
+### 2026-10-15 · WorkBuddy · 外部工具验证：REA（逆向一切）
+
+- 用户拉取 `github.com/bbylw/rea-cn.git`，要求做一次逆向验证它能不能用。**该仓库只是 REA 中文官网**（Astro 站点），工具本体是 npm 包 `rea-agents@6.5.0`。
+- 验证结论：**能用**，详见 `/workspace/REA-逆向验证报告.md`（独立于本仓库）。要点：
+  - 官网：npm install 221 包 / 0 漏洞 / build 3 页 ✅
+  - 拿本项目 `src/frontend/dist` 做真逆向：exit=0，**从压缩 bundle 里 100% 还原出 6 条前端路由**（`/` `/ai` `/manual` `/settings` `/timetable` `/todos`），语义图 45 万+ 节点，limitations 标注诚实
+  - MCP：`doctor healthy`，207 工具 / 6 prompt，握手全通；大目标需走「analyze → get_evidence_bundle → inspect_analysis_view」证据包工作流（实测三步通，末步 12KB 可读摘要）
+- **4 个坑（复用前必读）**：① 默认输出 246MB / 5800 万 token，必须 `--token-limit` ② CLI 用 `path`、MCP 用 `input_path`，且 MCP 不支持 `maxSemanticNodes` ③ `--format md` 递归爆栈（RangeError）④ Node 必须 ≥22.19（沙箱已装 v24.22.0）
+- 本项目代码**未做任何改动**，本次仅为外部工具验证。
+
 ### 2026-10-15 · WorkBuddy · V1.0 收口第三轮（展示态 STALE + 计划缓存失效）
 
 - 处理交接文件第 6 节剩下的两个体验缺口，都来自「自动化测试过了、但用户会困惑」：
@@ -249,6 +259,7 @@ npm run build
 
 **V1.0 之后可考虑（未排期，需用户确认）**
 
+- **用 REA 核对线上部署版**：`compare_application_versions` 可对比 `timetable.zozovip.work` 产物与本地 build，确认无漏提交。工具已验证可用，见第 5 节与 `/workspace/REA-逆向验证报告.md`（待用户决定是否接入 MCP 常驻）。
 - 记忆语义级去重（"准备考研" vs "打算考研"）目前只能靠模型走 UPDATE，服务端归一化不做子串包含；想更准要引入向量相似度。
 - 每日计划 stale 判定偏保守：改了下周的课也会提示。若要精确，需要记录「计划生成时的输入快照」并比对当天数据。
 - 计划生成失败时的重试退避、模型超时降级文案目前是统一样式。
