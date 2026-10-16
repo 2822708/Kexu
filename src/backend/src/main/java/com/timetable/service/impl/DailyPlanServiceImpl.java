@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.timetable.dto.DailyPlanDto;
 import com.timetable.entity.Course;
+import com.timetable.entity.LlmUsage;
 import com.timetable.entity.DailyPlan;
 import com.timetable.entity.PeriodConfig;
 import com.timetable.entity.Schedule;
@@ -198,7 +199,7 @@ public class DailyPlanServiceImpl implements DailyPlanService {
 
         String input = AiPromptBuilder.buildDailyPlanInput(
                 planDate, schedule, todayCourses, periods, openTasks, profile);
-        JsonNode root = parseJsonOrFail(client.chatJson(List.of(
+        JsonNode root = parseJsonOrFail(client.chatJson(LlmUsage.SCENE_PLAN, List.of(
                 new LlmClient.Message("system", template.body()),
                 new LlmClient.Message("user", input))));
 

@@ -58,12 +58,12 @@ npm run build
 
 | 项 | 状态 |
 |---|---|
-| HEAD | `ec2ec62` docs: HANDOVER 记录日期翻篇测试修复、部署版核对结论与 git bundle 同步通道（分支已由 `master` 改名为 **`main`**） |
+| HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
-| 后端测试 | **134/134 通过**（0 失败 0 错误，2026-10-16 全量复跑 BUILD SUCCESS） |
+| 后端测试 | **142/142 通过**（0 失败 0 错误，2026-10-16 全量复跑 BUILD SUCCESS；含 P0-1 新增的 `UsageStatsIntegrationTest` 8 个用例） |
 | 前端 | typecheck 通过；lint **0 错误 / 7 警告**（7 个警告全在存量文件，属基线，不得新增）；build 通过 |
-| 工作区 | 干净（无未提交改动） |
-| 当前阶段 | V1.0 功能收口完成；下一步方向已调研定稿（见 `/workspace/下一步方向调研报告.md`），待用户确认后进入第一阶段「成本治理」。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
+| 工作区 | 见 `git status`（P0-1 成本治理埋点 + 用量看板已提交并推送） |
+| 当前阶段 | V1.0 功能收口完成；**第一阶段「成本治理」P0-1（埋点 + token 计量 + 用量看板）已完成**，P0-2 起未开工。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
@@ -75,7 +75,12 @@ npm run build
 | 后端测试 | 19 | 4,606 |
 | 前端 | 48 | 9,561（8 页面 / 19 组件 / 4 API / 2 store） |
 
-**已识别的基础设施缺口（此前未记录）**：① 无 LLM 调用计量/预算 ② `LlmClientRegistry` 仅注册 DeepSeek 一家（单点 + 无法分级路由）③ 无用户行为埋点 ④ 无模型输出评估集。已按《下一步方向调研报告》排入第 6.1 节。
+| 缺口 | 状态 |
+|---|---|
+| ① 无 LLM 调用计量/预算 | **计量与看板已解决**（P0-1：V5 迁移 + `llm_usage` + `/api/stats/*` + 设置页用量统计）；**预算上限与超限熔断未做**（P0-2） |
+| ② `LlmClientRegistry` 仅注册 DeepSeek 一家（单点 + 无法分级路由） | 未解决（6.1 第 2/3 项） |
+| ③ 无用户行为埋点 | **提案确认/拒绝已解决**（P0-1：`ai_event` + `ai_action.decided_at`）；留存 / 计划采纳率未做 |
+| ④ 无模型输出评估集 | 未解决 |
 
 **Step 完成表**
 
@@ -132,6 +137,7 @@ npm run build
 - V4 新增 4 表：`student_profile`、`task`、`student_memory`、`daily_plan`。
 - 既有表不会被 `CREATE TABLE IF NOT EXISTS` 升级，结构变更必须写迁移。
 - **Course / Exam 表没有 `api_key` 列**，通过 `schedule_id` 间接归属；校验走 schedule 归属而非直接比对 apiKey。
+- V5（成本治理 P0-1）新增 `llm_usage`（每次 LLM 调用的 token/延迟/成本）、`ai_event`（行为事件），并给 `ai_action` 加可空的 `decided_at`。**没有 JSON 列**，故不涉及 H2 的 TEXT / JacksonTypeHandler 兼容策略。
 
 ### 3.5 测试约定
 
@@ -157,6 +163,8 @@ npm run build
 | 固定 Clock 与数据库 `NOW()` 不同源 | `AiCampusAgentDailyPlanTest` 原来固定 2026-09-27，而 H2 `NOW()` 是真实当前时间（相差数周）→ stale 判定恒为 true，连「二次生成命中缓存」都失败。凡是比较应用层时间与 DB `ON UPDATE` 时间的逻辑，测试夹具必须用 `Clock.systemDefaultZone()` |
 | `List.of(...)` 不接受 null | `MAX(updated_at)` 无数据时返回 null，塞进 `List.of` 直接 NPE。改用 `String[]` 循环累加 |
 | **测试里写死「今天」的日期字面量** | `TaskEndpointIntegrationTest` 曾写死 `2026-10-15` 作为任务截止时间，而 `AiServiceImpl.parseExtractedDeadline` 的设计是「**过去的截止时间一律清洗成 null**」→ 日期一翻篇（2026-10-16）断言必挂。**两类时钟要分清**：① 带固定 `Clock` 的 AI 测试（`AiCampusAgent*Test`，today 恒为 2026-09-27）写死日期是安全的；② `@SpringBootTest` 全量启动、无 Clock 覆盖的测试（`TaskEndpointIntegrationTest` 等）用的是 `TimeConfig` 真实系统时钟，**凡是「未来/过去」语义的日期必须用 `LocalDate.now().plusDays(n)` 相对构造**。手动创建路径（`POST /api/tasks`）不过期清洗，写死过去日期反而不受影响——这个不对称是设计，别"顺手统一" |
+| **改 `LlmClient` 方法签名 → 波及所有 mock** | P0-1 给 `chatJson` / `chatJsonStream` 加了带 `scene` 的重载，旧签名保留为 `default` 方法。这样**只保证实现类零改动，不保证调用方零改动**：测试里 50 处 `when(provider.chatJson(any()))`（1 参）不再匹配业务侧 2 参调用，Mockito 静默返回 null，报出来的是「AI 未返回内容」这种完全指不到根因的错。**接口签名变更后，先全局搜 mock 再跑测试**，别指望 default 方法能一劳永逸 |
+| **埋点/统计类代码的两个通病** | ① 浮点金额直接返回 → 前端拿到 `0.026600000000000002`，必须 `roundMoney()` 取整 4 位；② 毫秒→秒换算里 `/10` 写了两次 → 耗时差 10 倍。两者都是**测试先发现的真实产品 bug**，别把断言改成迁就实现 |
 
 ---
 
@@ -172,8 +180,12 @@ npm run build
 | `service/impl/DailyPlanServiceImpl.java` | 每日计划生成 + 服务端强校验 + 缓存 |
 | `service/impl/DashboardServiceImpl.java` | 首页规则聚合（今日课程/任务/48h/考试倒计时/今日重点） |
 | `service/LlmClientRegistry.java` | 多模型注册与回退（含 legacy-direct 回滚开关） |
+| `service/DeepSeekLlmClient.java` | DeepSeek 调用实现。**token 计量落点**：非流式读 `usage`，流式必须开 `stream_options.include_usage`（usage 在最后一个 chunk） |
+| `service/LlmUsageRecorder.java`、`service/AiEventRecorder.java` | 成本/行为埋点。**异常必须吞掉**，埋点不能影响业务 |
+| `config/LlmPricingProperties.java` | 单价表（`app.llm.pricing`）。**调价走环境变量，别改代码** |
+| `service/impl/UsageStatsServiceImpl.java` | 用量聚合 + 提案漏斗。注意 `roundMoney()` 与 `avgDecideSeconds` 的毫秒→秒换算 |
 | `service/impl/PromptTemplateRegistry.java` | `resources/prompts/*.md` + front matter `version:N`；缺失返回 null 降级 |
-| `controller/` | `AiController`（聊天/提案执行）、`TaskController`、`DailyPlanController`、`DashboardController`、`MemoryController`、`StudentProfileController` |
+| `controller/` | `AiController`（聊天/提案执行）、`TaskController`、`DailyPlanController`、`DashboardController`、`MemoryController`、`StudentProfileController`、`UsageStatsController`（`/api/stats/*`） |
 | `service/StudentProfileService` | 档案读写：`applyPatch`（AI 提案，null=保持）与 `replace`（表单，null=清空）**语义相反，别用错** |
 
 **Prompt 模板**（`src/backend/src/main/resources/prompts/`）
@@ -192,6 +204,7 @@ npm run build
 | `pages/DashboardPage.tsx` | 首页（AI Dashboard）：档案问候、今日课程/任务、48h、考试、规则重点、每日计划 |
 | `pages/AiChatPage.tsx` | AI 聊天（流式） |
 | `pages/SettingsPage.tsx` | 设置：小组件地址、AI Key、**长期记忆管理**、字体、作息表 |
+| `pages/StatsPage.tsx` | AI 用量统计（路由 `/stats`）：成本/调用/token/确认率 + 每日趋势 + 分场景 + 提案漏斗。**不引图表库** |
 | `components/AiActionCard.tsx` | 提案卡渲染（每类 action 一套展示，新增 action 要同步） |
 | `components/MemoryManager.tsx` | 记忆管理（添加/行内编辑/归档/删除） |
 | `components/PlanTimeline.tsx` | 每日计划时间线 |
@@ -201,6 +214,35 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-16 · WorkBuddy · 成本治理 P0-1：LLM 埋点 + token 计量 + 用量看板
+
+**范围**：只做「埋点 + token 计量」，**不做**预算上限与超限熔断（留 P0-2）。提案确认率的口径选择**加 `decided_at` 补齐数据**（接受改既有表），成本估算用**内置可配置单价表**。
+
+**新增**
+
+| 层 | 内容 |
+|---|---|
+| 迁移 | `db/migration/{h2,mysql}/V5__usage_and_events.sql`：`llm_usage`、`ai_event`、`ai_action.decided_at`（可空） |
+| 实体/Mapper | `LlmUsage`（7 个 `SCENE_*` 常量）、`AiEvent`（`TYPE_PROPOSAL_CONFIRMED` / `_REJECTED`）、两个空 `BaseMapper` |
+| 埋点 | `LlmUsageRecorder`、`AiEventRecorder`——**异常全部吞掉记日志**，埋点是旁路观测，抛异常会把正常 AI 响应搞挂 |
+| 成本 | `LlmPricingProperties`（`app.llm.pricing`）。做成配置而非硬编码：价格会过期，硬编码会静默给出错误金额 |
+| 统计 | `UsageStatsService(Impl)` + `UsageStatsController`：`GET /api/stats/usage?days=`、`GET /api/stats/proposals`。**不接受前端传 key**，身份走拦截器 |
+| 前端 | `pages/StatsPage.tsx`（路由 `/stats`，侧栏「用量统计」）、`types` 加 4 个类型、`api` 加 `statsApi`。**不引图表库**，每日趋势用 div 柱状 |
+| 测试 | `UsageStatsIntegrationTest` 8 个用例（401 / 聚合与成本精确值 / 账号隔离 / 窗口夹取 / 提案漏斗 / 空数据返 null / 迁移列存在性） |
+
+**改动**
+
+- `LlmClient` 加带 `scene` 的 `chatJson` / `chatJsonStream` 重载，旧签名保留为 `default` 方法 → 实现类零改动（**但 mock 侧要改，见 3.6**）。
+- `DeepSeekLlmClient`：流式分支补 `stream_options.include_usage`——**不开这个开关，流式调用（聊天主力路径）拿不到 usage，统计会漏掉大头**；usage 在最后一个 chunk 返回（此时 `choices` 为空数组）。成功/失败都记（token 已花掉是真实成本）。
+- 8 处业务调用标注场景：`AiServiceImpl` 7 处 + `DailyPlanServiceImpl` 1 处。
+- `decided_at` 写入时机：`executeAction` 在 `applyAction` **成功之后**（失败整体回滚，不会留下「执行失败却已确认」的假记录）；`rejectAction` 并进同一条 CAS（不可能出现「状态变了但决定时间没写」的中间态）。
+
+**验收**：后端 **142/142** 全绿；前端 typecheck 通过、lint 0 错误 / 7 警告（全是存量基线）、build 通过。
+
+**两个被测试抓出来的真实 bug**（不是测试写错）：浮点金额尾巴（已 `roundMoney()`）、毫秒→秒换算重复除 10（耗时差 10 倍）。详见 3.6。
+
+**口径提醒（写文档时别丢掉）**：`/api/stats/proposals` 的确认率是**已落库口径**。展示态 STALE 只读复核不落库，所以纯 SQL 统计会**系统性低估**失效量——看板上的确认率是上界，真实值只会更低。页面里已用 Tooltip 说明。
 
 ### 2026-10-16 · WorkBuddy · 主分支 master → main + GitHub 私有仓库同步通道
 
@@ -336,11 +378,11 @@ npm run build
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 1 | **补用户行为埋点** | 提案确认率 / 计划采纳率（生成后 24h 内完成或调整占比）/ 7 日留存 / 单用户月 token 成本。**没有度量，后面全是盲飞，所以放第一** |
+| 1 | **补用户行为埋点** | ✅ **P0-1 已完成提案确认/拒绝埋点**（`ai_event` + `decided_at` + `/api/stats/proposals`）。**仍缺**：计划采纳率（生成后 24h 内完成或调整占比）/ 7 日留存 / 计划采纳率口径（`daily_plan` 没有决定时刻字段，要先补数据） |
 | 2 | **多 LLM provider 注册** | `LlmClientRegistry` 目前只有 DeepSeek 一家。补一个 OpenAI 兼容客户端（智谱 GLM / 通义 / 豆包均兼容），消除单点故障并获得议价能力 |
 | 3 | **按任务分级路由** | 意图分类、简单改写走 flash 级；每日计划、复杂推理走主力级。2026 年国产模型价格：DeepSeek-V4-Lite 0.1/0.2 元每百万 token、GLM-4-Flash 免费、V4-Pro 1.0/2.0（缓存命中 0.025） |
 | 4 | **Prompt Caching** | 系统提示词 + 学生画像这类稳定前缀打 cache 标记，输入成本可降 80–90% |
-| 5 | **token 计量与预算** | 每次调用记 tokens/费用/模型/作用域；前端用量看板 + 月度预算上限 + 超限熔断 |
+| 5 | **token 计量与预算** | ✅ **P0-1 已完成计量与看板**（`llm_usage` + `/api/stats/usage` + 设置页用量统计）。**仍缺 P0-2**：月度预算上限 + 超限熔断（熔断要在 `DeepSeekLlmClient` 之前那一层做，且要区分场景——对话超限不该让课表解析一起挂） |
 | 6 | **降级与重试** | provider 故障自动切备用；含已列入待排期的「计划生成失败重试退避」 |
 
 ### 6.2 第二阶段：记忆系统升级（调研报告 §5 方向 A，约 2–3 周）

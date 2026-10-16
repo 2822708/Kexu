@@ -20,6 +20,8 @@ import com.timetable.security.AdminAuthorizationService;
 import com.timetable.service.AiService;
 import com.timetable.service.CourseService;
 import com.timetable.service.LlmClient;
+import com.timetable.service.AiEventRecorder;
+import com.timetable.service.LlmUsageRecorder;
 import com.timetable.service.LlmClientRegistry;
 import com.timetable.service.MemoryService;
 import com.timetable.service.RequestValidationService;
@@ -81,7 +83,7 @@ class AiCampusAgentContextTest {
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
             StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
-            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class})
+            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class, AiEventRecorder.class, LlmUsageRecorder.class })
     static class TestApplication {
         @Bean
         Clock clock() {
@@ -111,7 +113,7 @@ class AiCampusAgentContextTest {
         }
         sql.update("INSERT INTO api_key(api_key,label,account_role) VALUES (?,?,'USER')", OWNER, "Context owner");
         when(provider.isConfigured()).thenReturn(true);
-        when(provider.chatJson(any())).thenReturn("{\"text\":\"好的\",\"actions\":[]}");
+        when(provider.chatJson(any(), any())).thenReturn("{\"text\":\"好的\",\"actions\":[]}");
     }
 
     @Test
@@ -226,7 +228,7 @@ class AiCampusAgentContextTest {
     private String captureSystemPrompt() {
         ArgumentCaptor<List<LlmClient.Message>> prompt =
                 (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
-        verify(provider, atLeastOnce()).chatJson(prompt.capture());
+        verify(provider, atLeastOnce()).chatJson(any(), prompt.capture());
         return prompt.getAllValues().get(0).get(0).getContent();
     }
 

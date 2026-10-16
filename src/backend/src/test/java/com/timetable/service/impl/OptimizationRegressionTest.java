@@ -58,7 +58,10 @@ class OptimizationRegressionTest {
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
             StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
-            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class})
+            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class,
+            // 成本治理 P0-1：AiServiceImpl 构造器依赖这两个埋点组件，
+            // 本切片用显式 @Import 而非组件扫描，必须显式列入否则上下文起不来。
+            AiEventRecorder.class, LlmUsageRecorder.class})
     static class TestApplication {
         @Bean
         MutableClock clock() { return new MutableClock(); }
@@ -119,13 +122,13 @@ class OptimizationRegressionTest {
     @Test
     void screenshotTextImportChecksImageAndOnlySendsItAsEphemeralUserInput() {
         String image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
-        when(provider.chatJson(any())).thenReturn("{\"text\":\"期末考试：6月12日 14:00\"}");
+        when(provider.chatJson(any(), any())).thenReturn("{\"text\":\"期末考试：6月12日 14:00\"}");
 
         assertThat(ai.parseImageText(image)).contains("期末考试");
         @SuppressWarnings({"unchecked", "rawtypes"})
         ArgumentCaptor<List<LlmClient.Message>> prompt =
                 (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
-        verify(provider).chatJson(prompt.capture());
+        verify(provider).chatJson(any(), prompt.capture());
         assertThat(prompt.getValue()).hasSize(2);
         assertThat(prompt.getValue().get(1).getImageDataUrl()).isEqualTo(image);
         assertThatThrownBy(() -> ai.parseImageText("data:image/png;base64,/9j/AA=="))
@@ -280,7 +283,8 @@ class OptimizationRegressionTest {
         Schedule schedule = schedule(OWNER, "Cancellation");
         AiConversation conversation = conversation(schedule.getId(), OWNER);
         AtomicBoolean cancelled = new AtomicBoolean(false);
-        when(provider.chatJsonStream(any(), any(), any())).thenAnswer(invocation -> {
+        // 成本治理 P0-1 后流式签名为 4 参：(scene, messages, listener, cancelled)
+        when(provider.chatJsonStream(any(), any(), any(), any())).thenAnswer(invocation -> {
             cancelled.set(true);
             return createCourseJson("Should not be saved");
         });
@@ -388,7 +392,7 @@ class OptimizationRegressionTest {
     }
 
     private AiMessageResponse propose(AiConversation conversation, String json) {
-        when(provider.chatJson(any())).thenReturn(json);
+        when(provider.chatJson(any(), any())).thenReturn(json);
         AiMessageRequest request = new AiMessageRequest();
         request.setContent("Propose changes");
         request.setScheduleId(conversation.getScheduleId());

@@ -20,7 +20,9 @@ import com.timetable.dto.TodoRequest;
 import com.timetable.dto.CourseRequest;
 import com.timetable.dto.ExamRequest;
 import com.timetable.dto.CursorPage;
+import com.timetable.entity.AiEvent;
 import com.timetable.entity.AiAction;
+import com.timetable.entity.LlmUsage;
 import com.timetable.entity.AiConversation;
 import com.timetable.entity.AiMessage;
 import com.timetable.entity.Course;
@@ -40,6 +42,7 @@ import com.timetable.service.AiService;
 import com.timetable.service.CourseService;
 import com.timetable.service.ExamService;
 import com.timetable.service.LlmClient;
+import com.timetable.service.AiEventRecorder;
 import com.timetable.service.LlmClientRegistry;
 import com.timetable.service.MemoryService;
 import com.timetable.service.PeriodConfigService;
@@ -122,6 +125,8 @@ public class AiServiceImpl implements AiService {
     private final MemoryService memoryService;
     private final TaskService taskService;
     private final PromptTemplateRegistry promptTemplates;
+    /** 成本治理 P0-1：提案确认/拒绝事件埋点。 */
+    private final AiEventRecorder aiEventRecorder;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
@@ -148,6 +153,7 @@ public class AiServiceImpl implements AiService {
                          MemoryService memoryService,
                          TaskService taskService,
                          PromptTemplateRegistry promptTemplates,
+                         AiEventRecorder aiEventRecorder,
                          ObjectMapper objectMapper,
                          PlatformTransactionManager transactionManager,
                          Clock clock,
@@ -166,6 +172,7 @@ public class AiServiceImpl implements AiService {
         this.memoryService = memoryService;
         this.taskService = taskService;
         this.promptTemplates = promptTemplates;
+        this.aiEventRecorder = aiEventRecorder;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.clock = clock;
@@ -790,11 +797,11 @@ public class AiServiceImpl implements AiService {
 
         String raw;
         if (callback == null) {
-            raw = client.chatJson(payload);
+            raw = client.chatJson(LlmUsage.SCENE_CHAT, payload);
         } else {
             JsonTextStreamExtractor extractor = new JsonTextStreamExtractor();
             boolean[] planningNotified = {false};
-            raw = client.chatJsonStream(payload, new LlmClient.StreamListener() {
+            raw = client.chatJsonStream(LlmUsage.SCENE_CHAT, payload, new LlmClient.StreamListener() {
                 @Override
                 public void onReasoning(String delta) {
                     callback.onThinking(delta);
@@ -908,7 +915,7 @@ public class AiServiceImpl implements AiService {
             List<LlmClient.Message> payload = List.of(
                     new LlmClient.Message("system", template.body()),
                     new LlmClient.Message("user", refineInput));
-            JsonNode root = parseJson(client.chatJson(payload));
+            JsonNode root = parseJson(client.chatJson(LlmUsage.SCENE_REFINE, payload));
 
             List<JsonNode> proposals = new ArrayList<>();
             JsonNode memoryNodes = root.path("memories");
@@ -1327,7 +1334,12 @@ public class AiServiceImpl implements AiService {
 
             applyAction(action.getActionType(), data, action.getScheduleId(), apiKey, action.getMessageId());
             action.setActionStatus(STATUS_EXECUTED);
+            // 成本治理 P0-1：记录用户决定时刻，必须在 applyAction 成功之后写——
+            // applyAction 抛异常会整体回滚，decided_at 不会留下「执行失败却已确认」的假记录。
+            action.setDecidedAt(LocalDateTime.now());
             actionMapper.updateById(action);
+            aiEventRecorder.record(apiKey, AiEvent.TYPE_PROPOSAL_CONFIRMED, action.getScope(),
+                    action.getActionType(), action.getId());
             invalidateOtherScopePending(apiKey, action, action.getScheduleId());
             return new ActionExecution(toResponse(message, apiKey), null);
         });
@@ -1394,10 +1406,15 @@ public class AiServiceImpl implements AiService {
                     .eq(AiAction::getId, actionId)
                     .eq(AiAction::getApiKey, apiKey)
                     .eq(AiAction::getActionStatus, STATUS_PENDING)
-                    .set(AiAction::getActionStatus, STATUS_REJECTED));
+                    .set(AiAction::getActionStatus, STATUS_REJECTED)
+                    // 成本治理 P0-1：与状态变更合并进同一条 CAS，不可能出现
+                    // 「状态变了但决定时间没写」的中间态。
+                    .set(AiAction::getDecidedAt, LocalDateTime.now()));
             if (updated != 1) {
                 throw new BusinessException(409, "该操作正在处理或已被其它请求修改");
             }
+            aiEventRecorder.record(apiKey, AiEvent.TYPE_PROPOSAL_REJECTED, action.getScope(),
+                    action.getActionType(), action.getId());
         } else if (!STATUS_STALE.equals(action.getActionStatus())
                 && !STATUS_REJECTED.equals(action.getActionStatus())) {
             throw new BusinessException(409, "该操作已执行或正在执行，无法取消");
@@ -2023,7 +2040,7 @@ public class AiServiceImpl implements AiService {
         payload.add(new LlmClient.Message("system", AiPromptBuilder.buildParseHtmlSystemPrompt(schedule, periods)));
         payload.add(new LlmClient.Message("user", content));
 
-        JsonNode root = parseJson(client.chatJson(payload));
+        JsonNode root = parseJson(client.chatJson(LlmUsage.SCENE_PARSE_HTML, payload));
 
         List<Map<String, Object>> courses = new ArrayList<>();
         List<Map<String, Object>> diagnostics = new ArrayList<>();
@@ -2119,7 +2136,7 @@ public class AiServiceImpl implements AiService {
                     List<LlmClient.Message> payload = List.of(
                             new LlmClient.Message("system", systemPrompt),
                             new LlmClient.Message("user", instruction, request.getImageDataUrl()));
-                    root = parseJson(client.chatJson(payload));
+                    root = parseJson(client.chatJson(LlmUsage.SCENE_EXTRACT, payload));
                 } finally {
                     imageAnalysisSlots.release();
                 }
@@ -2127,7 +2144,7 @@ public class AiServiceImpl implements AiService {
                 List<LlmClient.Message> payload = List.of(
                         new LlmClient.Message("system", systemPrompt),
                         new LlmClient.Message("user", request.getText().trim()));
-                root = parseJson(client.chatJson(payload));
+                root = parseJson(client.chatJson(LlmUsage.SCENE_EXTRACT, payload));
             }
         } catch (BusinessException e) {
             // 已知错误（未配置 / 限流 / 供应商故障）原样透传，前端展示具体原因
@@ -2275,7 +2292,7 @@ public class AiServiceImpl implements AiService {
             List<LlmClient.Message> payload = List.of(
                     new LlmClient.Message("system", "你是忠实的图片文字识别器。只转录，不推断。"),
                     new LlmClient.Message("user", instruction, imageDataUrl));
-            JsonNode result = parseJson(client.chatJson(payload));
+            JsonNode result = parseJson(client.chatJson(LlmUsage.SCENE_OCR, payload));
             JsonNode text = result.path("text");
             if (!text.isTextual() || text.asText().isBlank()) {
                 throw new BusinessException(502, "图片中没有识别到文字；可手动输入材料后继续");

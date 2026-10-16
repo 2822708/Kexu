@@ -52,10 +52,35 @@ public interface LlmClient {
     String chatJson(List<Message> messages);
 
     /**
+     * 带场景标识的 JSON Mode 调用（成本治理 P0-1）。
+     *
+     * <p>新增的 {@code scene} 只用于 token 用量埋点，见
+     * {@link com.timetable.entity.LlmUsage} 的 {@code SCENE_*} 常量。
+     * 走这个重载才能把调用归到正确场景，统计页才有分场景成本数据。
+     *
+     * <p>默认实现委托到 {@link #chatJson(List)}，因此既有实现类与既有 8 处调用
+     * 都无需改动——这是本方法的向后兼容保证。
+     */
+    default String chatJson(String scene, List<Message> messages) {
+        return chatJson(messages);
+    }
+
+    /**
      * 流式调用，边接收边回调，最终返回拼接完成的完整原始输出。
      */
     default String chatJsonStream(List<Message> messages, StreamListener listener) {
         return chatJsonStream(messages, listener, () -> false);
+    }
+
+    /**
+     * 带场景标识的流式调用（成本治理 P0-1）。默认委托到
+     * {@link #chatJsonStream(List, StreamListener, BooleanSupplier)}，向后兼容。
+     *
+     * <p>聊天是流式的主路径，不用这个重载会漏掉大部分 token 计量。
+     */
+    default String chatJsonStream(String scene, List<Message> messages, StreamListener listener,
+                                  java.util.function.BooleanSupplier cancelled) {
+        return chatJsonStream(messages, listener, cancelled);
     }
 
     /**

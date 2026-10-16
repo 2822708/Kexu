@@ -6,6 +6,7 @@ import TimetablePage from './pages/TimetablePage'
 import TodosPage from './pages/TodosPage'
 import AiChatPage from './pages/AiChatPage'
 import SettingsPage from './pages/SettingsPage'
+import StatsPage from './pages/StatsPage'
 import UserManualPage from './pages/UserManualPage'
 import WidgetPreviewPage from './pages/WidgetPreviewPage'
 import { useApp } from './store/AppContext'
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/timetable" element={<TimetablePage />} />
         <Route path="/todos" element={<TodosPage />} />
         <Route path="/ai" element={<AiChatPage />} />
+        <Route path="/stats" element={<StatsPage />} />
         <Route path="/manual" element={<UserManualPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -12,6 +12,8 @@ import com.timetable.entity.Schedule;
 import com.timetable.security.AdminAuthorizationService;
 import com.timetable.service.AiService;
 import com.timetable.service.LlmClient;
+import com.timetable.service.AiEventRecorder;
+import com.timetable.service.LlmUsageRecorder;
 import com.timetable.service.LlmClientRegistry;
 import com.timetable.service.MemoryService;
 import com.timetable.service.RequestValidationService;
@@ -71,7 +73,7 @@ class AiCampusAgentMemoryRefineSwitchTest {
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
             StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
-            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class})
+            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class, AiEventRecorder.class, LlmUsageRecorder.class })
     static class TestApplication {
         @Bean
         Clock clock() {
@@ -100,7 +102,7 @@ class AiCampusAgentMemoryRefineSwitchTest {
         Schedule schedule = schedule(OWNER, "Off");
         AiConversation conversation = conversation(schedule.getId());
         memoryService.create(OWNER, Memory.TYPE_GOAL, "准备 12 月 CET-6 考试", 5, Memory.SOURCE_USER, null);
-        when(provider.chatJson(any())).thenReturn("{\"text\":\"好的\",\"actions\":[]}");
+        when(provider.chatJson(any(), any())).thenReturn("{\"text\":\"好的\",\"actions\":[]}");
 
         AiMessageResponse response = ai.sendMessage(conversation.getId(),
                 request(schedule.getId(), "帮我加一门高数"), OWNER);
@@ -108,7 +110,7 @@ class AiCampusAgentMemoryRefineSwitchTest {
         // 主回复照常；模型只被调用一次（没有额外的提炼调用），也不产生记忆提案
         assertThat(response.getText()).isEqualTo("好的");
         assertThat(response.getActions()).isEmpty();
-        verify(provider, times(1)).chatJson(any());
+        verify(provider, times(1)).chatJson(any(), any());
         // 已有记忆照常进入上下文
         assertThat(ai.contextSummary(conversation.getId(), OWNER).getMemoryCount()).isEqualTo(1);
         assertThat(memoryService.listActive(OWNER)).hasSize(1);

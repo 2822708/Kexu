@@ -18,6 +18,7 @@ import type {
   MemoryPayload,
   ParseHtmlResult,
   PeriodConfig,
+  ProposalFunnel,
   RecurringScriptTemplate,
   RecurringScriptTestResult,
   RecurringTodo,
@@ -28,6 +29,7 @@ import type {
   TaskDraft,
   TaskExtractResult,
   Todo,
+  UsageStats,
 } from '../types'
 
 export const authApi = {
@@ -165,6 +167,19 @@ export const planApi = {
     request<DailyPlan | null>(`/plans/daily${date ? `?date=${date}` : ''}`),
   generate: (body: { date?: string; scheduleId?: number | null } = {}) =>
     request<DailyPlan>('/plans/daily', { method: 'POST', body }),
+}
+
+/**
+ * 成本治理统计（成本治理 P0-1）。
+ * 身份不靠参数传——API Key 拦截器在路由之前鉴权，服务端按 key 过滤，
+ * 所以前端无法看到别人的数据。
+ */
+export const statsApi = {
+  /** 用量与成本；days 缺省 30，服务端会夹到 [1, 365] */
+  usage: (days?: number) =>
+    request<UsageStats>(`/stats/usage${days ? `?days=${days}` : ''}`),
+  /** AI 提案漏斗（确认率 / 决定耗时） */
+  proposals: () => request<ProposalFunnel>('/stats/proposals'),
 }
 
 export const profileApi = {

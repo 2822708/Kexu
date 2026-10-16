@@ -95,7 +95,7 @@ class TaskEndpointIntegrationTest {
         // 本类是 @SpringBootTest 真实系统时钟（TimeConfig: Clock.system(Asia/Shanghai)），没有固定 Clock。
         String futureDate = LocalDate.now().plusDays(7).toString();
         String expectedDeadline = futureDate + "T23:59:00";
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"tasks":[
                   {"title":"提交高等数学第三次作业","type":"COURSE_WORK","deadline":"%s 23:59","priority":1,"description":"提交到学习通"},
                   {"title":"完成 MOOC 第二章测试","type":"ONLINE_COURSE","deadline":null,"priority":2,"description":""}

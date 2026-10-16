@@ -16,6 +16,8 @@ import com.timetable.mapper.MemoryMapper;
 import com.timetable.security.AdminAuthorizationService;
 import com.timetable.service.AiService;
 import com.timetable.service.LlmClient;
+import com.timetable.service.AiEventRecorder;
+import com.timetable.service.LlmUsageRecorder;
 import com.timetable.service.LlmClientRegistry;
 import com.timetable.service.MemoryService;
 import com.timetable.service.RequestValidationService;
@@ -76,7 +78,7 @@ class AiCampusAgentMemoryTest {
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
             StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
-            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class})
+            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class, AiEventRecorder.class, LlmUsageRecorder.class })
     static class TestApplication {
         @Bean
         Clock clock() {
@@ -109,7 +111,7 @@ class AiCampusAgentMemoryTest {
         Schedule schedule = schedule(OWNER, "Repeat");
         AiConversation conversation = conversation(schedule.getId());
         // 三轮都聊同一件事，模型（不听话地）每轮都输出 ADD，内容只有标点/空格差异
-        when(provider.chatJson(any())).thenReturn(
+        when(provider.chatJson(any(), any())).thenReturn(
                 createCourseJson("高等数学"),
                 """
                 {"memories":[{"type":"GOAL","content":"准备 12 月 CET-6 考试","importance":5}]}
@@ -145,7 +147,7 @@ class AiCampusAgentMemoryTest {
         Schedule schedule = schedule(OWNER, "Update");
         AiConversation conversation = conversation(schedule.getId());
         Memory seeded = memoryService.create(OWNER, Memory.TYPE_GOAL, "准备考研", 3, Memory.SOURCE_AI, null);
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"), """
                 {"memories":[{"action":"UPDATE","target_id":%d,"type":"GOAL",
                   "content":"准备 26 年考研","importance":4}]}
                 """.formatted(seeded.getId()));
@@ -172,7 +174,7 @@ class AiCampusAgentMemoryTest {
         Memory foreign = memoryService.create(OTHER, Memory.TYPE_GOAL, "别人的目标", 3, Memory.SOURCE_AI, null);
 
         // 指向不存在的 id
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"), """
                 {"memories":[{"action":"UPDATE","target_id":999999,"type":"GOAL",
                   "content":"不存在","importance":4}]}
                 """);
@@ -181,7 +183,7 @@ class AiCampusAgentMemoryTest {
         assertThat(missing.getActions()).noneMatch(a -> "SAVE_MEMORY".equals(a.getType()));
 
         // 指向他人账号下的记忆
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"), """
                 {"memories":[{"action":"UPDATE","target_id":%d,"type":"GOAL",
                   "content":"越权改写","importance":4}]}
                 """.formatted(foreign.getId()));

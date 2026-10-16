@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.timetable.config.DeepSeekProperties;
+import com.timetable.entity.LlmUsage;
 import com.timetable.exception.BusinessException;
+import com.timetable.interceptor.RequestContext;
 import com.timetable.service.impl.DeepSeekKeyStore;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -42,6 +44,7 @@ public class DeepSeekLlmClient implements LlmClient {
     private final DeepSeekProperties properties;
     private final DeepSeekKeyStore keyStore;
     private final ObjectMapper objectMapper;
+    private final LlmUsageRecorder usageRecorder;
     private final HttpClient httpClient;
     private final ScheduledExecutorService requestWatchdog = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "deepseek-request-watchdog");
@@ -50,10 +53,11 @@ public class DeepSeekLlmClient implements LlmClient {
     });
 
     public DeepSeekLlmClient(DeepSeekProperties properties, DeepSeekKeyStore keyStore,
-                             ObjectMapper objectMapper) {
+                             ObjectMapper objectMapper, LlmUsageRecorder usageRecorder) {
         this.properties = properties;
         this.keyStore = keyStore;
         this.objectMapper = objectMapper;
+        this.usageRecorder = usageRecorder;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(15))
                 .build();
@@ -76,18 +80,29 @@ public class DeepSeekLlmClient implements LlmClient {
 
     @Override
     public String chatJson(List<Message> messages) {
-        return execute(messages, null, () -> false);
+        return execute(null, messages, null, () -> false);
+    }
+
+    @Override
+    public String chatJson(String scene, List<Message> messages) {
+        return execute(scene, messages, null, () -> false);
     }
 
     @Override
     public String chatJsonStream(List<Message> messages, StreamListener listener) {
-        return execute(messages, listener, () -> false);
+        return execute(null, messages, listener, () -> false);
     }
 
     @Override
     public String chatJsonStream(List<Message> messages, StreamListener listener,
                                  java.util.function.BooleanSupplier cancelled) {
-        return execute(messages, listener, cancelled);
+        return execute(null, messages, listener, cancelled);
+    }
+
+    @Override
+    public String chatJsonStream(String scene, List<Message> messages, StreamListener listener,
+                                 java.util.function.BooleanSupplier cancelled) {
+        return execute(scene, messages, listener, cancelled);
     }
 
     private ObjectNode buildBody(List<Message> messages, boolean stream) {
@@ -118,17 +133,60 @@ public class DeepSeekLlmClient implements LlmClient {
         }
         if (stream) {
             body.put("stream", true);
+            // 成本治理 P0-1：不开这个开关，流式调用（聊天的主力路径）拿不到 usage，
+            // 统计会漏掉大头。上游在最后一个 chunk 返回 usage。
+            body.putObject("stream_options").put("include_usage", true);
         }
         return body;
     }
 
-    private String execute(List<Message> messages, StreamListener listener,
+    /**
+     * 一次调用的 token 用量（成本治理 P0-1）。
+     *
+     * <p>非流式：整包响应里直接读 usage。流式：开启
+     * {@code stream_options.include_usage} 后，上游在<b>最后一个</b> chunk 返回
+     * usage，此时 choices 为空数组。上游没返回时保持 0 / null，统计侧按未知处理，
+     * 绝不因为拿不到 usage 而影响业务。
+     */
+    private static final class Usage {
+        private int promptTokens;
+        private int completionTokens;
+
+        void setFrom(JsonNode usage) {
+            if (usage == null || !usage.isObject()) {
+                return;
+            }
+            promptTokens = usage.path("prompt_tokens").asInt(0);
+            completionTokens = usage.path("completion_tokens").asInt(0);
+        }
+
+        int promptTokens() { return promptTokens; }
+        int completionTokens() { return completionTokens; }
+    }
+
+    /**
+     * 已耗时的毫秒数。饱和转换而非直接强转：系统时钟回拨或长时间挂起时
+     * {@code long} 差值可能为负或溢出 int，直接转会得到负的延迟。
+     */
+    private static int elapsedMs(long startedAt) {
+        long diff = System.currentTimeMillis() - startedAt;
+        if (diff <= 0) {
+            return 0;
+        }
+        return diff > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) diff;
+    }
+
+    private String execute(String scene, List<Message> messages, StreamListener listener,
                            BooleanSupplier cancelled) {
         if (!isConfigured()) {
             throw new BusinessException(503, "未配置 DeepSeek API Key，AI 功能不可用");
         }
         boolean stream = listener != null;
         ObjectNode body = buildBody(messages, stream);
+        // 埋点是旁路观测：apiKey 拿不到（理论上不该发生）就整次跳过，不影响业务。
+        String apiKey = RequestContext.getApiKey();
+        long startedAt = System.currentTimeMillis();
+        Usage usage = new Usage();
 
         try {
             if (cancelled.getAsBoolean()) {
@@ -157,12 +215,19 @@ public class DeepSeekLlmClient implements LlmClient {
                         throw new BusinessException(502, "AI 服务调用失败: HTTP " + response.statusCode());
                     }
                     String result = stream
-                            ? readStream(guard, listener)
-                            : readJsonResponse(guard);
+                            ? readStream(guard, listener, usage)
+                            : readJsonResponse(guard, usage);
                     guard.check();
+                    usageRecorder.recordSuccess(apiKey, scene, providerId(), properties.getModel(),
+                            usage.promptTokens(), usage.completionTokens(), stream,
+                            elapsedMs(startedAt));
                     return result;
                 } catch (Exception failure) {
                     guard.check();
+                    // 失败也记录：token 已经花掉是真实成本，只记成功会低估开销。
+                    usageRecorder.recordError(apiKey, scene, providerId(), properties.getModel(),
+                            usage.promptTokens(), usage.completionTokens(), stream,
+                            elapsedMs(startedAt));
                     throw failure;
                 }
             }
@@ -180,7 +245,7 @@ public class DeepSeekLlmClient implements LlmClient {
         }
     }
 
-    private String readJsonResponse(CallGuard guard) throws IOException {
+    private String readJsonResponse(CallGuard guard, Usage usage) throws IOException {
         byte[] body;
         try (InputStream stream = guard.boundedBody()) {
             body = stream.readAllBytes();
@@ -192,6 +257,9 @@ public class DeepSeekLlmClient implements LlmClient {
         } catch (Exception malformed) {
             throw new BusinessException(502, "AI 服务返回内容格式有误");
         }
+        // 成本治理 P0-1：先读 usage 再做业务校验，这样即使 finish_reason 不合法
+        // 也要先记下已消耗的 token（token 已经花掉了）。
+        usage.setFrom(root.path("usage"));
         JsonNode choice = root.path("choices").path(0);
         String finishReason = choice.path("finish_reason").asText();
         if ("length".equals(finishReason)) {
@@ -207,7 +275,7 @@ public class DeepSeekLlmClient implements LlmClient {
         return content.asText();
     }
 
-    private String readStream(CallGuard guard, StreamListener listener) throws IOException {
+    private String readStream(CallGuard guard, StreamListener listener, Usage usage) throws IOException {
             StringBuilder full = new StringBuilder();
             String finishReason = null;
             try (BufferedReader reader = new BufferedReader(
@@ -227,6 +295,12 @@ public class DeepSeekLlmClient implements LlmClient {
                         chunk = objectMapper.readTree(payload);
                     } catch (Exception e) {
                         throw new BusinessException(502, "AI 流式数据格式有误，回复未保存");
+                    }
+                    // 成本治理 P0-1：开启 include_usage 后，usage 出现在最后一个
+                    // chunk（此时 choices 为空数组，path(0) 返回 MissingNode，
+                    // 下面的取值逻辑天然跳过，不用额外分支）。
+                    if (chunk.has("usage")) {
+                        usage.setFrom(chunk.path("usage"));
                     }
                     JsonNode choice = chunk.path("choices").path(0);
                     JsonNode delta = choice.path("delta");

@@ -17,6 +17,8 @@ import com.timetable.mapper.TaskMapper;
 import com.timetable.security.AdminAuthorizationService;
 import com.timetable.service.AiService;
 import com.timetable.service.LlmClient;
+import com.timetable.service.AiEventRecorder;
+import com.timetable.service.LlmUsageRecorder;
 import com.timetable.service.LlmClientRegistry;
 import com.timetable.service.RequestValidationService;
 import com.timetable.service.ScheduleService;
@@ -75,7 +77,7 @@ class AiCampusAgentTaskTest {
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
             StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
-            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class})
+            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class, AiEventRecorder.class, LlmUsageRecorder.class })
     static class TestApplication {
         @Bean
         Clock clock() {
@@ -105,7 +107,7 @@ class AiCampusAgentTaskTest {
     void createTaskProposalExecutesWithAiParseSourceAndSourceRef() {
         Schedule schedule = schedule(OWNER, "Create task");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"text":"已为你生成任务提案，确认后创建。","actions":[
                   {"type":"CREATE_TASK","data":{"tasks":[
                     {"title":"提交高等数学第三次作业","type":"COURSE_WORK","deadline":"2026-10-15 23:59","priority":1,"description":"提交到学习通"}]}}]}
@@ -144,7 +146,7 @@ class AiCampusAgentTaskTest {
         AiConversation conversation = conversation(schedule.getId());
         Task seeded = taskService.create(OWNER,
                 draft("整理竞赛报名材料", Task.TYPE_COMPETITION, null, 2, ""), Task.SOURCE_MANUAL);
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"text":"已生成修改提案。","actions":[
                   {"type":"UPDATE_TASK","data":{"tasks":[
                     {"id":%d,"title":"整理数学建模竞赛报名材料","type":"COMPETITION","deadline":"2026-10-20 09:30","priority":1,"description":"注意截止当天不收"}]}}]}
@@ -177,7 +179,7 @@ class AiCampusAgentTaskTest {
         AiConversation conversation = conversation(schedule.getId());
         Task seeded = taskService.create(OWNER,
                 draft("完成 MOOC 第二章测试", Task.TYPE_ONLINE_COURSE, null, 2, ""), Task.SOURCE_MANUAL);
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"text":"已标记完成提案。","actions":[
                   {"type":"UPDATE_TASK","data":{"tasks":[
                     {"id":%d,"title":"完成 MOOC 第二章测试","type":"ONLINE_COURSE","deadline":null,"priority":2,"description":"","status":"DONE"}]}}]}
@@ -199,7 +201,7 @@ class AiCampusAgentTaskTest {
     void taskDataChangeMarksPendingTaskProposalStale() {
         Schedule schedule = schedule(OWNER, "Stale task");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"text":"已生成任务提案。","actions":[
                   {"type":"CREATE_TASK","data":{"tasks":[{"title":"准备英语口语展示","type":"OTHER","deadline":null,"priority":2,"description":""}]}}]}
                 """);
@@ -224,7 +226,7 @@ class AiCampusAgentTaskTest {
     void taskScopeIsIndependentFromTodoScope() {
         Schedule schedule = schedule(OWNER, "Scope split");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"text":"两件事都提案了。","actions":[
                   {"type":"CREATE_TASK","data":{"tasks":[{"title":"写实验报告","type":"LAB_REPORT","deadline":null,"priority":2,"description":""}]}},
                   {"type":"CREATE_TODO","data":{"todos":[{"title":"记得带校园卡","ddl":"2026-09-28 08:00"}]}}]}

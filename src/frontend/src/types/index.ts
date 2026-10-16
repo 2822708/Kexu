@@ -344,3 +344,65 @@ export interface DashboardData {  /** 聚合日期（用户请求的 date，缺�
   /** 计划摘要（plan.summary 的便捷字段，无计划时 null） */
   planSummary: string | null
 }
+
+/** LLM 调用场景（与后端 LlmUsage.SCENE_* 一致） */
+export type UsageScene =
+  | 'CHAT'
+  | 'EXTRACT'
+  | 'PLAN'
+  | 'REFINE'
+  | 'PARSE_HTML'
+  | 'OCR'
+  | 'UNKNOWN'
+
+/** 分场景用量明细 */
+export interface UsageSceneBreakdown {
+  scene: UsageScene
+  sceneLabel: string
+  callCount: number
+  totalTokens: number
+  estimatedCost: number
+}
+
+/** 每日用量趋势点 */
+export interface UsageDailyPoint {
+  date: string
+  callCount: number
+  totalTokens: number
+}
+
+/**
+ * LLM 用量与成本统计（成本治理 P0-1）。
+ * estimatedCost 由「配置的单价表」估算，不是账单数字，会随单价调整而变化。
+ * avgLatencyMs 在无成功调用时为 null（而不是 0，避免被误读为「极快」）。
+ */
+export interface UsageStats {
+  days: number
+  currency: string
+  callCount: number
+  errorCount: number
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  estimatedCost: number
+  avgLatencyMs: number | null
+  scenes: UsageSceneBreakdown[]
+  daily: UsageDailyPoint[]
+}
+
+/**
+ * AI 提案漏斗（确认率 / 决定耗时）。
+ * confirmRate 是「已落库口径」：读消息时的 STALE 复核不落库，所以这里的分母偏小、
+ * 真实确认率只会比它低，不会比它高。
+ */
+export interface ProposalFunnel {
+  pendingCount: number
+  executedCount: number
+  rejectedCount: number
+  staleCount: number
+  decidedCount: number
+  /** 无任何已决定提案时为 null */
+  confirmRate: number | null
+  /** 无任何已决定提案时为 null */
+  avgDecideSeconds: number | null
+}

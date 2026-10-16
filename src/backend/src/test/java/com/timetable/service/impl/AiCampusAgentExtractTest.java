@@ -12,6 +12,8 @@ import com.timetable.mapper.TaskMapper;
 import com.timetable.security.AdminAuthorizationService;
 import com.timetable.service.AiService;
 import com.timetable.service.LlmClient;
+import com.timetable.service.AiEventRecorder;
+import com.timetable.service.LlmUsageRecorder;
 import com.timetable.service.LlmClientRegistry;
 import com.timetable.service.RequestValidationService;
 import com.timetable.service.TaskService;
@@ -76,7 +78,7 @@ class AiCampusAgentExtractTest {
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
             StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
-            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class})
+            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class, AiEventRecorder.class, LlmUsageRecorder.class })
     static class TestApplication {
         @Bean
         Clock clock() {
@@ -107,7 +109,7 @@ class AiCampusAgentExtractTest {
                 + "1. 第三次作业请于 10 月 15 日 23:59 前提交到学习通；\n"
                 + "2. 实验报告《线性方程组求解》10 月 8 日截止；\n"
                 + "3. 期中考试安排待教务处后续通知。";
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"tasks":[
                   {"title":"提交高等数学第三次作业","type":"COURSE_WORK","deadline":"2026-10-15 23:59","priority":1,"description":"提交到学习通平台"},
                   {"title":"提交线性方程组求解实验报告","type":"LAB_REPORT","deadline":"2026-10-08 23:59","priority":2,"description":""}
@@ -135,7 +137,7 @@ class AiCampusAgentExtractTest {
 
     @Test
     void extractTasksFromScreenshotSendsImageToVisionModel() {
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"tasks":[{"title":"完成 MOOC 第二章测试","type":"ONLINE_COURSE","deadline":null,"priority":2,"description":""}],"confidence":0.7}""");
 
         TaskExtractResult result = ai.extractTasks(imageRequest(PNG_DATA_URL), OWNER);
@@ -154,7 +156,7 @@ class AiCampusAgentExtractTest {
     void extractTasksCleansInvalidFieldsWithoutGuessingDeadlines() {
         String longTitle = "题".repeat(60);
         String longDescription = "述".repeat(260);
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"tasks":[
                   {"title":"","type":"COURSE_WORK","deadline":"2026-10-01 12:00","priority":1,"description":"空标题应被丢弃"},
                   {"title":"提交密码学作业","type":"MAILMAN","deadline":"2026-09-20 23:59","priority":1,"description":"过去的截止时间必须作废"},
@@ -186,7 +188,7 @@ class AiCampusAgentExtractTest {
 
     @Test
     void extractTasksWithNothingToExtractReturnsZeroConfidenceAndNote() {
-        when(provider.chatJson(any())).thenReturn("""
+        when(provider.chatJson(any(), any())).thenReturn("""
                 {"tasks":[],"confidence":0}""");
 
         TaskExtractResult result = ai.extractTasks(textRequest("今天天气不错，我去打球了。"), OWNER);
@@ -198,7 +200,7 @@ class AiCampusAgentExtractTest {
 
     @Test
     void extractTasksDegradesGracefullyWhenModelRepliesPlainText() {
-        when(provider.chatJson(any())).thenReturn("抱歉，我不理解这段内容。");
+        when(provider.chatJson(any(), any())).thenReturn("抱歉，我不理解这段内容。");
 
         TaskExtractResult result = ai.extractTasks(textRequest("随便一段话"), OWNER);
 
@@ -221,7 +223,7 @@ class AiCampusAgentExtractTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("二选一");
 
-        verify(provider, never()).chatJson(any());
+        verify(provider, never()).chatJson(any(), any());
     }
 
     @Test
@@ -229,7 +231,7 @@ class AiCampusAgentExtractTest {
         assertThatThrownBy(() -> ai.extractTasks(imageRequest("data:image/png;base64,not-base64!!"), OWNER))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getCode()).isEqualTo(400));
-        verify(provider, never()).chatJson(any());
+        verify(provider, never()).chatJson(any(), any());
     }
 
     @Test
@@ -308,7 +310,7 @@ class AiCampusAgentExtractTest {
     private List<LlmClient.Message> captureSingleCall() {
         ArgumentCaptor<List<LlmClient.Message>> prompt =
                 (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
-        verify(provider).chatJson(prompt.capture());
+        verify(provider).chatJson(any(), prompt.capture());
         return prompt.getValue();
     }
 }

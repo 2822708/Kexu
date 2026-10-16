@@ -11,6 +11,7 @@ import {
   MessageOutlined,
   ReloadOutlined,
   SettingOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons'
 import { useApp } from '../store/AppContext'
 import { useTheme } from '../theme'
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { key: '/timetable', icon: <CalendarOutlined />, label: '课表' },
   { key: '/todos', icon: <CheckSquareOutlined />, label: '待办' },
   { key: '/ai', icon: <MessageOutlined />, label: 'AI 助手' },
+  { key: '/stats', icon: <BarChartOutlined />, label: '用量统计' },
   { key: '/manual', icon: <BookOutlined />, label: '用户手册' },
   { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ]

@@ -102,7 +102,7 @@ class AiCampusAgentDailyPlanTest {
         Schedule schedule = schedule();
         Long courseId = seedCourse(schedule.getId(), "高等数学", 1, 1, 2); // 周一 1-2 节 → 08:00-09:35
         Task task = taskService.create(OWNER, draft("提交高数第三次作业", Task.TYPE_COURSE_WORK), Task.SOURCE_MANUAL);
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"COURSE","start":"08:00","end":"09:35","title":"高等数学","ref_id":%d,"note":"带教材"},
                   {"type":"TASK","start":"10:00","end":"11:00","title":"推进高数作业","ref_id":%d,"note":"先做第一题"},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""},
@@ -129,7 +129,7 @@ class AiCampusAgentDailyPlanTest {
 
         // 输入只给真实数据：课程 id 与换算后的真实起止时刻都出现在模型输入里
         ArgumentCaptor<List<LlmClient.Message>> payload = ArgumentCaptor.forClass(List.class);
-        verify(provider).chatJson(payload.capture());
+        verify(provider).chatJson(any(), payload.capture());
         String user = payload.getValue().get(1).getContent();
         assertThat(user).contains("id=" + courseId).contains("08:00-09:35");
         assertThat(user).contains("id=" + task.getId()).contains("提交高数第三次作业");
@@ -140,7 +140,7 @@ class AiCampusAgentDailyPlanTest {
     void secondGenerateHitsCacheWithoutCallingModel() {
         Schedule schedule = schedule();
         Long courseId = seedCourse(schedule.getId(), "线性代数", 1, 1, 2);
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"COURSE","start":"08:00","end":"09:35","title":"线性代数","ref_id":%d,"note":""},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
                 """.formatted(courseId), "先上课，午休后再推进任务"));
@@ -152,7 +152,7 @@ class AiCampusAgentDailyPlanTest {
         assertThat(second.isCached()).isTrue();
         assertThat(second.getSummary()).isEqualTo(first.getSummary());
         assertThat(second.getItems()).hasSize(2);
-        verify(provider, times(1)).chatJson(any());
+        verify(provider, times(1)).chatJson(any(), any());
     }
 
     @Test
@@ -160,7 +160,7 @@ class AiCampusAgentDailyPlanTest {
         assertThat(plans.get(OWNER, MONDAY)).isNull();
         Schedule schedule = schedule();
         Long courseId = seedCourse(schedule.getId(), "大学英语", 1, 1, 2);
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"COURSE","start":"08:00","end":"09:35","title":"大学英语","ref_id":%d,"note":""},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
                 """.formatted(courseId), "今天只有一节课"));
@@ -176,7 +176,7 @@ class AiCampusAgentDailyPlanTest {
     void cachedPlanIsFlaggedStaleAfterInputDataChanges() {
         Schedule schedule = schedule();
         Long courseId = seedCourse(schedule.getId(), "大学英语", 1, 1, 2);
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"COURSE","start":"08:00","end":"09:35","title":"大学英语","ref_id":%d,"note":""},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
                 """.formatted(courseId), "今天只有一节课"));
@@ -192,7 +192,7 @@ class AiCampusAgentDailyPlanTest {
                 .as("数据变了应提示计划可能过时，但仍返回旧计划（不偷偷烧 token）")
                 .isTrue();
         // 用户主动重新生成：stale 的缓存被覆盖重算，而不是继续返回旧计划
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"COURSE","start":"08:00","end":"09:35","title":"大学英语","ref_id":%d,"note":""},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
                 """.formatted(courseId), "重新排过"));
@@ -202,14 +202,14 @@ class AiCampusAgentDailyPlanTest {
         assertThat(regenerated.isStale()).isFalse();
         // 覆盖而不是叠加：同一天仍然只有一条计划
         assertThat(rowCount()).isEqualTo(1);
-        verify(provider, times(2)).chatJson(any());
+        verify(provider, times(2)).chatJson(any(), any());
     }
 
     @Test
     void planRejectsCourseBlockThatDisagreesWithTimetable() {
         Schedule schedule = schedule();
         Long courseId = seedCourse(schedule.getId(), "高等数学", 1, 1, 2);
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"COURSE","start":"09:00","end":"10:00","title":"高等数学","ref_id":%d,"note":""},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
                 """.formatted(courseId), "时间被改了"));
@@ -224,7 +224,7 @@ class AiCampusAgentDailyPlanTest {
     void planRejectsWhenTodaysCourseIsOmitted() {
         Schedule schedule = schedule();
         seedCourse(schedule.getId(), "高等数学", 1, 1, 2);
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"SUGGESTION","start":"10:00","end":"11:00","title":"自习","ref_id":null,"note":""},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
                 """, "漏了课"));
@@ -241,7 +241,7 @@ class AiCampusAgentDailyPlanTest {
         Long courseId = seedCourse(schedule.getId(), "高等数学", 1, 1, 2);
         Task done = taskService.create(OWNER, draft("已完成的作业", Task.TYPE_OTHER), Task.SOURCE_MANUAL);
         taskService.updateStatus(done.getId(), "DONE", OWNER);
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"COURSE","start":"08:00","end":"09:35","title":"高等数学","ref_id":%d,"note":""},
                   {"type":"TASK","start":"10:00","end":"11:00","title":"重做已完成的","ref_id":%d,"note":""},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
@@ -257,7 +257,7 @@ class AiCampusAgentDailyPlanTest {
     void planRejectsTimelineWithoutBreak() {
         Schedule schedule = schedule();
         Long courseId = seedCourse(schedule.getId(), "高等数学", 1, 1, 2);
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"COURSE","start":"08:00","end":"09:35","title":"高等数学","ref_id":%d,"note":""},
                   {"type":"SUGGESTION","start":"10:00","end":"11:00","title":"写实验报告","ref_id":null,"note":""}
                 """.formatted(courseId), "塞满了"));
@@ -272,7 +272,7 @@ class AiCampusAgentDailyPlanTest {
     void planRejectsUnparsableModelOutput() {
         Schedule schedule = schedule();
         seedCourse(schedule.getId(), "高等数学", 1, 1, 2);
-        when(provider.chatJson(any())).thenReturn("抱歉，我今天不太会排计划。");
+        when(provider.chatJson(any(), any())).thenReturn("抱歉，我今天不太会排计划。");
 
         assertThatThrownBy(() -> plans.generate(OWNER, schedule.getId(), MONDAY))
                 .isInstanceOf(BusinessException.class)
@@ -295,7 +295,7 @@ class AiCampusAgentDailyPlanTest {
     @Test
     void emptyDayStillProducesSuggestionAndBreak() {
         Schedule schedule = schedule(); // 周一没有课
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"SUGGESTION","start":"09:00","end":"10:00","title":"复习线代","ref_id":null,"note":""},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
                 """, "没课的一天也别把自己逼太紧"));
@@ -310,7 +310,7 @@ class AiCampusAgentDailyPlanTest {
     @Test
     void planTruncatesOverlongSummary() {
         Schedule schedule = schedule();
-        when(provider.chatJson(any())).thenReturn(planJson("""
+        when(provider.chatJson(any(), any())).thenReturn(planJson("""
                   {"type":"SUGGESTION","start":"09:00","end":"10:00","title":"复习","ref_id":null,"note":""},
                   {"type":"BREAK","start":"12:00","end":"13:00","title":"午休","ref_id":null,"note":""}
                 """, "一".repeat(80)));

@@ -19,6 +19,8 @@ import com.timetable.mapper.StudentProfileMapper;
 import com.timetable.security.AdminAuthorizationService;
 import com.timetable.service.AiService;
 import com.timetable.service.LlmClient;
+import com.timetable.service.AiEventRecorder;
+import com.timetable.service.LlmUsageRecorder;
 import com.timetable.service.LlmClientRegistry;
 import com.timetable.service.MemoryService;
 import com.timetable.service.RequestValidationService;
@@ -80,7 +82,7 @@ class AiCampusAgentChatTest {
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
             StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
-            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class})
+            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class, AiEventRecorder.class, LlmUsageRecorder.class })
     static class TestApplication {
         @Bean
         Clock clock() {
@@ -112,14 +114,14 @@ class AiCampusAgentChatTest {
     void systemPromptCarriesSeniorPersonaAndProposalProtocol() {
         Schedule schedule = schedule(OWNER, "Persona");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn(createCourseJson("线性代数"));
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("线性代数"));
 
         ai.sendMessage(conversation.getId(), request(schedule.getId(), "这学期有什么课"), OWNER);
 
         @SuppressWarnings({"unchecked", "rawtypes"})
         ArgumentCaptor<List<LlmClient.Message>> prompt =
                 (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
-        verify(provider, atLeastOnce()).chatJson(prompt.capture());
+        verify(provider, atLeastOnce()).chatJson(any(), prompt.capture());
         // getAllValues().get(0) 是主聊天调用（人格与协议在其 system 消息里）；
         // 第二次 chatJson 是记忆提炼，用的是 memory-extract 模板，不能混用
         String system = prompt.getAllValues().get(0).get(0).getContent();
@@ -138,7 +140,7 @@ class AiCampusAgentChatTest {
         StudentProfilePatch seed = new StudentProfilePatch();
         seed.setName("小明");
         studentProfileService.applyPatch(OWNER, seed, StudentProfile.UPDATED_BY_USER);
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"), """
                 {"memories":[{"type":"GOAL","content":"准备 12 月 CET-6 考试","importance":5}],
                  "profile":{"major":"计算机科学与技术","goal":"通过六级"}}
                 """);
@@ -184,7 +186,7 @@ class AiCampusAgentChatTest {
     void multipleMemoriesSplitIntoIndependentProposals() {
         Schedule schedule = schedule(OWNER, "Split");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"), """
                 {"memories":[{"type":"GOAL","content":"准备 12 月 CET-6 考试","importance":5},
                              {"type":"HABIT","content":"习惯晚饭后散步","importance":2}]}
                 """);
@@ -202,7 +204,7 @@ class AiCampusAgentChatTest {
     void invalidRefinementProposalsAreDroppedWithoutTouchingData() {
         Schedule schedule = schedule(OWNER, "Invalid refine");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"), """
                 {"memories":[{"type":"BAD_TYPE","content":"无效类型","importance":9},
                              {"type":"GOAL","content":"","importance":3}],
                  "profile":{"unknownField":"越权字段","name":123}}
@@ -223,7 +225,7 @@ class AiCampusAgentChatTest {
     void memoryDataChangeMarksPendingMemoryProposalStale() {
         Schedule schedule = schedule(OWNER, "Stale memory");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"), """
                 {"memories":[{"type":"GOAL","content":"准备 12 月 CET-6 考试","importance":5}]}
                 """);
         AiMessageResponse response = ai.sendMessage(conversation.getId(),
@@ -245,7 +247,7 @@ class AiCampusAgentChatTest {
     void rereadingHistoryShowsStaleProposalWithoutPersistingIt() {
         Schedule schedule = schedule(OWNER, "Display stale memory");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"), """
                 {"memories":[{"type":"GOAL","content":"准备 12 月六级","importance":5}]}
                 """);
         AiMessageResponse response = ai.sendMessage(conversation.getId(),
@@ -273,7 +275,7 @@ class AiCampusAgentChatTest {
     void profileDataChangeMarksPendingProfileProposalStale() {
         Schedule schedule = schedule(OWNER, "Stale profile");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"), """
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"), """
                 {"profile":{"major":"软件工程"}}
                 """);
         AiMessageResponse response = ai.sendMessage(conversation.getId(),
@@ -298,7 +300,7 @@ class AiCampusAgentChatTest {
     void refinementFailureDoesNotBreakMainReply() {
         Schedule schedule = schedule(OWNER, "Refine down");
         AiConversation conversation = conversation(schedule.getId());
-        when(provider.chatJson(any())).thenReturn(createCourseJson("高等数学"))
+        when(provider.chatJson(any(), any())).thenReturn(createCourseJson("高等数学"))
                 .thenThrow(new RuntimeException("upstream unavailable"));
 
         AiMessageResponse response = ai.sendMessage(conversation.getId(),

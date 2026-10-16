@@ -107,7 +107,7 @@ class AiCampusAgentJourneyIntegrationTest {
         Long conversationId = createConversation(scheduleId);
         String proposedDeadline = today.plusDays(3).atTime(23, 59).toString().replace('T', ' ');
 
-        when(provider.chatJson(any())).thenReturn(
+        when(provider.chatJson(any(), any())).thenReturn(
                 // 3.1 主回复：带一条 CREATE_TASK 提案
                 """
                 {"text":"这周有两件事要盯：高数作业和实验报告。","actions":[
