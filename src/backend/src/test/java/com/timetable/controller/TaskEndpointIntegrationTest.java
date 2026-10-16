@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
@@ -89,21 +90,26 @@ class TaskEndpointIntegrationTest {
     @Test
     void extractThenConfirmCreatesTasksWithAiParseSource() throws Exception {
         register(FIRST).andExpect(status().isOk());
+        // 服务端会把「过去的截止时间」清洗成 null（AiServiceImpl.parseExtractedDeadline 兜底），
+        // 所以这里必须用相对今天的未来日期：本测试原先写死 2026-10-15，2026-10-16 日期一翻篇就失败。
+        // 本类是 @SpringBootTest 真实系统时钟（TimeConfig: Clock.system(Asia/Shanghai)），没有固定 Clock。
+        String futureDate = LocalDate.now().plusDays(7).toString();
+        String expectedDeadline = futureDate + "T23:59:00";
         when(provider.chatJson(any())).thenReturn("""
                 {"tasks":[
-                  {"title":"提交高等数学第三次作业","type":"COURSE_WORK","deadline":"2026-10-15 23:59","priority":1,"description":"提交到学习通"},
+                  {"title":"提交高等数学第三次作业","type":"COURSE_WORK","deadline":"%s 23:59","priority":1,"description":"提交到学习通"},
                   {"title":"完成 MOOC 第二章测试","type":"ONLINE_COURSE","deadline":null,"priority":2,"description":""}
-                ],"confidence":0.88}""");
+                ],"confidence":0.88}""".formatted(futureDate));
 
         // 1) 抽取：只产草稿，不落库
         String extractBody = mvc.perform(post("/api/tasks/extract").header("X-API-Key", FIRST)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"text\":\"高等数学第三次作业 10 月 15 日 23:59 截止；MOOC 第二章测试尽快完成\"}"))
+                        .content("{\"text\":\"高等数学第三次作业 %s 23:59 截止；MOOC 第二章测试尽快完成\"}".formatted(futureDate)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.tasks", hasSize(2)))
                 .andExpect(jsonPath("$.data.tasks[0].title").value("提交高等数学第三次作业"))
-                .andExpect(jsonPath("$.data.tasks[0].deadline").value("2026-10-15T23:59:00"))
+                .andExpect(jsonPath("$.data.tasks[0].deadline").value(expectedDeadline))
                 .andExpect(jsonPath("$.data.tasks[1].deadline").value(nullValue()))
                 .andExpect(jsonPath("$.data.confidence").value(0.88))
                 .andReturn().getResponse().getContentAsString();
