@@ -2,11 +2,12 @@
 
 > **本文件是项目的「当前状态唯一真相」。** WorkBuddy 与 Codex 交替开发同一份代码，任何 Agent 在开工前先读本文件，收工前必须更新本文件（至少更新「会话日志」与「当前状态快照」）。
 >
-> **已同步到项目网盘**（tdrive 根目录，2026-10-15）：`Timetable-HANDOVER-交接主文件.md`（本文件）、`Timetable-交接总览-20261015.md`（自包含精简版，可整份粘给新 Agent）、`下一步方向调研报告.md`（**下一步方向决策依据，接手必读**）、`REA-逆向验证报告.md`。
+> **已同步到项目网盘**（tdrive 根目录，2026-10-16）：`Timetable-HANDOVER-交接主文件.md`（本文件）、`Timetable-交接总览-20261015.md`（自包含精简版，可整份粘给新 Agent）、`下一步方向调研报告.md`（**下一步方向决策依据，接手必读**）、`REA-逆向验证报告.md`、`ai-campus-agent-git-bundle.bundle`（**跨环境同步用**，见 `/workspace/Git同步操作指引.md`）。
 >
-> 最近更新：2026-10-15 ｜ 更新者：WorkBuddy ｜ 对应提交：`7612bbe`（文档）
+> 最近更新：2026-10-16 ｜ 更新者：WorkBuddy ｜ 对应提交：`7b7ad63`
 >
 > ⚠️ **下一步做什么，请直接读 `/workspace/下一步方向调研报告.md` 第 8 节。**本文件第 6 节已按其结论重排待办。
+> ⚠️ **在别的机器/环境上 clone 或拉取前，先读第 2 节「多环境同步」和 `/workspace/Git同步操作指引.md`**——本仓库没有 remote，直接 `git pull` 会什么也拿不到。
 
 ---
 
@@ -57,12 +58,14 @@ npm run build
 
 | 项 | 状态 |
 |---|---|
-| HEAD | `c9cd72b` V1.0 收口(3/3): 展示态 STALE + 计划 stale 重算 |
+| HEAD | `7b7ad63` fix(test): TaskEndpointIntegrationTest 改用相对日期（修日期翻篇失败） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
-| 后端测试 | **134/134 通过**（0 失败 0 错误） |
+| 后端测试 | **134/134 通过**（0 失败 0 错误，2026-10-16 全量复跑 BUILD SUCCESS） |
 | 前端 | typecheck 通过；lint **0 错误 / 7 警告**（7 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 干净（无未提交改动） |
 | 当前阶段 | V1.0 功能收口完成；下一步方向已调研定稿（见 `/workspace/下一步方向调研报告.md`），待用户确认后进入第一阶段「成本治理」。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
+| **⚠️ 多环境同步** | 本沙箱仓库**没有配置 git remote**，提交只存在于本沙箱。跨环境同步走**网盘 git bundle**（`ai-campus-agent-git-bundle.bundle`，操作指引见 `/workspace/Git同步操作指引.md`）。对方环境的分叉提交 `9bb3200` 不在本仓库对象库中，需 fetch bundle 后合并，不能直接 pull |
+| **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
 **代码规模（2026-10-15 实测）**
 
@@ -153,6 +156,7 @@ npm run build
 | 档案补丁「null=保持原值」 | AI 提案语义如此；表单要「清空=删除」，走 `profileService.replace` 而不是 `applyPatch` |
 | 固定 Clock 与数据库 `NOW()` 不同源 | `AiCampusAgentDailyPlanTest` 原来固定 2026-09-27，而 H2 `NOW()` 是真实当前时间（相差数周）→ stale 判定恒为 true，连「二次生成命中缓存」都失败。凡是比较应用层时间与 DB `ON UPDATE` 时间的逻辑，测试夹具必须用 `Clock.systemDefaultZone()` |
 | `List.of(...)` 不接受 null | `MAX(updated_at)` 无数据时返回 null，塞进 `List.of` 直接 NPE。改用 `String[]` 循环累加 |
+| **测试里写死「今天」的日期字面量** | `TaskEndpointIntegrationTest` 曾写死 `2026-10-15` 作为任务截止时间，而 `AiServiceImpl.parseExtractedDeadline` 的设计是「**过去的截止时间一律清洗成 null**」→ 日期一翻篇（2026-10-16）断言必挂。**两类时钟要分清**：① 带固定 `Clock` 的 AI 测试（`AiCampusAgent*Test`，today 恒为 2026-09-27）写死日期是安全的；② `@SpringBootTest` 全量启动、无 Clock 覆盖的测试（`TaskEndpointIntegrationTest` 等）用的是 `TimeConfig` 真实系统时钟，**凡是「未来/过去」语义的日期必须用 `LocalDate.now().plusDays(n)` 相对构造**。手动创建路径（`POST /api/tasks`）不过期清洗，写死过去日期反而不受影响——这个不对称是设计，别"顺手统一" |
 
 ---
 
@@ -197,6 +201,25 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-16 · WorkBuddy · 复验基线发现 1 个日期翻篇失败 + 部署版核对 + git bundle 同步通道
+
+**触发**：另一环境（Codex）报告「本地/备份/远端优化分支均为 `9bb3200`、远端查 `7612bbe` 未找到、`docs/HANDOVER.md` 未找到 → 134/134 未复验、本机 REA 缺运行文件」。逐项处理如下。
+
+**① 134/134 实际不成立（已修）**：本沙箱跑全量测试，`TaskEndpointIntegrationTest.extractThenConfirmCreatesTasksWithAiParseSource` **1 个失败**（133/134）。根因是**又一处日期硬编码**：服务端 `AiServiceImpl.parseExtractedDeadline` 的设计就是「过去的截止时间一律清洗为 null」，而测试写死 `2026-10-15`，今天 `2026-10-16` 一起床断言必然挂。**产品行为正确，测试缺陷**。改为 `LocalDate.now().plusDays(7)`（输入文本同步改成相对日期），已单独跑该类 5/5、全量 **134/134 BUILD SUCCESS**。提交 `7b7ad63`。教训已补进 3.6。
+
+**② 部署版核对（用资产哈希，比 REA 更直接）**：REA 在本沙箱可用（`npx rea-agents@6.5.0`），但其 web 命令需 CDP 浏览器；改用**内容哈希比对**，结论更硬：
+
+| 资源 | 线上 `timetable.zozovip.work` | 本地 `dist` | 判定 |
+|---|---|---|---|
+| `react-*.js` | md5 `cc3c292f…` | md5 `cc3c292f…` | **完全一致**（同 React 版本） |
+| `index-*.js` | `index-Cm4yYtry.js` 149,707 B | `index-CEirBQDd.js` 182,121 B | 本地大 32 KB |
+| `antd-*.js` | `antd-D3xlKeEY.js` 1,226,868 B | `antd-Dq_GqYmF.js` 1,237,349 B | 本地大 10 KB |
+| `index-*.css` | `index-BP6lxbFV.css` 22,107 B | `index-Cl_cbg2Z.css` 22,157 B | 本地大 50 B |
+
+字符串扫描：线上 `index.js` 中「学长」「每日计划」「长期记忆」**均 0 次**，本地分别 3/2/2 次 → **线上前端 = baseline `61981d9`，尚未部署 V1.0**。首页 GET 200，标题仍为「大切课程表 · 课程表与待办」。**线上后端版本无法从外部判定**——API Key 拦截器在路由之前，`/api/**` 无论是否存在一律 401（用不存在的路径做过对照组，响应体同为 `{"code":401,"message":"缺少 X-API-Key 请求头"}`）。
+
+**③ git 同步断裂的真相与修复**：本沙箱仓库**从未配置任何 remote**（`git remote -v` 为空），18 个提交只存在于本沙箱；`9bb3200` 不在本仓库对象库中，说明对方环境已是**另一条分叉的提交线**，不是简单的「没 pull」。已生成 `git bundle`（完整 18 提交历史，812 KB）传上网盘，对方可直接 `git fetch` 拉取后再合并，无需 remote 凭据。见 `/workspace/Git同步操作指引.md`。
 
 ### 2026-10-15 · WorkBuddy · 下一步方向调研（无代码改动）
 
