@@ -7,7 +7,7 @@
 > 最近更新：2026-10-16 ｜ 更新者：WorkBuddy ｜ 对应提交：`ec2ec62` + 待提交的分支改名与 GitHub 同步通道
 >
 > ⚠️ **下一步做什么，请直接读 `/workspace/下一步方向调研报告.md` 第 8 节。**本文件第 6 节已按其结论重排待办。
-> 🆕 **跨环境同步现已有正式通道**：主分支 `main`（原 `master` 已改名），远端为 GitHub **私有仓库**。有 GitHub 凭证的机器直接 `git clone`；无凭证的机器用网盘 zip 快照（已验证解压即 134/134）。两种方式都有效，网盘通道继续保留。
+> 🆕 **跨环境同步现已有正式通道**：主分支 `main`，远端为 GitHub **私有仓库 `2552555/timetable-ai`**（2026-10-16 推送，CI 全绿）。有 GitHub 凭证的机器直接 `git clone`；无凭证的机器用网盘 zip 快照（已验证解压即 134/134）。两种方式都有效，网盘通道继续保留。
 
 ---
 
@@ -64,7 +64,7 @@ npm run build
 | 前端 | typecheck 通过；lint **0 错误 / 7 警告**（7 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 干净（无未提交改动） |
 | 当前阶段 | V1.0 功能收口完成；下一步方向已调研定稿（见 `/workspace/下一步方向调研报告.md`），待用户确认后进入第一阶段「成本治理」。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
-| **⚠️ 多环境同步** | **2026-10-16 起已配置 GitHub remote（私有仓库）**，主分支 `main`，`.github/workflows/ci.yml` 在 `main` 上触发。**原分支名 `master` 已改名为 `main`**（改名前 CI 的 `branches: [main]` 是空转，从不触发）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并或按 `/workspace/Git同步操作指引.md` 用网盘 zip 整体覆盖 |
+| **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
 **代码规模（2026-10-15 实测）**
@@ -225,6 +225,16 @@ npm run build
 **③ 与既有渠道的关系**：网盘的 zip 快照与 git bundle **继续保留**——私有仓库需要授权才能 clone，而对方环境（Codex）无凭证时网盘仍是唯一通道。两条路指向同一份代码。
 
 **④ 用户决策记录**（2026-10-16）：仓库可见性 = **私有**；分支 = **改为 main**；`docs/archive/` 内部文档 = **原样推送**；凭证 = 用户自行 `gh auth login`。
+
+**⑤ 推送完成（2026-10-16 03:58）**：
+
+| 项 | 值 |
+|---|---|
+| 仓库 | `2552555/timetable-ai`（**私有**），默认分支 `main`，标签 `v1.0` |
+| 提交 | 21个，远端与本地逐个一致（README / AGENTS / HANDOVER / ci.yml / LICENSE 字节数全部吻合） |
+| **CI 首跑** | ✅ **backend success + frontend success**——这是 `ci.yml` 建立以来的第一次真实运行，改名前因分支叫 `master` 而 `on.push.branches: [main]` 从不匹配，CI 一直是空转 |
+
+**过程中的两个坑**：`gh repo create --no-init` 在当前 gh 版本不支持（改用 `POST /user/repos` API 建仓）；`git push` 标签时 GitHub 443 端口超时，改用 `POST /git/refs` API 直接建 tag 成功。
 
 ### 2026-10-16 · WorkBuddy · 复验基线发现 1 个日期翻篇失败 + 部署版核对 + git bundle 同步通道
 
