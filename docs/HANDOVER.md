@@ -2,12 +2,12 @@
 
 > **本文件是项目的「当前状态唯一真相」。** WorkBuddy 与 Codex 交替开发同一份代码，任何 Agent 在开工前先读本文件，收工前必须更新本文件（至少更新「会话日志」与「当前状态快照」）。
 >
-> **已同步到项目网盘**（tdrive 根目录，2026-10-16）：`Timetable-HANDOVER-交接主文件.md`（本文件）、`Timetable-交接总览-20261015.md`（自包含精简版，可整份粘给新 Agent）、`下一步方向调研报告.md`（**下一步方向决策依据，接手必读**）、`REA-逆向验证报告.md`、`ai-campus-agent-git-bundle.bundle`（**跨环境同步用**，见 `/workspace/Git同步操作指引.md`）。
+> **已同步到项目网盘**（tdrive 根目录，2026-10-16）：`Timetable-HANDOVER-交接主文件.md`（本文件）、`Timetable-交接总览-20261015.md`（自包含精简版，可整份粘给新 Agent）、`下一步方向调研报告.md`（**下一步方向决策依据，接手必读**）、`REA-逆向验证报告.md`、`ai-campus-agent-源码快照-ec2ec62.zip`（**免 git 的源码通道**）、`ai-campus-agent-git-bundle.bundle`（免凭证的 git 通道），操作细节见 `/workspace/Git同步操作指引.md`。
 >
-> 最近更新：2026-10-16 ｜ 更新者：WorkBuddy ｜ 对应提交：`7b7ad63`
+> 最近更新：2026-10-16 ｜ 更新者：WorkBuddy ｜ 对应提交：`ec2ec62` + 待提交的分支改名与 GitHub 同步通道
 >
 > ⚠️ **下一步做什么，请直接读 `/workspace/下一步方向调研报告.md` 第 8 节。**本文件第 6 节已按其结论重排待办。
-> ⚠️ **在别的机器/环境上 clone 或拉取前，先读第 2 节「多环境同步」和 `/workspace/Git同步操作指引.md`**——本仓库没有 remote，直接 `git pull` 会什么也拿不到。
+> 🆕 **跨环境同步现已有正式通道**：主分支 `main`（原 `master` 已改名），远端为 GitHub **私有仓库**。有 GitHub 凭证的机器直接 `git clone`；无凭证的机器用网盘 zip 快照（已验证解压即 134/134）。两种方式都有效，网盘通道继续保留。
 
 ---
 
@@ -58,13 +58,13 @@ npm run build
 
 | 项 | 状态 |
 |---|---|
-| HEAD | `7b7ad63` fix(test): TaskEndpointIntegrationTest 改用相对日期（修日期翻篇失败） |
+| HEAD | `ec2ec62` docs: HANDOVER 记录日期翻篇测试修复、部署版核对结论与 git bundle 同步通道（分支已由 `master` 改名为 **`main`**） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
 | 后端测试 | **134/134 通过**（0 失败 0 错误，2026-10-16 全量复跑 BUILD SUCCESS） |
 | 前端 | typecheck 通过；lint **0 错误 / 7 警告**（7 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 干净（无未提交改动） |
 | 当前阶段 | V1.0 功能收口完成；下一步方向已调研定稿（见 `/workspace/下一步方向调研报告.md`），待用户确认后进入第一阶段「成本治理」。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
-| **⚠️ 多环境同步** | 本沙箱仓库**没有配置 git remote**，提交只存在于本沙箱。跨环境同步走**网盘 git bundle**（`ai-campus-agent-git-bundle.bundle`，操作指引见 `/workspace/Git同步操作指引.md`）。对方环境的分叉提交 `9bb3200` 不在本仓库对象库中，需 fetch bundle 后合并，不能直接 pull |
+| **⚠️ 多环境同步** | **2026-10-16 起已配置 GitHub remote（私有仓库）**，主分支 `main`，`.github/workflows/ci.yml` 在 `main` 上触发。**原分支名 `master` 已改名为 `main`**（改名前 CI 的 `branches: [main]` 是空转，从不触发）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并或按 `/workspace/Git同步操作指引.md` 用网盘 zip 整体覆盖 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
 **代码规模（2026-10-15 实测）**
@@ -201,6 +201,30 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-16 · WorkBuddy · 主分支 master → main + GitHub 私有仓库同步通道
+
+**触发**：用户授权「可以推到 GitHub 上」。这是本项目**第一次拥有真正的远端**，跨环境同步问题从「手动传文件」升级为 `git push`/`git clone`。
+
+**① 推送前的安全体检（不可逆操作，必须先做）**：
+
+| 检查项 | 结果 |
+|---|---|
+| 提交历史中的真实密钥 | ✅ 无。`sk-` 全量命中均为 `task-extract`/`task-owner`/`placeholder="sk-..."`/`sk-xxxx` |
+| 配置文件硬编码凭证 | ✅ 无。`application.yml` 全部走环境变量，默认值是 `your-deepseek-api-key` 这类占位符 |
+| 曾提交后删除的敏感文件 | ✅ 无。`docs/CREDENTIALS.md`、`application-local.yml`、`*.local.yml` 由 `.gitignore` 拦截，未进入历史 |
+| 归档对话中的个人信息 | ✅ 无手机号/邮箱/学号/真实姓名；部署文档服务器地址已用 `<SERVER_HOST>` 占位 |
+| 许可证 | MIT（Copyright (c) 2026 Tangent0712），允许再分发；**私有仓库下无额外义务**，转公开时须保留原版权声明 |
+| 仓库体积 | 348 文件 / `.git` 4.2 MB，无大文件（`releases/`、`target/`、`node_modules/` 均已忽略） |
+
+**② 修掉两个隐藏问题**：
+
+- **分支名 `master` → `main`**：`.github/workflows/ci.yml` 写的是 `on: push: branches: [main]`，而实际分支叫 `master` → **CI 从建立以来一直是空转，从未真正跑过**。改名后 CI 才会触发。
+- 改名前全仓库文档已无 `master` 残留（HANDOVER 第 1 节本就写 `main`），改完两者一致。
+
+**③ 与既有渠道的关系**：网盘的 zip 快照与 git bundle **继续保留**——私有仓库需要授权才能 clone，而对方环境（Codex）无凭证时网盘仍是唯一通道。两条路指向同一份代码。
+
+**④ 用户决策记录**（2026-10-16）：仓库可见性 = **私有**；分支 = **改为 main**；`docs/archive/` 内部文档 = **原样推送**；凭证 = 用户自行 `gh auth login`。
 
 ### 2026-10-16 · WorkBuddy · 复验基线发现 1 个日期翻篇失败 + 部署版核对 + git bundle 同步通道
 
