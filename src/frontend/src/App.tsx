@@ -10,6 +10,7 @@ import StatsPage from './pages/StatsPage'
 import UserManualPage from './pages/UserManualPage'
 import WidgetPreviewPage from './pages/WidgetPreviewPage'
 import { useApp } from './store/AppContext'
+import { VoiceAssistantProvider } from './store/VoiceAssistantContext'
 
 export default function App() {
   const { ready, authed } = useApp()
@@ -33,17 +34,20 @@ export default function App() {
   }
 
   return (
-    <AppLayout>
-      <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/timetable" element={<TimetablePage />} />
-        <Route path="/todos" element={<TodosPage />} />
-        <Route path="/ai" element={<AiChatPage />} />
-        <Route path="/stats" element={<StatsPage />} />
-        <Route path="/manual" element={<UserManualPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AppLayout>
+    // 语音助手挂在路由外层：录音途中切页面不应该被打断
+    <VoiceAssistantProvider>
+      <AppLayout>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/timetable" element={<TimetablePage />} />
+          <Route path="/todos" element={<TodosPage />} />
+          <Route path="/ai" element={<AiChatPage />} />
+          <Route path="/stats" element={<StatsPage />} />
+          <Route path="/manual" element={<UserManualPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AppLayout>
+    </VoiceAssistantProvider>
   )
 }

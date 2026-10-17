@@ -73,7 +73,11 @@ export function useSpeechConsent(): [boolean, (value: boolean) => void] {
   return [useSyncExternalStore(subscribeToConsent, getConsent, () => false), setConsent]
 }
 
-interface SpeechInputOptions {
+export interface SpeechInputOptions {
+  /**
+   * 回调收到的是**累计全文**而不是增量（continuous + interimResults 的语义），
+   * 调用方必须用 ref 存住录音开始前的 base 文本再拼接，否则每次回调都会覆盖前文。
+   */
   onTranscript: (text: string) => void
   onError: (message: string) => void
   onStart?: () => void

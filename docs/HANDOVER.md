@@ -60,10 +60,10 @@ npm run build
 |---|---|
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
-| 后端测试 | **142/142 通过**（0 失败 0 错误，2026-10-16 全量复跑 BUILD SUCCESS；含 P0-1 新增的 `UsageStatsIntegrationTest` 8 个用例） |
+| 后端测试 | **151/151 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个） |
 | 前端 | typecheck 通过；lint **0 错误 / 7 警告**（7 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 见 `git status`（P0-1 成本治理埋点 + 用量看板已提交并推送） |
-| 当前阶段 | V1.0 功能收口完成；**第一阶段「成本治理」P0-1（埋点 + token 计量 + 用量看板）已完成**，P0-2 起未开工。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
+| 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1 已完成**；**《产品界面与功能细化方案》第一轮（通知箱 + 分时 UI + 三级提醒 + 语音全局化 + 悬浮助手）已完成**。P0-2（预算熔断）与方案第二轮未开工。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
@@ -138,6 +138,7 @@ npm run build
 - 既有表不会被 `CREATE TABLE IF NOT EXISTS` 升级，结构变更必须写迁移。
 - **Course / Exam 表没有 `api_key` 列**，通过 `schedule_id` 间接归属；校验走 schedule 归属而非直接比对 apiKey。
 - V5（成本治理 P0-1）新增 `llm_usage`（每次 LLM 调用的 token/延迟/成本）、`ai_event`（行为事件），并给 `ai_action` 加可空的 `decided_at`。**没有 JSON 列**，故不涉及 H2 的 TEXT / JacksonTypeHandler 兼容策略。
+- V6 新增 `notice_card`（今日待阅通知箱）。**原始材料不落库**——整段群聊记录既占空间又有隐私负担，只存 AI 提炼后的结构化卡片。
 
 ### 3.5 测试约定
 
@@ -145,6 +146,14 @@ npm run build
 - **例外**：`AiCampusAgentDailyPlanTest` 用 `Clock.systemDefaultZone()`。**凡是要比较「应用层时间戳 vs 数据库 `ON UPDATE` 时间戳」的测试，都不能用固定 Clock**，必须让两者同源（见 3.6）。
 - **HTTP 层**：`@SpringBootTest(classes = TimetableApplication.class)` + `@ActiveProfiles("standalone")` + `@AutoConfigureMockMvc` + device 注册（`POST /api/auth/device`）取 key。
 - 测试是全项目的安全网：**改动后任何既有测试失败，先判断是「预期变化」还是「真实回归」**，属预期变化的要在报告「偏离记录」里写明。
+
+### 3.5 通知箱（今日待阅）
+
+- **信息入口只有手动喂入**：用户转发/粘贴/截图给助手，AI 提炼成卡片。**没有自动抓取**——群消息监听、教务系统对接、校园邮箱同步全部不做（见第 6 节红线）。
+- **截图路径复用既有 OCR**：`POST /api/notices/extract` 只接受文本。前端先调 `aiApi.parseImageText` 转文字再进来，这样图片校验与并发闸门不用在通知箱里重复实现，OCR 成本也落在它自己的埋点场景 `SCENE_OCR` 上。
+- **卡片不是任务**：`notice_card` 与 `task` 分开。通知里绝大多数是「知道了就行」的信息，自动转任务会让待办区迅速失去信噪比。只有用户点「加入日程」才转。
+- **「忽略 → 降低同类信息」是显式规则，不是学习模型**：按 `source` 统计历史忽略率，超过 50% 且样本 ≥ 2 条的来源其新卡片**排序靠后**。降权只影响顺序，**不隐藏任何卡片**——用户没说「别再给我看」，只是「别老推这个」。
+- 只统计 `IGNORED` / `DONE` 两种已决定状态参与降权计算。PENDING 的卡片还没被看过，用它去惩罚用户会导致「刚导入一批通知还没看，新通知就被降权」。
 
 ### 3.6 已踩过的坑（别再踩）
 
@@ -164,6 +173,10 @@ npm run build
 | `List.of(...)` 不接受 null | `MAX(updated_at)` 无数据时返回 null，塞进 `List.of` 直接 NPE。改用 `String[]` 循环累加 |
 | **测试里写死「今天」的日期字面量** | `TaskEndpointIntegrationTest` 曾写死 `2026-10-15` 作为任务截止时间，而 `AiServiceImpl.parseExtractedDeadline` 的设计是「**过去的截止时间一律清洗成 null**」→ 日期一翻篇（2026-10-16）断言必挂。**两类时钟要分清**：① 带固定 `Clock` 的 AI 测试（`AiCampusAgent*Test`，today 恒为 2026-09-27）写死日期是安全的；② `@SpringBootTest` 全量启动、无 Clock 覆盖的测试（`TaskEndpointIntegrationTest` 等）用的是 `TimeConfig` 真实系统时钟，**凡是「未来/过去」语义的日期必须用 `LocalDate.now().plusDays(n)` 相对构造**。手动创建路径（`POST /api/tasks`）不过期清洗，写死过去日期反而不受影响——这个不对称是设计，别"顺手统一" |
 | **改 `LlmClient` 方法签名 → 波及所有 mock** | P0-1 给 `chatJson` / `chatJsonStream` 加了带 `scene` 的重载，旧签名保留为 `default` 方法。这样**只保证实现类零改动，不保证调用方零改动**：测试里 50 处 `when(provider.chatJson(any()))`（1 参）不再匹配业务侧 2 参调用，Mockito 静默返回 null，报出来的是「AI 未返回内容」这种完全指不到根因的错。**接口签名变更后，先全局搜 mock 再跑测试**，别指望 default 方法能一劳永逸 |
+| **分时换肤别全局改 CSS 变量** | 项目是「CSS 变量（`index.css`）+ antd `ConfigProvider` TOKENS（`theme.tsx`）」**双轨并行硬编码**——antd Card 的背景来自 `colorBgContainer` 而不是 `var(--bg-card)`。全局改变量会让自定义 class 与 antd 组件逐层脱节。正确做法是在页面容器（`.dashboard-page[data-period]`）作用域内只覆盖 `--accent` 与页面级 tint，不碰主题本身，也不覆盖用户手动选的亮/暗模式 |
+| **`useMemo` 不能写在 early return 之后** | `DashboardPage` 有 `if (loading && !data) return <Skeleton/>`，在它之后调用 `useMemo` 会违反 Hooks 调用顺序，lint 的 `rules-of-hooks` 直接报错（不是警告）。要么把 Hook 提到 early return 之前，要么像 `nextCourse` 那样改成普通计算——给小数组排序每次重算的成本可以忽略 |
+| **裸 `FloatButton` 会重叠** | antd 的 `FloatButton` 默认都定位在右下 24px，想放第二个必须用 `FloatButton.Group` 包起来，否则两个浮球叠在同一位置互相遮挡 |
+| **语音 hook 绑在会重挂载的组件上会被打断** | `useSpeechInput` 在组件卸载时 `abort`。录音途中用户切页面/关弹窗就会静默中断。全局语音能力必须提到 Provider 层（本项目是 `VoiceAssistantProvider` 挂在路由外层）。另外 `onTranscript` 给的是**累计全文**不是增量，必须用 ref 存住录音前的 base 文本再拼接 |
 | **埋点/统计类代码的两个通病** | ① 浮点金额直接返回 → 前端拿到 `0.026600000000000002`，必须 `roundMoney()` 取整 4 位；② 毫秒→秒换算里 `/10` 写了两次 → 耗时差 10 倍。两者都是**测试先发现的真实产品 bug**，别把断言改成迁就实现 |
 
 ---
@@ -183,6 +196,8 @@ npm run build
 | `service/DeepSeekLlmClient.java` | DeepSeek 调用实现。**token 计量落点**：非流式读 `usage`，流式必须开 `stream_options.include_usage`（usage 在最后一个 chunk） |
 | `service/LlmUsageRecorder.java`、`service/AiEventRecorder.java` | 成本/行为埋点。**异常必须吞掉**，埋点不能影响业务 |
 | `config/LlmPricingProperties.java` | 单价表（`app.llm.pricing`）。**调价走环境变量，别改代码** |
+| `service/impl/NoticeServiceImpl.java` | 今日待阅通知箱。source 降权是**显式规则**不是学习模型；只统计已决定状态 |
+| `controller/NoticeController.java` | `/api/notices/*`。转任务后要调 `invalidateProposalsOnDataChange` |
 | `service/impl/UsageStatsServiceImpl.java` | 用量聚合 + 提案漏斗。注意 `roundMoney()` 与 `avgDecideSeconds` 的毫秒→秒换算 |
 | `service/impl/PromptTemplateRegistry.java` | `resources/prompts/*.md` + front matter `version:N`；缺失返回 null 降级 |
 | `controller/` | `AiController`（聊天/提案执行）、`TaskController`、`DailyPlanController`、`DashboardController`、`MemoryController`、`StudentProfileController`、`UsageStatsController`（`/api/stats/*`） |
@@ -205,6 +220,11 @@ npm run build
 | `pages/AiChatPage.tsx` | AI 聊天（流式） |
 | `pages/SettingsPage.tsx` | 设置：小组件地址、AI Key、**长期记忆管理**、字体、作息表 |
 | `pages/StatsPage.tsx` | AI 用量统计（路由 `/stats`）：成本/调用/token/确认率 + 每日趋势 + 分场景 + 提案漏斗。**不引图表库** |
+| `pages/DashboardPage.tsx` | 首页 + **分时动态 UI**（早/午/晚三档内容权重）。三档共用同一份数据 |
+| `components/NoticeInboxPanel.tsx` | 今日待阅卡片列表（加入日程/忽略/稍后提醒/了解详情） |
+| `components/NoticeDraftModal.tsx` | 通知草稿确认弹窗（human-in-the-loop） |
+| `store/VoiceAssistantContext.tsx` | 全局语音新增待办。**Provider 挂路由外层**，否则录音会被卸载打断 |
+| `hooks/useReminders.ts` | 三级提醒。**纯前端，关页面不提醒**，阈值写 `REMINDER_LEADS` 常量便于后续接后端推送 |
 | `components/AiActionCard.tsx` | 提案卡渲染（每类 action 一套展示，新增 action 要同步） |
 | `components/MemoryManager.tsx` | 记忆管理（添加/行内编辑/归档/删除） |
 | `components/PlanTimeline.tsx` | 每日计划时间线 |
@@ -214,6 +234,40 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-16 · WorkBuddy ·《AI 校园助手产品界面与功能细化方案》第一轮
+
+**前置：范围裁定。** 方案里有四块踩既有红线或技术上不成立，**明确不做**（已写进第 6 节防回潮）：自动抓取 QQ/微信群/教务系统/校园邮箱、自学习推荐算法（点赞忽略收藏训练权重）、全国高校知识库、顶刊/校招等外部数据源。天气/食堂拥挤度/快递取件/教室导航同样不做——没有可靠数据源。「今日专业速览」行业新闻板块和「决策辅助（AI 版的我）」不做新增（后者现有档案 + 长期记忆已在承担）。
+
+**三项已拍板的设计决策**（用户未在选项中确认，按调研结论取推荐项）：
+
+1. **三级提醒走纯前端**。项目零通知基建，后端定时 + 轮询要新增表/实体/端点/轮询逻辑，工作量翻倍且最终仍需页面常开才能弹窗。阈值写成 `REMINDER_LEADS` 可配置常量，将来接后端推送时不用重写。**代价已在 UI 上明说：关掉页面不提醒。**
+2. **今日必做的优先级以客观截止为准**。方案把「截止紧迫度」和「用户设的 priority」混在一起了。本项目的判断是：核心诉求是「怕漏事」，客观截止时间应压过主观设定——已逾期/今天截止强制置顶，卡片标注「临近截止自动置顶」避免用户误以为改了他的设置。
+3. **配色走保守方案**。方案要求三套色板，但项目是双轨并行硬编码，加第三套会让 antd 组件与自定义 class 逐层脱节。实际上只做了**局部氛围**：`.dashboard-page[data-period]` 作用域内覆盖 `--accent` + 页面 tint，不动主题、不覆盖用户手动选的亮/暗模式。
+
+**新增（后端）**
+
+| 内容 | 说明 |
+|---|---|
+| `V6__notice_inbox.sql`（h2 + mysql） | `notice_card` 表。**原始材料不落库**，只存 AI 提炼后的卡片 |
+| `NoticeCard` / `NoticeCardMapper` | 实体 + 空 BaseMapper |
+| `notice-extract.md`（v1) | 新 prompt。明确要求模型「只做提炼不做决策」，且看不出专业/年级时 relevance 一律填 2 不准填 1 |
+| `LlmUsage.SCENE_INBOX` | 新埋点场景，与 EXTRACT 分开统计 |
+| `NoticeService` / `NoticeServiceImpl` | extract（草稿不落库）/ create / listToday / toTask / ignore / snooze / remove |
+| `NoticeController` | 7 个端点，全部不写鉴权代码 |
+| `NoticeEndpointIntegrationTest` | **9 个用例**，含跨账号 404、V6 迁移列完整性、降权排序与样本量下限 |
+
+**新增 / 改造（前端）**
+
+- `NoticeInboxPanel.tsx`：卡片 + 加入日程 / 忽略 / 稍后提醒 / 一键了解详情。「了解详情」复用 QuickImportWidget 的 `navigate('/ai', { state: { quickImport } })` 通道，**只填输入框不自动发送**。
+- `NoticeDraftModal.tsx`：草稿确认弹窗，标题可改、默认全选。
+- `QuickImportWidget.tsx`：加「存为待阅通知」出口；浮球改 `FloatButton.Group` 双按钮（导入 / AI 助手）。
+- `DashboardPage.tsx`：早/午/晚三档内容权重，**同一份数据不因换时段重新拉取**。晚间额外拉一次明日数据（规则聚合不烧 token，且用 ref 防 60s 定时器重复触发）。
+- `VoiceAssistantContext.tsx`：全局语音新增待办，Provider 挂在路由外层（避免在会重挂载的组件上录音被 abort）。
+- `useReminders.ts`：三级提醒 hook。
+- `utils/schedule.ts` 加 `timeOfDay`；`utils/task.ts` 加 `groupTasksByUrgency` / `isAutoEscalated`。
+
+**验收**：后端 **151/151** 全绿；前端 typecheck 通过、lint **0 错误 / 8 警告**（7 个存量基线 + 1 个新增的 `react-refresh` 提示）、build 通过。
 
 ### 2026-10-16 · WorkBuddy · 成本治理 P0-1：LLM 埋点 + token 计量 + 用量看板
 
@@ -435,6 +489,24 @@ npm run build
 **暂缓 / 明确不做（方案已排除，调研报告再次确认）**：浏览器插件、桌面助手、爬学校教务系统、推荐算法、本地模型训练、全国高校知识库、社交 / 广告 / 用户画像。
 
 > 注：「不爬教务」在调研中被重新定性为**护城河**：2026 年网信办/工信部/公安部个人信息保护专项行动把教育领域单列治理，重点查过度收集位置/学校/学籍。竞品要做 AI 就得接教务系统，接了就进监管视野；我们走「用户主动上传 → 解析 → 人工确认」，既拿到结构化数据又不碰学校系统。
+
+---
+
+### 6.7 明确不做的事（防回潮，改动前先读这一节）
+
+以下项目**已被否决过**，不要在后续迭代中重新引入——它们要么踩合规红线，要么技术上不成立：
+
+| 类别 | 具体内容 | 原因 |
+|---|---|---|
+| 自动抓取 | QQ/微信群消息监听、教务系统绑定、校园邮箱同步 | 等价于爬虫 + 浏览器插件，用户明令禁止 |
+| 自学习推荐 | 点赞/忽略/收藏训练权重、用户画像自动更新、协同过滤 | 推荐算法，用户明令禁止。降权走**显式规则**（见 3.5） |
+| 外部知识库 | 全国高校知识库、保研政策库、选课指南库 | 用户明令禁止 |
+| 外部数据源 | 顶刊论文摘要、国际顶会、导师课题、图书馆新书、历年真题、校招薪资 | 需要实时外部数据源，单靠 LLM API 拿不到 |
+| 第三方接口 | 天气、食堂拥挤度、快递取件、教室导航 | 无可靠数据源；食堂拥挤度与快递取件没有公开的个人化 API |
+| 行业新闻 | 「今日专业速览」板块 | 同上，依赖外部数据源 |
+| 桌面/浏览器端 | 浏览器插件、桌面助手 | 用户明令禁止 |
+
+**能做的替代**：信息入口用**手动喂入**（转发/粘贴/截图）替代自动抓取；个性化用**档案 + 长期记忆**（用户显式告知）替代自学习画像。这两条已经落地，见 3.5。
 
 ---
 

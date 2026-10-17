@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Checkbox, Collapse, FloatButton, Input, message, Modal, Space, Typography, Upload } from 'antd'
 import type { UploadProps } from 'antd'
-import { AudioOutlined, FileImageOutlined, ImportOutlined, StopOutlined } from '@ant-design/icons'
+import {
+  AudioOutlined,
+  FileImageOutlined,
+  ImportOutlined,
+  MessageOutlined,
+  StopOutlined,
+} from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { aiApi, taskApi } from '../api'
+import { aiApi, noticeApi, taskApi } from '../api'
 import { useApp } from '../store/AppContext'
 import { useSpeechConsent, useSpeechInput } from '../hooks/useSpeechInput'
 import { extractImportFileText, isSupportedImage, MAX_IMAGE_BYTES, MAX_IMPORT_TEXT_CHARS } from '../utils/importFiles'
 import { readChatImage } from '../utils/chatImport'
 import TaskDraftModal from './TaskDraftModal'
-import type { TaskDraft, TaskExtractResult } from '../types'
+import NoticeDraftModal from './NoticeDraftModal'
+import type { NoticeDraft, NoticeExtractResult, TaskDraft, TaskExtractResult } from '../types'
 
 const { Dragger } = Upload
 
@@ -30,6 +37,8 @@ export default function QuickImportWidget() {
   const [error, setError] = useState('')
   const [draftResult, setDraftResult] = useState<TaskExtractResult | null>(null)
   const [createError, setCreateError] = useState('')
+  const [noticeResult, setNoticeResult] = useState<NoticeExtractResult | null>(null)
+  const [noticeCreateError, setNoticeCreateError] = useState('')
   const textBeforeRecordingRef = useRef('')
   const { recording, start, stop, abort, supported } = useSpeechInput({
     onStart: () => {
@@ -167,6 +176,50 @@ export default function QuickImportWidget() {
     }
   }
 
+  /**
+   * 材料 → 通知草稿（不落库）。
+   *
+   * 只接受文本：截图先走 aiApi.parseImageText 转文字，这样复用既有的图片校验
+   * 与并发闸门，OCR 成本也落在它自己的埋点场景上，不用在通知箱里重复实现一遍。
+   */
+  const extractNotices = async () => {
+    if (busy || recording) return
+    setError('')
+    setNoticeCreateError('')
+    setBusy(true)
+    try {
+      const material = imageFile
+        ? (await aiApi.parseImageText(await readChatImage(imageFile))).text
+        : text.trim()
+      if (!material) {
+        setError('请提供要提炼的材料文本或截图')
+        return
+      }
+      setNoticeResult(await noticeApi.extract(material))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '通知提炼失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** 通知草稿确认后才落库（human-in-the-loop）。 */
+  const confirmNotices = async (drafts: NoticeDraft[]) => {
+    setBusy(true)
+    setNoticeCreateError('')
+    try {
+      const created = await noticeApi.create(drafts)
+      message.success(`已加入 ${created.length} 条待阅通知，去首页「今日待阅」查看`)
+      setNoticeResult(null)
+      setOpen(false)
+      reset()
+    } catch (e) {
+      setNoticeCreateError(e instanceof Error ? e.message : '通知创建失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const close = () => {
     if (busy) return
     abort()
@@ -175,33 +228,52 @@ export default function QuickImportWidget() {
 
   return (
     <>
-      <FloatButton
-        icon={<ImportOutlined />}
-        tooltip="截图、文件或语音导入"
-        aria-label="打开快速导入"
-        onClick={() => setOpen(true)}
-      />
+      {/*
+        两个浮球必须用 FloatButton.Group：裸 FloatButton 默认都定位在右下 24px，
+        不用 Group 会叠在同一个位置互相遮挡。
+      */}
+      <FloatButton.Group trigger="click" icon={<ImportOutlined />} tooltip="快速操作">
+        <FloatButton
+          icon={<ImportOutlined />}
+          tooltip="截图、文件或语音导入"
+          aria-label="打开快速导入"
+          onClick={() => setOpen(true)}
+        />
+        <FloatButton
+          icon={<MessageOutlined />}
+          tooltip="问 AI 学长"
+          aria-label="打开 AI 助手"
+          onClick={() => navigate('/ai')}
+        />
+      </FloatButton.Group>
       <Modal
         className="quick-import-modal"
         title="快速导入到 AI 助手"
         open={open}
         onCancel={close}
         footer={
-          <Space>
+          <Space wrap>
             <Button
               type="primary"
               loading={busy}
               disabled={!text.trim() || !!imageFile || recording}
               onClick={sendToAi}
             >
-              转交 AI 助手（先生成提案）
+              转交 AI 助手
             </Button>
             <Button
               loading={busy}
               disabled={(!text.trim() && !imageFile) || recording}
               onClick={extractTasks}
             >
-              抽取为任务草稿
+              抽取为任务
+            </Button>
+            <Button
+              loading={busy}
+              disabled={(!text.trim() && !imageFile) || recording}
+              onClick={extractNotices}
+            >
+              存为待阅通知
             </Button>
           </Space>
         }
@@ -299,6 +371,17 @@ export default function QuickImportWidget() {
           setCreateError('')
         }}
         onConfirm={(drafts) => void confirmDrafts(drafts)}
+      />
+      <NoticeDraftModal
+        open={noticeResult !== null}
+        result={noticeResult}
+        confirming={busy}
+        error={noticeCreateError}
+        onCancel={() => {
+          setNoticeResult(null)
+          setNoticeCreateError('')
+        }}
+        onConfirm={(drafts) => void confirmNotices(drafts)}
       />
     </>
   )

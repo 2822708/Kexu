@@ -406,3 +406,37 @@ export interface ProposalFunnel {
   /** 无任何已决定提案时为 null */
   avgDecideSeconds: number | null
 }
+
+/** 一天的三个时段（分时动态 UI）。0–6 点归入 night，与「夜深了」问候保持一致 */
+export type TimeOfDay = 'morning' | 'day' | 'night'
+
+/** 待阅通知卡片状态：待决定 / 已忽略 / 已转任务 */
+export type NoticeStatus = 'PENDING' | 'IGNORED' | 'DONE'
+
+/** 通知草稿：AI 提炼输出，确认后才落库 */
+export interface NoticeDraft {
+  source: string
+  title: string
+  summary: string
+  keyTime: string | null
+  requirement: string
+  /** 关联度 1 高 / 2 中 / 3 低 */
+  relevance: number
+}
+
+/** 已落库的通知卡片 */
+export interface NoticeCard extends NoticeDraft {
+  id: number
+  status: NoticeStatus
+  /** 「稍后提醒」的到期时刻；未设置时为 null */
+  snoozeUntil: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** 通知提炼结果：草稿不落库 */
+export interface NoticeExtractResult {
+  cards: NoticeDraft[]
+  confidence: number
+  note: string
+}

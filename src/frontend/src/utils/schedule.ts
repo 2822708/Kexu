@@ -104,4 +104,26 @@ export function rangeWeeks(count: number): number[] {
   return Array.from({ length: count }, (_, i) => i + 1)
 }
 
+/**
+ * 分时档位（分时动态 UI 用）：早间 6–10 / 午间 10–18 / 晚间 18–次日 6。
+ *
+ * 注意 0–6 点归入 night，与首页「夜深了」的问候一致——凌晨刷首页的人
+ * 显然该看复盘而不是晨间规划。
+ *
+ * ⚠️ 别和 `PeriodCategory`（MORNING/AFTERNOON/EVENING，节次表的静态分类）混淆，
+ * 那个表示「第 1-4 节属于上午」，跟当前时刻无关。
+ */
+export function timeOfDay(now: Dayjs = dayjs()): import('../types').TimeOfDay {
+  const hour = now.hour()
+  if (hour >= 6 && hour < 10) return 'morning'
+  if (hour >= 10 && hour < 18) return 'day'
+  return 'night'
+}
+
+export const TIME_OF_DAY_LABELS: Record<import('../types').TimeOfDay, string> = {
+  morning: '早间',
+  day: '午间',
+  night: '晚间',
+}
+
 export { dayjs }

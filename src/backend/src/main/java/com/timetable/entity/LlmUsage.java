@@ -20,9 +20,11 @@ import java.time.LocalDateTime;
  */
 @TableName("llm_usage")
 public class LlmUsage {
-    /** 埋点场景：CHAT / EXTRACT / PLAN / REFINE / PARSE_HTML / OCR / UNKNOWN。 */
+    /** 埋点场景：CHAT / EXTRACT / INBOX / PLAN / REFINE / PARSE_HTML / OCR / UNKNOWN。 */
     public static final String SCENE_CHAT = "CHAT";
     public static final String SCENE_EXTRACT = "EXTRACT";
+    /** 通知箱提炼（今日待阅）。与 EXTRACT 分开统计：两者的 prompt 与输出形态都不同。 */
+    public static final String SCENE_INBOX = "INBOX";
     public static final String SCENE_PLAN = "PLAN";
     public static final String SCENE_REFINE = "REFINE";
     public static final String SCENE_PARSE_HTML = "PARSE_HTML";

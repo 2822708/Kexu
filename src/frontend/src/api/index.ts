@@ -16,6 +16,9 @@ import type {
   Memory,
   MemoryList,
   MemoryPayload,
+  NoticeCard,
+  NoticeDraft,
+  NoticeExtractResult,
   ParseHtmlResult,
   PeriodConfig,
   ProposalFunnel,
@@ -167,6 +170,31 @@ export const planApi = {
     request<DailyPlan | null>(`/plans/daily${date ? `?date=${date}` : ''}`),
   generate: (body: { date?: string; scheduleId?: number | null } = {}) =>
     request<DailyPlan>('/plans/daily', { method: 'POST', body }),
+}
+
+/**
+ * 今日待阅通知箱。
+ * 信息入口是**手动喂入**（转发/粘贴/截图转文本），不是自动抓取——
+ * 没有群消息监听、没有教务系统对接。
+ */
+export const noticeApi = {
+  /** 待决定且「稍后提醒」已到期的卡片；被高频忽略的来源排在后面 */
+  list: () => request<NoticeCard[]>('/notices'),
+  /** AI 提炼草稿，不落库。只接受文本——截图先走 aiApi.parseImageText 转文本 */
+  extract: (text: string) =>
+    request<NoticeExtractResult>('/notices/extract', { method: 'POST', body: { text } }),
+  /** 草稿确认后落库 */
+  create: (cards: NoticeDraft[]) =>
+    request<NoticeCard[]>('/notices', { method: 'POST', body: { cards } }),
+  /** 加入日程：卡片转任务。draft 不传则用卡片内容兜底 */
+  toTask: (id: number, draft?: Partial<TaskDraft>) =>
+    request<NoticeCard>(`/notices/${id}/to-task`, { method: 'POST', body: draft ?? {} }),
+  /** 忽略：保留数据便于追溯，只是移出待阅列表并影响同来源排序 */
+  ignore: (id: number) => request<NoticeCard>(`/notices/${id}/ignore`, { method: 'POST' }),
+  /** 稍后提醒：hours 缺省 4 小时，范围 1–72 */
+  snooze: (id: number, hours = 4) =>
+    request<NoticeCard>(`/notices/${id}/snooze`, { method: 'POST', body: { hours } }),
+  remove: (id: number) => request<null>(`/notices/${id}`, { method: 'DELETE' }),
 }
 
 /**

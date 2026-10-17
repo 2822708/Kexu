@@ -911,6 +911,112 @@ body {
   color: var(--text-secondary) !important;
 }
 
+/* ==================== 分时动态 UI（首页） ==================== */
+/* 
+ * 分时只做「局部氛围」：在 .dashboard-page 作用域内重定义 CSS 变量。
+ * 
+ * 为什么不全局换肤：项目是「CSS 变量 + antd ConfigProvider TOKENS」双轨并行，
+ * antd Card 的背景来自 colorBgContainer 而不是 var(--bg-card)，全局改变量会让
+ * 自定义 class 和 antd 组件脱节。这里只覆盖 accent（按钮/标签跟随）和页面级
+ * tint（容器背景），不碰主题本身，也不覆盖用户手动选的亮/暗模式。
+ */
+.dashboard-page {
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.dashboard-page[data-period='morning'] {
+  --accent: #ffb26b;
+  --accent-hover: #ff9f47;
+  --dashboard-tint: #fff6e9;
+  --dashboard-tint-strong: #ffe8cc;
+}
+
+.dashboard-page[data-period='day'] {
+  --accent: #7fb3d5;
+  --accent-hover: #6aa5cc;
+  --dashboard-tint: #eaf4fb;
+  --dashboard-tint-strong: #d6e9f7;
+}
+
+/* 晚间用半透明黑：亮色主题下压暗、暗色主题下更暗，两种主题都能用 */
+.dashboard-page[data-period='night'] {
+  --accent: #9575cd;
+  --accent-hover: #8165bf;
+  --dashboard-tint: rgba(0, 0, 0, 0.14);
+  --dashboard-tint-strong: rgba(0, 0, 0, 0.26);
+}
+
+.dashboard-page {
+  background: var(--dashboard-tint);
+}
+
+/* 时段氛围条：一眼看出现在处在哪个模式 */
+.dashboard-period-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 4px;
+  background: var(--dashboard-tint-strong);
+  border: 1px solid var(--border-light);
+  margin-bottom: 12px;
+}
+
+.dashboard-period-bar-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dashboard-period-bar-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 午间模式：今日必做收缩成顶部悬浮小条 */
+.dashboard-mini-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.dashboard-mini-bar .mini-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+/* 晚间模式：完成度统计 */
+.dashboard-recap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dashboard-recap-num {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.dashboard-recap-unit {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-left: 2px;
+}
+
 /* ==================== Instant Interactions ==================== */
 /* 点按/悬停不做过渡动画，瞬间完成 */
 .ant-btn,
