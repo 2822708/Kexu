@@ -61,7 +61,12 @@ public class LlmBudgetService {
      * @param scene  场景标识，取 {@link LlmUsage} 的 SCENE_* 常量
      */
     public void check(String apiKey, String scene) {
-        if (!budget.isEnabled() || apiKey == null || apiKey.isBlank()) {
+        if (!budget.isEnabled()) {
+            return;
+        }
+        if (apiKey == null || apiKey.isBlank()) {
+            // 预算已启用却拿不到身份 = 拦截失效。静默放行会让额度形同虚设，必须留声。
+            log.warn("预算拦截跳过：调用方身份为空（scene={}），本次调用不受额度约束", scene);
             return;
         }
         String normalized = (scene == null || scene.isBlank()) ? LlmUsage.SCENE_UNKNOWN : scene;

@@ -38,6 +38,15 @@ public class LlmUsageRecorder {
                        int promptTokens, int completionTokens,
                        boolean stream, int latencyMs, String status) {
         if (apiKey == null || apiKey.isBlank()) {
+            /*
+             * 理论上不该发生（拦截器保证），但一旦发生就是静默丢数据：整个场景的
+             * 成本在统计页上凭空消失，而且没有任何报错。
+             *
+             * 实测踩过一次：SSE 流式对话跑在 streamExecutor 的工作线程上，
+             * RequestContext（ThreadLocal）取不到身份 → 对话场景零计量。
+             * 所以这里必须留声，不能默默 return。
+             */
+            log.warn("记录 LLM 用量失败：调用方身份为空（scene={}），这条用量不会计入统计", scene);
             return;
         }
         try {

@@ -221,7 +221,13 @@ public class AiController {
         emitter.onError(e -> cancelled.set(true));
 
         try {
-            streamExecutor.execute(() -> {
+            streamExecutor.execute(() -> RequestContext.callWithApiKey(apiKey, () -> {
+            /*
+             * 身份必须带进这个线程，否则两个后果都是静默的：
+             * ① 用量记不进来 → 对话（最贵的场景）在统计页完全消失；
+             * ② 预算检查跳过 → 对话永远不会熔断。
+             * set/清理的语义（含线程复用场景下的防串号）见 RequestContext.callWithApiKey。
+             */
             try {
                 AiMessageResponse result = aiService.sendMessageStream(id, request, apiKey,
                         new AiService.StreamCallback() {
@@ -255,7 +261,7 @@ public class AiController {
                 emit(emitter, "error", Map.of("code", 500, "message", "AI 服务异常"), cancelled);
                 emitter.complete();
             }
-            });
+            }));
         } catch (RejectedExecutionException e) {
             log.warn("AI stream rejected: executor saturated");
             emit(emitter, "error", Map.of("code", 503, "message", "当前 AI 请求过多，请稍后重试"), cancelled);
