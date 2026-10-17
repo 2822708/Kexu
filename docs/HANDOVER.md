@@ -60,10 +60,10 @@ npm run build
 |---|---|
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
-| 后端测试 | **164/164 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个） |
+| 后端测试 | **171/171 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个） |
 | 前端 | typecheck 通过；lint **0 错误 / 8 警告**（8 个警告全在存量文件，属基线，不得新增）；build 通过 |
-| 工作区 | 见 `git status`（P0-1 成本治理埋点 + 用量看板已提交并推送） |
-| 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》第一轮（通知箱 + 分时 UI + 三级提醒 + 语音全局化 + 悬浮助手）与第二轮（启动引导页 + 使用指引 + 模块自定义排序显隐）均已完成**。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
+| 工作区 | 见 `git status`（**本地较 GitHub 领先 5 个提交未推送**：P0-1、P0-2、通知箱/分时 UI、引导页/模块自定义、ThreadLocal 修复。缺 `ghp_`/`github_pat_` 开头的 PAT，见 6.5） |
+| 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》两轮均已完成**。**2026-10-18 用真实 DeepSeek Key 完成了首次端到端验收**，并修复了一个只有真实调用才能暴露的 P0（流式对话工作线程丢失调用方身份，详见第 5 节当日条目）。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
@@ -77,7 +77,7 @@ npm run build
 
 | 缺口 | 状态 |
 |---|---|
-| ① 无 LLM 调用计量/预算 | ✅ **已全部解决**：P0-1 计量与看板（V5 迁移 + `llm_usage` + `/api/stats/*` + 统计页）；**P0-2 月度预算与超限熔断**（两级额度 + 装饰器拦截 + 统计页预算卡片）。**默认不限制**，需显式配置额度 |
+| ① 无 LLM 调用计量/预算 | ✅ **已全部解决**：P0-1 计量与看板（V5 迁移 + `llm_usage` + `/api/stats/*` + 统计页）；**P0-2 月度预算与超限熔断**（两级额度 + 装饰器拦截 + 统计页预算卡片）。**默认不限制**，需显式配置额度。**2026-10-18 真实 Key 端到端验收**又抓出并修掉两个静默缺陷：CHAT/REFINE 场景不计量、流式对话丢身份（见第 5 节当日条目） |
 | ② `LlmClientRegistry` 仅注册 DeepSeek 一家（单点 + 无法分级路由） | 未解决（6.1 第 2/3 项） |
 | ③ 无用户行为埋点 | **提案确认/拒绝已解决**（P0-1：`ai_event` + `ai_action.decided_at`）；留存 / 计划采纳率未做 |
 | ④ 无模型输出评估集 | 未解决 |
@@ -182,6 +182,8 @@ npm run build
 | **localStorage 里的用户配置必须读时清洗** | 存模块的 `order` / `hidden` 时，只过滤「认识的 key」还不够——**必须把默认列表里有、存档里没有的 key 补进去**。否则以后新增模块，老用户存档里没有它，就永远看不到这个新功能，而且根本不知道去哪开。JSON 解析失败要静默回默认，别让一个坏存档把首页搞白屏 |
 | **`LlmClientRegistry` 是 8 个测试切片的显式 `@Import` 项** | 给 registry 加构造依赖（P0-2 加了 `LlmBudgetService`）会让这 8 个切片全部起不来上下文。**改 registry 构造函数 = 同步改 8 个测试文件的 `@Import` 与 import 语句**。别用 `Optional` 注入来「省事」——熔断 bean 缺失时静默失效正是最危险的失败模式 |
 | **配置 Map 的 key 要归一化** | yml 里写 `chat:` 而场景常量是 `CHAT`，不在 setter 里转大写就会「配置看起来对了但永远命中不了」。这类静默失效最难查 |
+| **ThreadLocal 身份传不进线程池** | `RequestContext` 是 ThreadLocal，异步任务（`streamExecutor`）跑在工作线程上取不到调用方设的值。下游 `DeepSeekLlmClient` 读到 null **不报错**，只会静默不记账、静默跳过预算检查。**这个 bug mock 测试永远测不到**——被替换掉的正是读 ThreadLocal 的那段代码；防回归测试必须让 mock 在被调用时**主动读一次 `RequestContext`** 复现真实行为。修复模式：异步派发一律走 `RequestContext.callWithApiKey(apiKey, task)`（set → 执行 → finally 恢复），且**必须恢复**——线程复用下残留身份会让下一个请求的花费记到本账号，比丢失更危险 |
+| **mock 忘了 stub `isConfigured()` → 503 走「无声」分支** | `LlmClientRegistry.active()` 在没有任何客户端 `isConfigured()` 时抛 503 `BusinessException`。流式链路里这个异常只 `emit("error")` + `complete()`，**不调 `SseEmitter.onError`、不打 error 日志**。排查指纹：mock 从未被调用 + 无任何异常日志 + `onError` 未触发 = 任务在到达 LLM 之前就抛了 `BusinessException`。所有 stub `chatJson*` 的测试都要先 `when(provider.isConfigured()).thenReturn(true)` |
 
 ### 3.8 预算熔断（成本治理 P0-2）
 
@@ -222,7 +224,8 @@ npm run build
 | `service/BudgetAwareLlmClient.java` | P0-2 拦截装饰器，由 `LlmClientRegistry.active()` 包装。**不是 Spring bean**（否则被 `List<LlmClient>` 收集进去自己包自己） |
 | `config/LlmBudgetProperties.java` | 预算配置。**默认不限制**；Map key 在 setter 里转大写 |
 | `service/impl/PromptTemplateRegistry.java` | `resources/prompts/*.md` + front matter `version:N`；缺失返回 null 降级 |
-| `controller/` | `AiController`（聊天/提案执行）、`TaskController`、`DailyPlanController`、`DashboardController`、`MemoryController`、`StudentProfileController`、`UsageStatsController`（`/api/stats/*`） |
+| `controller/` | `AiController`（聊天/提案执行；**流式任务必须经 `RequestContext.callWithApiKey` 携带身份进工作线程**）、`TaskController`、`DailyPlanController`、`DashboardController`、`MemoryController`、`StudentProfileController`、`UsageStatsController`（`/api/stats/*`） |
+| `interceptor/RequestContext.java` | ThreadLocal 身份。**异步派发一律走 `callWithApiKey(apiKey, task)`**（set → 执行 → finally 恢复调用前状态）；空身份时 `LlmUsageRecorder` / `LlmBudgetService` 会打 warn 日志 |
 | `service/StudentProfileService` | 档案读写：`applyPatch`（AI 提案，null=保持）与 `replace`（表单，null=清空）**语义相反，别用错** |
 
 **Prompt 模板**（`src/backend/src/main/resources/prompts/`）
@@ -259,6 +262,35 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-18 · WorkBuddy · 首次真实端到端验收 + 修复「工作线程丢失身份」P0
+
+**范围**：拿用户提供的真实 DeepSeek Key 做**第一次真实模型调用验收**（此前全部链路只跑过 mock），顺带把刚完成的 P0-2 预算熔断在真实链路上验证。
+
+**真实验收跑通的链路**：建课表 → AI 流式对话（thinking/text/planning/done 事件分离干净；模型正确处理「下午 3-4 节」歧义并说明假设）→ 提案确认执行落库 → 通知提炼（keyTime 精确到 10-25 23:59）→ 每日计划（含 BREAK）→ 任务抽取（「下周一交」正确推算为 10-19）→ 课表 HTML 解析。
+
+**真实调用暴露的两个静默缺陷（都是 mock 永远测不到的那类）**
+
+1. **CHAT / REFINE 两个场景完全不计量**：真实调用 6 次只有 4 次入账，token 从应有的约 1.1 万缩到 4910。根因是场景参数没有透传到实际调用点。已修（随 `e8dbca4` 的场景透传落地），修复后 CHAT 4621 tokens、REFINE 1623 tokens 正确入账。
+2. **流式对话的工作线程丢失调用方身份（P0，`e55b477`）**：`RequestContext` 是 ThreadLocal，`streamExecutor` 的工作线程里取不到拦截器设的 apiKey → 下游 `DeepSeekLlmClient` 读到 null → **用量记不进来 + 预算检查跳过，两个后果都是静默的**。这个缺陷用 mock 测不出来——被替换掉的正是读 ThreadLocal 的那段代码。
+
+**P0-2 熔断真实验证通过**：把 CHAT 场景额度压到 ¥0.001 后，对话返回 `429 本月「对话」的 AI 预算已用完…其它功能不受影响`，而 INBOX 通知提炼与 PARSE_HTML 课表解析照常 200——两级额度的语义在真实链路上成立。
+
+**修复方式与测试（本轮核心交付）**
+
+| 文件 | 说明 |
+|---|---|
+| `interceptor/RequestContext.java` | 新增 `callWithApiKey(apiKey, task)`：带身份执行 + try/finally **恢复调用前状态**。线程复用下不清理会让下一个请求的花费记到本账号，比丢失更危险；异步派发一律走它 |
+| `controller/AiController.java`（改） | 流式任务改用 `callWithApiKey`；隐患注释收敛到助手定义处 |
+| `service/LlmUsageRecorder.java`、`service/LlmBudgetService.java`（改） | 身份为空时补 `log.warn`——**此前静默丢失，正是这次排查困难的根源** |
+| `controller/AiStreamIdentityIntegrationTest.java` | 防回归（2 例）。关键技巧：让 mock **在被调用时主动读一次 `RequestContext`**，复现真实客户端行为。**已验证修复前失败（断言 `seen=null`）、修复后通过** |
+| `interceptor/RequestContextTest.java` | 助手契约单测（5 例）：任务内可见、结束不残留、原身份恢复、异常也恢复、嵌套按栈恢复 |
+
+**调试过程记录（供以后查同类问题）**：测试最初 2 例全超时，现象是「mock 从未被调用 + 无 error 日志 + `emitter.onError` 未触发」。根因是测试自己漏了 `when(provider.isConfigured()).thenReturn(true)`——`active()` 抛 503 `BusinessException`，而流式链路的这个分支只 `emit("error")` + `complete()`，不调 onError 也不打日志。**这个「三无」组合就是 BusinessException 早退的指纹**，已记进 3.7。
+
+**验收**：后端全量回归 **171/171**（164 + 2 集成 + 5 单测）；前端本轮未动，基线不变。
+
+**遗留**：① 5 个本地提交未推送 GitHub（缺 PAT，见 6.5）；② 用户的 DeepSeek Key 已明文出现在对话中，**建议用完后轮换**。
 
 ### 2026-10-17 · WorkBuddy · 成本治理 P0-2：月度预算 + 超限熔断
 
@@ -548,6 +580,8 @@ npm run build
 |---|---|---|
 | — | **人工走查（浏览器 / 桌面端）** | V1.0 功能已全部收口，唯一未验证项是 UI 交互与桌面端打包；**需用户在本机执行**：`npm run dev` 走一遍首页/聊天/设置，再做桌面冒烟（沙箱无法做人工走查） |
 | — | **用 REA 核对线上部署版** | `compare_application_versions` 可对比 `timetable.zozovip.work` 与本地 build。工具已验证可用（见第 5 节 / `/workspace/REA-逆向验证报告.md`），待用户决定是否接入 MCP 常驻 |
+| — | **推送 5 个本地提交到 GitHub** | `3a0623f`（P0-1）、`601aaf9`（通知箱/分时 UI）、`f4840b6`（引导页/模块自定义）、`e8dbca4`（P0-2）、`e55b477`（身份修复）。remote `origin` 已配好，缺的是一个 `ghp_` / `github_pat_` 开头的 **PAT**（用户 10-18 提供的 `sk-` 是 DeepSeek Key，推不了 GitHub）。拿到后 `git push origin main` 即可，CI 会自动跑 |
+| — | **轮换 DeepSeek API Key** | 该 Key 已在本轮对话中明文出现。验收已完成，建议用户在 DeepSeek 控制台作废旧 Key 换新，避免泄露风险 |
 
 ### 6.6 已完成的旧待办（留档）
 
@@ -584,7 +618,7 @@ npm run build
 
 ## 7. 给 Codex 接手提示
 
-- 开工前先跑到 `docs/HANDOVER.md` 第 2 节看当前基线（现在是 134/134），跑一次 `cd src/backend && ./mvnw -B test -o` 确认，再动手——避免把别人引入的问题算到自己头上。
+- 开工前先跑到 `docs/HANDOVER.md` 第 2 节看当前基线（现在是 **171/171**），跑一次 `cd src/backend && ./mvnw -B test -o` 确认，再动手——避免把别人引入的问题算到自己头上。
 - **沙箱 Node 环境**：系统默认 `node` 是 **v22.13.1**（前端 typecheck/lint/build 均已验证通过）；另装了 nvm **v24.22.0**，需 `source ~/.nvm/nvm.sh && nvm use 24` 才能用（非交互 shell 里 `nvm` 不可直接调用）。**本项目代码两个版本都能构建**，不必主动切换；只有跑外部工具 REA 时才需要 ≥22.19。
 - 本项目**不重写**：所有改动走模块化增量，保留课表/待办/循环规则的既有行为。
 - 新增 AI action 类型时，必须同步 4 处：`splitToSingleActions` 的 recordField、`isValidProposal` 的 switch、`applyAction` 的执行分支、前端 `AiActionCard` 的渲染。少一处就会出现「提案被静默丢弃」这类难查的 bug。
