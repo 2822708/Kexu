@@ -62,7 +62,7 @@ npm run build
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
 | 后端测试 | **171/171 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个） |
 | 前端 | typecheck 通过；lint **0 错误 / 8 警告**（8 个警告全在存量文件，属基线，不得新增）；build 通过 |
-| 工作区 | 见 `git status`（**本地较 GitHub 领先 6 个提交未推送**：P0-1、通知箱/分时 UI、引导页/模块自定义、P0-2、身份修复、HANDOVER。缺 `ghp_`/`github_pat_` 开头的 PAT，见 6.5） |
+| 工作区 | 见 `git status`。**本地领先 origin 的提交均未推送**（数量以 `git rev-list --count origin/main..main` 实时为准，含 P0-1、通知箱/分时 UI、引导页/模块自定义、P0-2、身份修复及收工文档提交）。缺 `ghp_`/`github_pat_` 开头的 PAT，见 6.5 |
 | 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》两轮均已完成**。**2026-10-18 用真实 DeepSeek Key 完成了首次端到端验收**，并修复了一个只有真实调用才能暴露的 P0（流式对话工作线程丢失调用方身份，详见第 5 节当日条目）。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
@@ -290,7 +290,7 @@ npm run build
 
 **验收**：后端全量回归 **171/171**（164 + 2 集成 + 5 单测）；前端本轮未动，基线不变。
 
-**遗留**：① 6 个本地提交未推送 GitHub（缺 PAT，见 6.5）；② 用户的 DeepSeek Key 已明文出现在对话中，**建议用完后轮换**。
+**遗留**：① 本地提交未推送 GitHub（数量以 `git rev-list --count origin/main..main` 为准，缺 PAT，见 6.5）；② 用户的 DeepSeek Key 已明文出现在对话中，**建议用完后轮换**。
 
 ### 2026-10-17 · WorkBuddy · 成本治理 P0-2：月度预算 + 超限熔断
 
@@ -580,7 +580,7 @@ npm run build
 |---|---|---|
 | — | **人工走查（浏览器 / 桌面端）** | V1.0 功能已全部收口，唯一未验证项是 UI 交互与桌面端打包；**需用户在本机执行**：`npm run dev` 走一遍首页/聊天/设置，再做桌面冒烟（沙箱无法做人工走查） |
 | — | **用 REA 核对线上部署版** | `compare_application_versions` 可对比 `timetable.zozovip.work` 与本地 build。工具已验证可用（见第 5 节 / `/workspace/REA-逆向验证报告.md`），待用户决定是否接入 MCP 常驻 |
-| — | **推送 6 个本地提交到 GitHub** | `3a0623f`（P0-1）、`601aaf9`（通知箱/分时 UI）、`f4840b6`（引导页/模块自定义）、`e8dbca4`（P0-2）、`e55b477`（身份修复）、`5b02473`（HANDOVER）。remote `origin` 已配好，缺的是一个 `ghp_` / `github_pat_` 开头的 **PAT**（用户 10-18 提供的 `sk-` 是 DeepSeek Key，推不了 GitHub）。拿到后 `git push origin main` 即可，CI 会自动跑 |
+| — | **推送本地全部提交到 GitHub**（截至本文撰写为 7 个：`3a0623f` P0-1、`601aaf9` 通知箱/分时 UI、`f4840b6` 引导页/模块自定义、`e8dbca4` P0-2、`e55b477` 身份修复、`5b02473`/`ce5aaea` HANDOVER 文档；实时数量 `git rev-list --count origin/main..main`）。remote `origin` 已配好，缺的是一个 `ghp_` / `github_pat_` 开头的 **PAT**（用户 10-18 提供的 `sk-` 是 DeepSeek Key，推不了 GitHub）。拿到后 `git push origin main` 即可，CI 会自动跑 |
 | — | **轮换 DeepSeek API Key** | 该 Key 已在本轮对话中明文出现。验收已完成，建议用户在 DeepSeek 控制台作废旧 Key 换新，避免泄露风险 |
 
 ### 6.6 已完成的旧待办（留档）
