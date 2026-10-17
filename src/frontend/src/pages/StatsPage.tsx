@@ -11,6 +11,7 @@ import {
   Space,
   Statistic,
   Table,
+  Tag,
   Tooltip,
   Typography,
   message,
@@ -253,6 +254,88 @@ export default function StatsPage() {
               </Card>
             </Col>
           </Row>
+
+          {/*
+            月度预算（成本治理 P0-2）。未配预算时后端返回 null，这里整块不渲染——
+            显示「不限 / 不限 / 不限」这种空卡片比不显示更糟，会让人以为额度没生效。
+
+            分场景分别显示是因为「对话超限不该让课表解析一起挂」：用户需要能看出
+            到底是哪一项超了，而不是只知道「AI 不能用了」。
+          */}
+          {usage.budget && (
+            <Card size="small" title="本月预算" style={{ marginTop: 12 }}>
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={6}>
+                  <Statistic
+                    title="已用"
+                    value={formatCost(usage.budget.usedCny, usage.currency)}
+                    valueStyle={{ fontSize: 20 }}
+                  />
+                </Col>
+                <Col xs={12} md={6}>
+                  <Statistic
+                    title="全局额度"
+                    value={
+                      usage.budget.monthlyLimitCny == null
+                        ? '不限'
+                        : formatCost(usage.budget.monthlyLimitCny, usage.currency)
+                    }
+                    valueStyle={{ fontSize: 20 }}
+                  />
+                </Col>
+                <Col xs={12} md={6}>
+                  <Statistic
+                    title="剩余"
+                    value={
+                      usage.budget.remainingCny == null
+                        ? '不限'
+                        : formatCost(usage.budget.remainingCny, usage.currency)
+                    }
+                    valueStyle={{
+                      fontSize: 20,
+                      color: usage.budget.blocked ? '#cf1322' : undefined,
+                    }}
+                  />
+                </Col>
+                <Col xs={12} md={6}>
+                  <Statistic
+                    title="状态"
+                    value={usage.budget.blocked ? '已熔断' : '正常'}
+                    valueStyle={{
+                      fontSize: 20,
+                      color: usage.budget.blocked ? '#cf1322' : '#3f8600',
+                    }}
+                  />
+                </Col>
+              </Row>
+
+              {usage.budget.scenes.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  {usage.budget.scenes.map((s) => (
+                    <div key={s.scene} style={{ marginBottom: 8 }}>
+                      <Space size={8} style={{ justifyContent: 'space-between', width: '100%' }}>
+                        <Text style={{ fontSize: 13 }}>{s.sceneLabel}</Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {formatCost(s.usedCny, usage.currency)} /{' '}
+                          {formatCost(s.limitCny, usage.currency)}
+                          {s.exceeded && <Tag color="red" style={{ marginInlineStart: 6 }}>已用完</Tag>}
+                        </Text>
+                      </Space>
+                      <Progress
+                        percent={Math.min(100, Math.round((s.usedCny / s.limitCny) * 100))}
+                        size="small"
+                        status={s.exceeded ? 'exception' : 'normal'}
+                        showInfo={false}
+                      />
+                    </div>
+                  ))}
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    某一个场景用完只停该场景，其它功能照常可用；额度每月 1 号自动归零。
+                  </Text>
+                </div>
+              )}
+            </Card>
+          )}
 
           {/* 每日趋势：纯 div 柱状，避免为一张图引一个图表库 */}
           {trend.daily.length > 0 && (

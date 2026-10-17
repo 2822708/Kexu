@@ -1,6 +1,7 @@
 package com.timetable.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.timetable.config.LlmBudgetProperties;
 import com.timetable.config.LlmPricingProperties;
 import com.timetable.dto.ProposalFunnelDto;
 import com.timetable.dto.UsageStatsDto;
@@ -36,6 +37,7 @@ public class UsageStatsServiceImpl implements UsageStatsService {
     static {
         SCENE_LABELS.put(LlmUsage.SCENE_CHAT, "对话");
         SCENE_LABELS.put(LlmUsage.SCENE_EXTRACT, "任务抽取");
+        SCENE_LABELS.put(LlmUsage.SCENE_INBOX, "通知提炼");
         SCENE_LABELS.put(LlmUsage.SCENE_PLAN, "每日计划");
         SCENE_LABELS.put(LlmUsage.SCENE_REFINE, "记忆提炼");
         SCENE_LABELS.put(LlmUsage.SCENE_PARSE_HTML, "课表解析");
@@ -46,12 +48,17 @@ public class UsageStatsServiceImpl implements UsageStatsService {
     private final LlmUsageMapper usageMapper;
     private final AiActionMapper actionMapper;
     private final LlmPricingProperties pricing;
+    private final LlmBudgetService budgetService;
+    private final LlmBudgetProperties budgetProperties;
 
     public UsageStatsServiceImpl(LlmUsageMapper usageMapper, AiActionMapper actionMapper,
-                                 LlmPricingProperties pricing) {
+                                 LlmPricingProperties pricing, LlmBudgetService budgetService,
+                                 LlmBudgetProperties budgetProperties) {
         this.usageMapper = usageMapper;
         this.actionMapper = actionMapper;
         this.pricing = pricing;
+        this.budgetService = budgetService;
+        this.budgetProperties = budgetProperties;
     }
 
     @Override
@@ -127,7 +134,49 @@ public class UsageStatsServiceImpl implements UsageStatsService {
         List<UsageStatsDto.DailyPoint> daily = new ArrayList<>(perDay.values());
         daily.sort((a, b) -> a.getDate().compareTo(b.getDate()));
         dto.setDaily(daily);
+        dto.setBudget(buildBudget(apiKey));
         return dto;
+    }
+
+    /**
+     * 月度预算卡片（成本治理 P0-2）。
+     *
+     * <p><b>未配预算时返回 null</b>，前端据此整块不渲染——显示「不限 / 不限 / 不限」
+     * 这种空卡片比不显示更糟，会让人以为额度没生效。
+     *
+     * <p>这里的「已用」与 {@link LlmBudgetService} 判定时用的是同一个口径
+     * （同自然月、同单价表、失败调用同样计入），两边不会打架。
+     */
+    private UsageStatsDto.BudgetInfo buildBudget(String apiKey) {
+        if (!budgetService.isEnabled()) {
+            return null;
+        }
+        Double global = budgetProperties.getMonthlyLimitCnyOrNull();
+        double usedAll = budgetService.spentThisMonth(apiKey, null);
+
+        UsageStatsDto.BudgetInfo info = new UsageStatsDto.BudgetInfo();
+        info.setMonthlyLimitCny(global);
+        info.setUsedCny(roundMoney(usedAll));
+        info.setRemainingCny(global == null ? null : roundMoney(Math.max(0, global - usedAll)));
+        info.setBlocked(global != null && usedAll >= global);
+
+        List<UsageStatsDto.SceneBudget> scenes = new ArrayList<>();
+        for (Map.Entry<String, Double> entry : budgetProperties.getSceneMonthlyLimits().entrySet()) {
+            Double limit = entry.getValue();
+            if (limit == null || limit <= 0) {
+                continue;
+            }
+            double used = budgetService.spentThisMonth(apiKey, entry.getKey());
+            UsageStatsDto.SceneBudget scene = new UsageStatsDto.SceneBudget();
+            scene.setScene(entry.getKey());
+            scene.setSceneLabel(SCENE_LABELS.getOrDefault(entry.getKey(), entry.getKey()));
+            scene.setLimitCny(limit);
+            scene.setUsedCny(roundMoney(used));
+            scene.setExceeded(used >= limit);
+            scenes.add(scene);
+        }
+        info.setScenes(scenes);
+        return info;
     }
 
     @Override

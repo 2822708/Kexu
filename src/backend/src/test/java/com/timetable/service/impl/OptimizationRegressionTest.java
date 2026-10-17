@@ -1,5 +1,8 @@
 package com.timetable.service.impl;
 
+import com.timetable.config.LlmBudgetProperties;
+import com.timetable.config.LlmPricingProperties;
+import com.timetable.service.LlmBudgetService;
 import com.timetable.config.LlmProperties;
 import com.timetable.config.ValidatedFlywayMigration;
 import com.timetable.dto.*;
@@ -58,7 +61,7 @@ class OptimizationRegressionTest {
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
             StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
-            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class,
+            LlmClientRegistry.class, LlmProperties.class, LlmBudgetService.class, LlmBudgetProperties.class, LlmPricingProperties.class, PromptTemplateRegistry.class,
             // 成本治理 P0-1：AiServiceImpl 构造器依赖这两个埋点组件，
             // 本切片用显式 @Import 而非组件扫描，必须显式列入否则上下文起不来。
             AiEventRecorder.class, LlmUsageRecorder.class})

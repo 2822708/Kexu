@@ -60,10 +60,10 @@ npm run build
 |---|---|
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
-| 后端测试 | **151/151 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个） |
+| 后端测试 | **164/164 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个） |
 | 前端 | typecheck 通过；lint **0 错误 / 8 警告**（8 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 见 `git status`（P0-1 成本治理埋点 + 用量看板已提交并推送） |
-| 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1 已完成**；**《产品界面与功能细化方案》第一轮（通知箱 + 分时 UI + 三级提醒 + 语音全局化 + 悬浮助手）与第二轮（启动引导页 + 使用指引 + 模块自定义排序显隐）均已完成**。P0-2（预算熔断）未开工。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
+| 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》第一轮（通知箱 + 分时 UI + 三级提醒 + 语音全局化 + 悬浮助手）与第二轮（启动引导页 + 使用指引 + 模块自定义排序显隐）均已完成**。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
@@ -77,7 +77,7 @@ npm run build
 
 | 缺口 | 状态 |
 |---|---|
-| ① 无 LLM 调用计量/预算 | **计量与看板已解决**（P0-1：V5 迁移 + `llm_usage` + `/api/stats/*` + 设置页用量统计）；**预算上限与超限熔断未做**（P0-2） |
+| ① 无 LLM 调用计量/预算 | ✅ **已全部解决**：P0-1 计量与看板（V5 迁移 + `llm_usage` + `/api/stats/*` + 统计页）；**P0-2 月度预算与超限熔断**（两级额度 + 装饰器拦截 + 统计页预算卡片）。**默认不限制**，需显式配置额度 |
 | ② `LlmClientRegistry` 仅注册 DeepSeek 一家（单点 + 无法分级路由） | 未解决（6.1 第 2/3 项） |
 | ③ 无用户行为埋点 | **提案确认/拒绝已解决**（P0-1：`ai_event` + `ai_action.decided_at`）；留存 / 计划采纳率未做 |
 | ④ 无模型输出评估集 | 未解决 |
@@ -143,11 +143,11 @@ npm run build
 ### 3.5 测试约定
 
 - **服务级集成**：`TestApplication` + `@Import` + 固定 Clock（`2026-09-27T02:06:00Z`，Asia/Shanghai）+ H2 mem `MODE=MySQL` + `@MockBean LlmClient`。真实事务、真实 Mapper、真实迁移，只 mock 外部 LLM。
-- **例外**：`AiCampusAgentDailyPlanTest` 用 `Clock.systemDefaultZone()`。**凡是要比较「应用层时间戳 vs 数据库 `ON UPDATE` 时间戳」的测试，都不能用固定 Clock**，必须让两者同源（见 3.6）。
+- **例外**：`AiCampusAgentDailyPlanTest` 用 `Clock.systemDefaultZone()`。**凡是要比较「应用层时间戳 vs 数据库 `ON UPDATE` 时间戳」的测试，都不能用固定 Clock**，必须让两者同源（见 3.7）。
 - **HTTP 层**：`@SpringBootTest(classes = TimetableApplication.class)` + `@ActiveProfiles("standalone")` + `@AutoConfigureMockMvc` + device 注册（`POST /api/auth/device`）取 key。
 - 测试是全项目的安全网：**改动后任何既有测试失败，先判断是「预期变化」还是「真实回归」**，属预期变化的要在报告「偏离记录」里写明。
 
-### 3.5 通知箱（今日待阅）
+### 3.6 通知箱（今日待阅）
 
 - **信息入口只有手动喂入**：用户转发/粘贴/截图给助手，AI 提炼成卡片。**没有自动抓取**——群消息监听、教务系统对接、校园邮箱同步全部不做（见第 6 节红线）。
 - **截图路径复用既有 OCR**：`POST /api/notices/extract` 只接受文本。前端先调 `aiApi.parseImageText` 转文字再进来，这样图片校验与并发闸门不用在通知箱里重复实现，OCR 成本也落在它自己的埋点场景 `SCENE_OCR` 上。
@@ -155,7 +155,7 @@ npm run build
 - **「忽略 → 降低同类信息」是显式规则，不是学习模型**：按 `source` 统计历史忽略率，超过 50% 且样本 ≥ 2 条的来源其新卡片**排序靠后**。降权只影响顺序，**不隐藏任何卡片**——用户没说「别再给我看」，只是「别老推这个」。
 - 只统计 `IGNORED` / `DONE` 两种已决定状态参与降权计算。PENDING 的卡片还没被看过，用它去惩罚用户会导致「刚导入一批通知还没看，新通知就被降权」。
 
-### 3.6 已踩过的坑（别再踩）
+### 3.7 已踩过的坑（别再踩）
 
 | 坑 | 说明 |
 |---|---|
@@ -180,6 +180,23 @@ npm run build
 | **埋点/统计类代码的两个通病** | ① 浮点金额直接返回 → 前端拿到 `0.026600000000000002`，必须 `roundMoney()` 取整 4 位；② 毫秒→秒换算里 `/10` 写了两次 → 耗时差 10 倍。两者都是**测试先发现的真实产品 bug**，别把断言改成迁就实现 |
 | **往长 JSX 里插函数时先看自己在不在 `return (` 里** | 给 `DashboardPage` 加 `renderModule` 时按「`<Row>` 这一行」定位插入点，结果函数被插进了 JSX 内部，报的是 `TS1382: Unexpected token. Did you mean {'>'}?` 这种完全指不到位置的错。**按行号脚本改动 JSX 文件后，第一件事是确认插入点相对 `return (` 的位置** |
 | **localStorage 里的用户配置必须读时清洗** | 存模块的 `order` / `hidden` 时，只过滤「认识的 key」还不够——**必须把默认列表里有、存档里没有的 key 补进去**。否则以后新增模块，老用户存档里没有它，就永远看不到这个新功能，而且根本不知道去哪开。JSON 解析失败要静默回默认，别让一个坏存档把首页搞白屏 |
+| **`LlmClientRegistry` 是 8 个测试切片的显式 `@Import` 项** | 给 registry 加构造依赖（P0-2 加了 `LlmBudgetService`）会让这 8 个切片全部起不来上下文。**改 registry 构造函数 = 同步改 8 个测试文件的 `@Import` 与 import 语句**。别用 `Optional` 注入来「省事」——熔断 bean 缺失时静默失效正是最危险的失败模式 |
+| **配置 Map 的 key 要归一化** | yml 里写 `chat:` 而场景常量是 `CHAT`，不在 setter 里转大写就会「配置看起来对了但永远命中不了」。这类静默失效最难查 |
+
+### 3.8 预算熔断（成本治理 P0-2）
+
+**两级额度，语义不同**：
+
+| 级别 | 配置 | 超了会怎样 |
+|---|---|---|
+| 场景额度 | `app.llm.budget.scene-monthly-limits.<scene>` | **只熔断该场景**。对话超限不该让课表解析一起挂——后者往往更紧急、更不可替代 |
+| 全局额度 | `app.llm.budget.monthly-limit-cny` | 熔断全部（总闸） |
+
+**默认不限制**：两项都不配时 `isEnabled()` 为 false，拦截整体跳过。预算熔断默认打开会让没配预算的人某天突然用不了 AI 且不知道为什么——要熔断必须显式配额度。
+
+**拦截点在 `LlmClientRegistry.active()` 返回的装饰器**（`BudgetAwareLlmClient`），而不是 `DeepSeekLlmClient` 内部。理由：① 换 provider 不用重做；② 检查在 delegate 调用**之前**，超限的请求一次 token 都不花。装饰器**不是 Spring bean**——否则会被 registry 的 `List<LlmClient>` 收集进去自己包自己。
+
+**统计口径与用量看板完全一致**（同自然月、同单价表、失败调用同样计入），否则会出现「看板说没超，但请求被拦」这种无法解释的现象。额度按自然月结算，每月 1 号自动归零，无定时任务。
 
 ---
 
@@ -200,7 +217,10 @@ npm run build
 | `config/LlmPricingProperties.java` | 单价表（`app.llm.pricing`）。**调价走环境变量，别改代码** |
 | `service/impl/NoticeServiceImpl.java` | 今日待阅通知箱。source 降权是**显式规则**不是学习模型；只统计已决定状态 |
 | `controller/NoticeController.java` | `/api/notices/*`。转任务后要调 `invalidateProposalsOnDataChange` |
-| `service/impl/UsageStatsServiceImpl.java` | 用量聚合 + 提案漏斗。注意 `roundMoney()` 与 `avgDecideSeconds` 的毫秒→秒换算 |
+| `service/impl/UsageStatsServiceImpl.java` | 用量聚合 + 提案漏斗 + 预算卡片。注意 `roundMoney()` 与 `avgDecideSeconds` 的毫秒→秒换算 |
+| `service/LlmBudgetService.java` | P0-2 预算判定。**场景额度只拦该场景，全局额度拦全部**；统计口径与用量看板必须一致 |
+| `service/BudgetAwareLlmClient.java` | P0-2 拦截装饰器，由 `LlmClientRegistry.active()` 包装。**不是 Spring bean**（否则被 `List<LlmClient>` 收集进去自己包自己） |
+| `config/LlmBudgetProperties.java` | 预算配置。**默认不限制**；Map key 在 setter 里转大写 |
 | `service/impl/PromptTemplateRegistry.java` | `resources/prompts/*.md` + front matter `version:N`；缺失返回 null 降级 |
 | `controller/` | `AiController`（聊天/提案执行）、`TaskController`、`DailyPlanController`、`DashboardController`、`MemoryController`、`StudentProfileController`、`UsageStatsController`（`/api/stats/*`） |
 | `service/StudentProfileService` | 档案读写：`applyPatch`（AI 提案，null=保持）与 `replace`（表单，null=清空）**语义相反，别用错** |
@@ -221,7 +241,7 @@ npm run build
 | `pages/DashboardPage.tsx` | 首页（AI Dashboard）：档案问候、今日课程/任务、48h、考试、规则重点、每日计划 + **分时动态 UI**（早/午/晚三档内容权重，共用同一份数据）+ **模块自定义**（`renderModule` 按配置渲染，注意它必须在 `return (` 之前定义） |
 | `pages/AiChatPage.tsx` | AI 聊天（流式） |
 | `pages/SettingsPage.tsx` | 设置：小组件地址、AI Key、**长期记忆管理**、字体、作息表 |
-| `pages/StatsPage.tsx` | AI 用量统计（路由 `/stats`）：成本/调用/token/确认率 + 每日趋势 + 分场景 + 提案漏斗。**不引图表库** |
+| `pages/StatsPage.tsx` | AI 用量统计（路由 `/stats`）：成本/调用/token/确认率 + 每日趋势 + 分场景 + 提案漏斗 + **本月预算卡片**。`budget` 为 null 时整块不渲染。**不引图表库** |
 | `pages/OnboardingPage.tsx` | 启动引导页（3 步）+ 使用指引。**第 2 步的「它不会做什么」不许删**——避免过度承诺 |
 | `pages/UserManualPage.tsx` | 用户手册。顶部有「再看一次功能说明」常驻入口，跳转到 `/onboarding` |
 | `hooks/useDashboardModules.ts` | 首页模块排序/显隐，存 `timetable.dashboard.modules`。**时段可用性（`periods`）与用户开关分开**：前者不可改 |
@@ -240,6 +260,32 @@ npm run build
 
 ## 5. 会话日志（倒序，最新在最上）
 
+### 2026-10-17 · WorkBuddy · 成本治理 P0-2：月度预算 + 超限熔断
+
+**范围**：月度预算上限 + 超限熔断。**不做**预算预警邮件/站内信、按用户分组的差异化额度（单用户模型下无意义）。
+
+**三个关键决策**
+
+1. **两级额度，语义不同**。场景额度（如 `CHAT`）超了**只熔断该场景**——对话超限不该让课表解析一起挂，后者更紧急且不可替代；全局额度才拦全部。把额度做成单一总闸是 P0-2 明确要避免的行为。
+2. **默认不限制**。两项额度都不配时 `isEnabled()` 为 false，拦截整体跳过。默认打开熔断会让没配预算的人某天突然用不了 AI 且不知道为什么——要熔断必须显式配额度。
+3. **拦截点放在 `LlmClientRegistry.active()` 的装饰器里**，不在 `DeepSeekLlmClient` 内部。换 provider 不用重做；且检查在 delegate 之前，超限请求一次 token 都不花。
+
+**新增 / 改造**
+
+| 文件 | 说明 |
+|---|---|
+| `config/LlmBudgetProperties.java` | `app.llm.budget.*`。Map key 在 setter 转大写（yml 写 `chat:` 而常量是 `CHAT`） |
+| `service/LlmBudgetService.java` | 两级判定 + `spentThisMonth`。查花费失败时**放行**（宁可少拦一次，也不能因统计表异常让全部 AI 功能挂掉） |
+| `service/BudgetAwareLlmClient.java` | 装饰器，身份从 `RequestContext` 取，场景透传给 delegate（否则埋点全落 UNKNOWN） |
+| `service/LlmClientRegistry.java`（改） | `active()` 包装饰器；新增构造依赖 |
+| `dto/UsageStatsDto.java` + `UsageStatsServiceImpl`（改） | 统计接口返回 `budget`（未配时为 null） |
+| `application.yml`（改） | `app.llm.budget.*`，走环境变量，默认空 |
+| `service/LlmBudgetGuardTest.java` | **13 个用例**：只拦该场景、全局拦截、跨月重置、账号隔离、空身份跳过、失败调用计入、装饰器「一次 token 都不花」 |
+| 8 个测试切片（改） | registry 新增构造依赖 → 同步补 `@Import` 与 import（**这是本项目改 registry 的必备动作**） |
+| `StatsPage.tsx` / `types/index.ts`（改） | 本月预算卡片：已用 / 额度 / 剩余 / 状态 + 分场景进度条 |
+
+**验收**：后端 **164/164**（151 + 13 新增）；前端 typecheck / lint（0 错误 8 存量警告）/ build 全过。
+
 ### 2026-10-17 · WorkBuddy ·《AI 校园助手产品界面与功能细化方案》第二轮：启动引导页 + 模块自定义
 
 **范围**：方案第一、二部分（启动引导页 / 使用指引页）+ 基础交互第 1 条（模块自定义排序显隐）。**纯前端，零后端改动**。
@@ -257,7 +303,7 @@ npm run build
 
 **一个刻意的设计取舍**：模块自定义**只让用户关，不让用户强行开**。分时段可用性（`periods`）是产品行为不给改——午间把「今日必做」收缩成小条是分时 UI 的核心，让用户强行打开只会把页面撑成长条。设置弹窗里这类模块开关禁用 + 标注「仅早间、晚间」，避免用户对着勾了也不生效的开关困惑。
 
-**踩坑**：按行号脚本往 `DashboardPage` 插 `renderModule`，定位用了 `<Row>` 那一行 → 函数被插进 JSX 内部，报 `TS1382: Unexpected token. Did you mean {'>'}?`。已记进 3.6。
+**踩坑**：按行号脚本往 `DashboardPage` 插 `renderModule`，定位用了 `<Row>` 那一行 → 函数被插进 JSX 内部，报 `TS1382: Unexpected token. Did you mean {'>'}?`。已记进 3.7。
 
 **验收**：后端 **151/151** 全绿（本轮未改后端，确认基线未漂移）；前端 typecheck 通过、lint **0 错误 / 8 警告**（全存量基线，未新增）、build 通过。
 
@@ -313,14 +359,14 @@ npm run build
 
 **改动**
 
-- `LlmClient` 加带 `scene` 的 `chatJson` / `chatJsonStream` 重载，旧签名保留为 `default` 方法 → 实现类零改动（**但 mock 侧要改，见 3.6**）。
+- `LlmClient` 加带 `scene` 的 `chatJson` / `chatJsonStream` 重载，旧签名保留为 `default` 方法 → 实现类零改动（**但 mock 侧要改，见 3.7**）。
 - `DeepSeekLlmClient`：流式分支补 `stream_options.include_usage`——**不开这个开关，流式调用（聊天主力路径）拿不到 usage，统计会漏掉大头**；usage 在最后一个 chunk 返回（此时 `choices` 为空数组）。成功/失败都记（token 已花掉是真实成本）。
 - 8 处业务调用标注场景：`AiServiceImpl` 7 处 + `DailyPlanServiceImpl` 1 处。
 - `decided_at` 写入时机：`executeAction` 在 `applyAction` **成功之后**（失败整体回滚，不会留下「执行失败却已确认」的假记录）；`rejectAction` 并进同一条 CAS（不可能出现「状态变了但决定时间没写」的中间态）。
 
 **验收**：后端 **142/142** 全绿；前端 typecheck 通过、lint 0 错误 / 7 警告（全是存量基线）、build 通过。
 
-**两个被测试抓出来的真实 bug**（不是测试写错）：浮点金额尾巴（已 `roundMoney()`）、毫秒→秒换算重复除 10（耗时差 10 倍）。详见 3.6。
+**两个被测试抓出来的真实 bug**（不是测试写错）：浮点金额尾巴（已 `roundMoney()`）、毫秒→秒换算重复除 10（耗时差 10 倍）。详见 3.7。
 
 **口径提醒（写文档时别丢掉）**：`/api/stats/proposals` 的确认率是**已落库口径**。展示态 STALE 只读复核不落库，所以纯 SQL 统计会**系统性低估**失效量——看板上的确认率是上界，真实值只会更低。页面里已用 Tooltip 说明。
 
@@ -362,7 +408,7 @@ npm run build
 
 **触发**：另一环境（Codex）报告「本地/备份/远端优化分支均为 `9bb3200`、远端查 `7612bbe` 未找到、`docs/HANDOVER.md` 未找到 → 134/134 未复验、本机 REA 缺运行文件」。逐项处理如下。
 
-**① 134/134 实际不成立（已修）**：本沙箱跑全量测试，`TaskEndpointIntegrationTest.extractThenConfirmCreatesTasksWithAiParseSource` **1 个失败**（133/134）。根因是**又一处日期硬编码**：服务端 `AiServiceImpl.parseExtractedDeadline` 的设计就是「过去的截止时间一律清洗为 null」，而测试写死 `2026-10-15`，今天 `2026-10-16` 一起床断言必然挂。**产品行为正确，测试缺陷**。改为 `LocalDate.now().plusDays(7)`（输入文本同步改成相对日期），已单独跑该类 5/5、全量 **134/134 BUILD SUCCESS**。提交 `7b7ad63`。教训已补进 3.6。
+**① 134/134 实际不成立（已修）**：本沙箱跑全量测试，`TaskEndpointIntegrationTest.extractThenConfirmCreatesTasksWithAiParseSource` **1 个失败**（133/134）。根因是**又一处日期硬编码**：服务端 `AiServiceImpl.parseExtractedDeadline` 的设计就是「过去的截止时间一律清洗为 null」，而测试写死 `2026-10-15`，今天 `2026-10-16` 一起床断言必然挂。**产品行为正确，测试缺陷**。改为 `LocalDate.now().plusDays(7)`（输入文本同步改成相对日期），已单独跑该类 5/5、全量 **134/134 BUILD SUCCESS**。提交 `7b7ad63`。教训已补进 3.7。
 
 **② 部署版核对（用资产哈希，比 REA 更直接）**：REA 在本沙箱可用（`npx rea-agents@6.5.0`），但其 web 命令需 CDP 浏览器；改用**内容哈希比对**，结论更硬：
 
@@ -413,7 +459,7 @@ npm run build
 - **验收发现的真实缺口**：**没有学生档案的写端点**。首页有「去填写档案」引导，指向设置页却没有落点——档案此前只能靠 AI 提案写入，用户无法主动填。已补 `GET/PUT /api/profile` + 设置页 `ProfileForm` 卡片。
   - 附带设计决策：AI 提案的补丁语义是「null = 没提到，保持原值」，而表单需要「清空 = 删除」。两者语义相反，因此新增 `StudentProfileService.replace`（表单全量覆盖），**不动** `applyPatch`，AI 路径零影响。
 - **体验缺口已补**：用户手册新增「AI 学长」章节（首页/档案/记忆/任务/每日计划），README 增 AI Campus Agent 能力表与配置项（含 `app.ai.memory-refine-enabled` 回滚开关）。
-- **测试踩坑 2 个**（都已修复，见第 3.6 节）：
+- **测试踩坑 2 个**（都已修复，见第 3.7 节）：
   1. MockMvc `getContentAsString()` 无参版按 ISO-8859-1 解码 UTF-8 响应 → 中文变乱码（jsonPath 内部用 UTF-8，所以先前没暴露）。必须写 `getContentAsString(StandardCharsets.UTF_8)`。
   2. 旅程里先落库材料任务再执行 AI 提案 → 提案 409 STALE。这是**设计行为**（TASK 域数据变了），不是 bug；旅程顺序改为「先确认 AI 提案，再做材料解析」。
 - 结果：后端 132/132，前端三连通过。提交 `dd763c9`（档案端点 + 旅程测试）、`a39a5c7`（用户手册 + README）。
@@ -462,7 +508,7 @@ npm run build
 | 2 | **多 LLM provider 注册** | `LlmClientRegistry` 目前只有 DeepSeek 一家。补一个 OpenAI 兼容客户端（智谱 GLM / 通义 / 豆包均兼容），消除单点故障并获得议价能力 |
 | 3 | **按任务分级路由** | 意图分类、简单改写走 flash 级；每日计划、复杂推理走主力级。2026 年国产模型价格：DeepSeek-V4-Lite 0.1/0.2 元每百万 token、GLM-4-Flash 免费、V4-Pro 1.0/2.0（缓存命中 0.025） |
 | 4 | **Prompt Caching** | 系统提示词 + 学生画像这类稳定前缀打 cache 标记，输入成本可降 80–90% |
-| 5 | **token 计量与预算** | ✅ **P0-1 已完成计量与看板**（`llm_usage` + `/api/stats/usage` + 设置页用量统计）。**仍缺 P0-2**：月度预算上限 + 超限熔断（熔断要在 `DeepSeekLlmClient` 之前那一层做，且要区分场景——对话超限不该让课表解析一起挂） |
+| 5 | **token 计量与预算** | ✅ **P0-1 + P0-2 均已完成**（`llm_usage` + `/api/stats/usage` + 统计页用量与预算卡片 + `LlmBudgetService` 两级额度熔断，详见 3.8）。**默认不限制**，要熔断必须显式配 `app.llm.budget.*` |
 | 6 | **降级与重试** | provider 故障自动切备用；含已列入待排期的「计划生成失败重试退避」 |
 
 ### 6.2 第二阶段：记忆系统升级（调研报告 §5 方向 A，约 2–3 周）
@@ -525,14 +571,14 @@ npm run build
 | 类别 | 具体内容 | 原因 |
 |---|---|---|
 | 自动抓取 | QQ/微信群消息监听、教务系统绑定、校园邮箱同步 | 等价于爬虫 + 浏览器插件，用户明令禁止 |
-| 自学习推荐 | 点赞/忽略/收藏训练权重、用户画像自动更新、协同过滤 | 推荐算法，用户明令禁止。降权走**显式规则**（见 3.5） |
+| 自学习推荐 | 点赞/忽略/收藏训练权重、用户画像自动更新、协同过滤 | 推荐算法，用户明令禁止。降权走**显式规则**（见 3.6） |
 | 外部知识库 | 全国高校知识库、保研政策库、选课指南库 | 用户明令禁止 |
 | 外部数据源 | 顶刊论文摘要、国际顶会、导师课题、图书馆新书、历年真题、校招薪资 | 需要实时外部数据源，单靠 LLM API 拿不到 |
 | 第三方接口 | 天气、食堂拥挤度、快递取件、教室导航 | 无可靠数据源；食堂拥挤度与快递取件没有公开的个人化 API |
 | 行业新闻 | 「今日专业速览」板块 | 同上，依赖外部数据源 |
 | 桌面/浏览器端 | 浏览器插件、桌面助手 | 用户明令禁止 |
 
-**能做的替代**：信息入口用**手动喂入**（转发/粘贴/截图）替代自动抓取；个性化用**档案 + 长期记忆**（用户显式告知）替代自学习画像。这两条已经落地，见 3.5。
+**能做的替代**：信息入口用**手动喂入**（转发/粘贴/截图）替代自动抓取；个性化用**档案 + 长期记忆**（用户显式告知）替代自学习画像。这两条已经落地，见 3.6。
 
 ---
 
@@ -545,4 +591,4 @@ npm run build
 - 涉及数据库结构：h2 与 mysql 两套迁移都要改，并补迁移测试。
 - 每次收工请在本文件第 5 节追加一条会话日志，并更新第 2 节的状态快照。
 - **下一步方向不要自己拍脑袋**：`/workspace/下一步方向调研报告.md` 已给出四阶段路线与理由（先降本 → 再升智 → 再扩入口 → 最后 Agent 化），第 6 节是其落地拆解。若要调整路线，先读该报告第 8.1 节的顺序论证。
-- **新增 LLM provider 时**：实现 `LlmClient` 接口并在 `LlmClientRegistry` 注册，同时补 `LlmProperties` 的 providerId 说明；注意 `active()` 会先抛 503，`isConfigured()` 不是可达分支（见 3.6）。
+- **新增 LLM provider 时**：实现 `LlmClient` 接口并在 `LlmClientRegistry` 注册，同时补 `LlmProperties` 的 providerId 说明；注意 `active()` 会先抛 503，`isConfigured()` 不是可达分支（见 3.7）。

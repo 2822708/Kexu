@@ -52,6 +52,18 @@ app:
         deepseek-flash:
           input: ${LLM_PRICE_INPUT_DEEPSEEK_FLASH:0.5}
           output: ${LLM_PRICE_OUTPUT_DEEPSEEK_FLASH:2.0}
+    # 月度预算与超限熔断（成本治理 P0-2）。
+    # **默认不限制**：下面两项都不配置时完全不拦截。要熔断必须显式配额度——
+    # 默认打开会让没配预算的人某天突然用不了 AI 且不知道为什么。
+    # 额度按自然月结算，每月 1 号自动归零，无需定时任务。
+    budget:
+      # 全局月度上限（元）。所有场景合计，超了熔断全部 AI 功能。留空 = 不限。
+      monthly-limit-cny: ${LLM_BUDGET_MONTHLY_CNY:}
+      # 分场景月度上限（元）。某个场景超了**只熔断该场景**——对话超限不该让
+      # 课表解析一起挂。key 取 CHAT / EXTRACT / INBOX / PLAN / REFINE / PARSE_HTML / OCR。
+      scene-monthly-limits:
+        chat: ${LLM_BUDGET_CHAT_CNY:}
+        plan: ${LLM_BUDGET_PLAN_CNY:}
 
 deepseek:
   api:

@@ -30,14 +30,17 @@ public class LlmClientRegistry {
 
     private final Map<String, LlmClient> clients;
     private final LlmProperties properties;
+    private final LlmBudgetService budget;
 
-    public LlmClientRegistry(List<LlmClient> clients, LlmProperties properties) {
+    public LlmClientRegistry(List<LlmClient> clients, LlmProperties properties,
+                             LlmBudgetService budget) {
         Map<String, LlmClient> collected = new LinkedHashMap<>();
         for (LlmClient client : clients) {
             collected.put(client.providerId(), client);
         }
         this.clients = Collections.unmodifiableMap(collected);
         this.properties = properties;
+        this.budget = budget;
         String configured = normalize(properties.getActiveProvider());
         if (!this.clients.containsKey(configured)) {
             log.warn("app.llm.active-provider={} 未注册，已注册的 provider：{}；将按可用性回退",
@@ -45,16 +48,22 @@ public class LlmClientRegistry {
         }
     }
 
-    /** 当前激活的客户端；全部未配置时抛出 503（AI 功能不可用）。 */
+    /**
+     * 当前激活的客户端；全部未配置时抛出 503（AI 功能不可用）。
+     *
+     * <p>返回值统一包一层 {@link BudgetAwareLlmClient}：预算拦截因此对所有 provider
+     * 生效，未来接第二个模型不需要重做一遍。包的是「调用前检查」，超限的调用
+     * 一次 token 都不会花。
+     */
     public LlmClient active() {
         String configured = normalize(properties.getActiveProvider());
         LlmClient chosen = clients.get(configured);
         if (chosen != null && chosen.isConfigured()) {
-            return chosen;
+            return new BudgetAwareLlmClient(chosen, budget);
         }
         for (Map.Entry<String, LlmClient> entry : clients.entrySet()) {
             if (entry.getValue().isConfigured()) {
-                return entry.getValue();
+                return new BudgetAwareLlmClient(entry.getValue(), budget);
             }
         }
         throw new BusinessException(503, "AI 服务未配置或暂时不可用，请稍后再试");

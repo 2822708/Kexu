@@ -1,6 +1,9 @@
 package com.timetable.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.timetable.config.LlmBudgetProperties;
+import com.timetable.config.LlmPricingProperties;
+import com.timetable.service.LlmBudgetService;
 import com.timetable.config.LlmProperties;
 import com.timetable.config.ValidatedFlywayMigration;
 import com.timetable.dto.AiActionDto;
@@ -77,7 +80,7 @@ class AiCampusAgentTaskTest {
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, AiServiceImpl.class,
             StudentProfileServiceImpl.class, MemoryServiceImpl.class, TaskServiceImpl.class,
-            LlmClientRegistry.class, LlmProperties.class, PromptTemplateRegistry.class, AiEventRecorder.class, LlmUsageRecorder.class })
+            LlmClientRegistry.class, LlmProperties.class, LlmBudgetService.class, LlmBudgetProperties.class, LlmPricingProperties.class, PromptTemplateRegistry.class, AiEventRecorder.class, LlmUsageRecorder.class })
     static class TestApplication {
         @Bean
         Clock clock() {

@@ -27,6 +27,57 @@ public class UsageStatsDto {
 
     private List<SceneBreakdown> scenes;
     private List<DailyPoint> daily;
+    /** 月度预算与已用额度（成本治理 P0-2）。未配预算时为 null。 */
+    private BudgetInfo budget;
+
+    /**
+     * 月度预算（成本治理 P0-2）。
+     *
+     * <p>必须和用量看板放在同一屏：否则用户被 429 拦下时完全不知道为什么，
+     * 也不知道什么时候能恢复。
+     */
+    public static class BudgetInfo {
+        /** 全局月度上限（元），null = 未配置。 */
+        private Double monthlyLimitCny;
+        /** 本月已用（元，全场景合计）。 */
+        private double usedCny;
+        /** 本月剩余（元）；未配全局额度时为 null。 */
+        private Double remainingCny;
+        /** 当前是否已被熔断（按调用时同样的判定）。 */
+        private boolean blocked;
+        /** 配了独立额度的场景；没配的场景不返回，避免前端渲染一堆「不限」。 */
+        private List<SceneBudget> scenes;
+
+        public Double getMonthlyLimitCny() { return monthlyLimitCny; }
+        public void setMonthlyLimitCny(Double monthlyLimitCny) { this.monthlyLimitCny = monthlyLimitCny; }
+        public double getUsedCny() { return usedCny; }
+        public void setUsedCny(double usedCny) { this.usedCny = usedCny; }
+        public Double getRemainingCny() { return remainingCny; }
+        public void setRemainingCny(Double remainingCny) { this.remainingCny = remainingCny; }
+        public boolean isBlocked() { return blocked; }
+        public void setBlocked(boolean blocked) { this.blocked = blocked; }
+        public List<SceneBudget> getScenes() { return scenes; }
+        public void setScenes(List<SceneBudget> scenes) { this.scenes = scenes; }
+    }
+
+    public static class SceneBudget {
+        private String scene;
+        private String sceneLabel;
+        private Double limitCny;
+        private double usedCny;
+        private boolean exceeded;
+
+        public String getScene() { return scene; }
+        public void setScene(String scene) { this.scene = scene; }
+        public String getSceneLabel() { return sceneLabel; }
+        public void setSceneLabel(String sceneLabel) { this.sceneLabel = sceneLabel; }
+        public Double getLimitCny() { return limitCny; }
+        public void setLimitCny(Double limitCny) { this.limitCny = limitCny; }
+        public double getUsedCny() { return usedCny; }
+        public void setUsedCny(double usedCny) { this.usedCny = usedCny; }
+        public boolean isExceeded() { return exceeded; }
+        public void setExceeded(boolean exceeded) { this.exceeded = exceeded; }
+    }
 
     public static class SceneBreakdown {
         private String scene;
@@ -82,4 +133,6 @@ public class UsageStatsDto {
     public void setScenes(List<SceneBreakdown> scenes) { this.scenes = scenes; }
     public List<DailyPoint> getDaily() { return daily; }
     public void setDaily(List<DailyPoint> daily) { this.daily = daily; }
+    public BudgetInfo getBudget() { return budget; }
+    public void setBudget(BudgetInfo budget) { this.budget = budget; }
 }

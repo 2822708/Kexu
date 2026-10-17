@@ -372,6 +372,31 @@ export interface UsageDailyPoint {
 }
 
 /**
+ * 分场景月度预算（成本治理 P0-2）。
+ * 只返回「单独配了额度」的场景——没配的不返回，避免前端渲染一堆「不限」。
+ */
+export interface UsageSceneBudget {
+  scene: string
+  sceneLabel: string
+  limitCny: number
+  usedCny: number
+  exceeded: boolean
+}
+
+/**
+ * 月度预算与已用额度（成本治理 P0-2）。
+ * 未配预算时后端返回 null，前端据此整块不渲染。
+ * 多个场景各自有额度，某个场景花超只停该场景，不影响其它场景。
+ */
+export interface UsageBudgetInfo {
+  monthlyLimitCny: number | null
+  usedCny: number
+  remainingCny: number | null
+  blocked: boolean
+  scenes: UsageSceneBudget[]
+}
+
+/**
  * LLM 用量与成本统计（成本治理 P0-1）。
  * estimatedCost 由「配置的单价表」估算，不是账单数字，会随单价调整而变化。
  * avgLatencyMs 在无成功调用时为 null（而不是 0，避免被误读为「极快」）。
@@ -388,6 +413,8 @@ export interface UsageStats {
   avgLatencyMs: number | null
   scenes: UsageSceneBreakdown[]
   daily: UsageDailyPoint[]
+  /** 成本治理 P0-2：未配预算时为 null */
+  budget: UsageBudgetInfo | null
 }
 
 /**
