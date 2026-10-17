@@ -65,6 +65,7 @@ npm run build
 | 工作区 | 见 `git status`。**本地领先 origin 的提交均未推送**（数量以 `git rev-list --count origin/main..main` 实时为准，含 P0-1、通知箱/分时 UI、引导页/模块自定义、P0-2、身份修复及收工文档提交）。缺 `ghp_`/`github_pat_` 开头的 PAT，见 6.5 |
 | 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》两轮均已完成**。**2026-10-18 用真实 DeepSeek Key 完成了首次端到端验收**，并修复了一个只有真实调用才能暴露的 P0（流式对话工作线程丢失调用方身份，详见第 5 节当日条目）。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
+| **网盘同步产物** | 根目录 `MTOwZfixfiEX`。`ai-campus-agent-git-bundle.bundle`（949,805 B，md5 `7b509d010dd527aaa6905c6186d91f2c`）+ `ai-campus-agent-源码快照-<HEAD>.zip`（md5 见《Git同步操作指引》§7）+ 三份文档，均已刷新到当前 HEAD 并经 **ETag == 本地 md5** 验证。上传/下载通道的坑见 3.7 与第 5 节当日收尾条目 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
 **代码规模（2026-10-15 实测）**
@@ -184,6 +185,8 @@ npm run build
 | **配置 Map 的 key 要归一化** | yml 里写 `chat:` 而场景常量是 `CHAT`，不在 setter 里转大写就会「配置看起来对了但永远命中不了」。这类静默失效最难查 |
 | **ThreadLocal 身份传不进线程池** | `RequestContext` 是 ThreadLocal，异步任务（`streamExecutor`）跑在工作线程上取不到调用方设的值。下游 `DeepSeekLlmClient` 读到 null **不报错**，只会静默不记账、静默跳过预算检查。**这个 bug mock 测试永远测不到**——被替换掉的正是读 ThreadLocal 的那段代码；防回归测试必须让 mock 在被调用时**主动读一次 `RequestContext`** 复现真实行为。修复模式：异步派发一律走 `RequestContext.callWithApiKey(apiKey, task)`（set → 执行 → finally 恢复），且**必须恢复**——线程复用下残留身份会让下一个请求的花费记到本账号，比丢失更危险 |
 | **mock 忘了 stub `isConfigured()` → 503 走「无声」分支** | `LlmClientRegistry.active()` 在没有任何客户端 `isConfigured()` 时抛 503 `BusinessException`。流式链路里这个异常只 `emit("error")` + `complete()`，**不调 `SseEmitter.onError`、不打 error 日志**。排查指纹：mock 从未被调用 + 无任何异常日志 + `onError` 未触发 = 任务在到达 LLM 之前就抛了 `BusinessException`。所有 stub `chatJson*` 的测试都要先 `when(provider.isConfigured()).thenReturn(true)` |
+| **网盘上传成功的判据是 PUT 响应，不是下载** | COS 对成功的单部 PUT 返回 **HTTP 200 + 空 body + `ETag` = 文件 MD5**；失败一定带 XML 错误体（如 `InvalidAccessKeyId`，542 字节）。**下载失败 ≠ 上传失败**：`file_download` 签发的 URL 自身出过两次故障（10-16 presign 的 AK 无效；10-17 晚间 URL 干脆缺 presign 签名参数），都报 `InvalidAccessKeyId`，但当时的上传其实是好的。曾因此**误删过已上传成功的 bundle 条目**又重传一遍。正确做法：PUT 后核对 `ETag == 本地 md5` 即完成内容级验证，比下载回传更硬；下载只作端到端抽验 |
+| **网盘 COS 临时凭证偶尔「签发即无效」** | `file_upload` 返回的预签名 URL 有小概率直接不可用（首次 PUT 即 `InvalidAccessKeyId`）。处理：**原样重发一次 `file_upload` 拿新凭证**，不要改代码也不要怀疑密钥——重签后同样方法立刻成功。凭证有效期约 2 小时（`q-key-time`），过期重签即可 |
 
 ### 3.8 预算熔断（成本治理 P0-2）
 
@@ -262,6 +265,23 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-18 · WorkBuddy · 收尾：GitHub 推送受阻确认 + 网盘同步产物刷新 + 同步通道防坑
+
+**背景**：用户指令「全部做完并推送」。代码/测试/文档已收口（171/171，4 个提交），本段做两件事：① 穷尽一切手段完成 GitHub 推送；② 把网盘同步产物（git bundle + 源码 zip + 三份文档）刷新到最终 HEAD。
+
+**GitHub 推送：确认被凭据阻断，无法自主完成**。已尝试并排除：环境变量 / profile / git config / credential helper（`gh auth status` 未登录，`git credential fill` 无票）；MCP 网关是 GitHub App 集成 token——`get_me` 能看到账号 `2552555`，但 `list_commits(2552555/timetable-ai)` 返回 404（私有不可见与已删除不可区分）、`create_repository` 403「integration 无权建仓」、账号下 5 个公开仓库的提交记录均与本项目无关；浏览器无 github.com 网络（HTML 超时），但 `api.github.com` 与 git smart HTTP 端点可达（401 = 有票就能推）。**结论：只差一个 `ghp_` / `github_pat_` 开头的 PAT，用户提供后 `git push origin main` 即可，CI 会自动跑**。已把 `/workspace/push-to-github.sh` 更新到当前状态（一条命令推送）。
+
+**网盘同步通道的完整真相（本次最有价值的产出，已抽象进 3.7）**：
+
+- **上传侧一直是真的成功**：17:21 两次 PUT（bundle / zip）返回的都是 HTTP 200 + 空 body——这就是 COS 的成功响应。重传后用响应头里的 `ETag` 与本地 md5 逐一核对：bundle `7b509d01…`、zip `2f5dd920…`，**服务端对象内容哈希与本地文件逐字节一致**，比下载回传更硬的验证。
+- **下载侧出过两次故障，都报 `InvalidAccessKeyId`（542 字节 XML）**：10-16 的下载 URL 带完整 presign 但 AK 无效；10-17 晚间 `file_download` 签发的 URL **连 presign 签名参数都没有**（只有裸 token）。10-17 18:05 重新签发的 URL 恢复正常，下载 → md5 一致 → `git bundle verify` 通过（`# v2 git bundle`，`refs/heads/main` 完整）。
+- **由此纠出一个此前的错误结论**：10-16 文档里「已验证：下载后 md5 一致」不成立——当时下载实际返回的就是 `InvalidAccessKeyId`。并因此**误删过一次已上传成功的 bundle 条目**（对象其实已在 COS）又重传。判据纠正：**看 PUT 的 ETag，不看下载**。
+- 另确认：网盘根目录 ID `MTOwZfixfiEX`；`file_upload` 的凭证小概率签发即无效，重签即可。
+
+**最终同步状态**：bundle 与 zip 均已刷新到**收尾提交后的 HEAD**（此前网盘版本停在 `5b02473`，少 2 个文档提交）；网盘上三份陈旧的 Markdown（交接总览 / HANDOVER / Git 同步指引，停留在 10-15/16 版本）已用当前版覆盖上传。`/workspace/Git同步操作指引.md` §7 清单同步更新。
+
+**遗留**：① 推送仍缺 PAT（见 6.5）；② 用户的 DeepSeek Key 已明文出现在对话中，**建议用完后轮换**；③ 网盘 `file_download` 的 URL 格式不稳定（偶发缺签名参数），若再遇 `InvalidAccessKeyId`，先重签下载链接，别急着判定上传失败。
 
 ### 2026-10-18 · WorkBuddy · 首次真实端到端验收 + 修复「工作线程丢失身份」P0
 
@@ -580,7 +600,7 @@ npm run build
 |---|---|---|
 | — | **人工走查（浏览器 / 桌面端）** | V1.0 功能已全部收口，唯一未验证项是 UI 交互与桌面端打包；**需用户在本机执行**：`npm run dev` 走一遍首页/聊天/设置，再做桌面冒烟（沙箱无法做人工走查） |
 | — | **用 REA 核对线上部署版** | `compare_application_versions` 可对比 `timetable.zozovip.work` 与本地 build。工具已验证可用（见第 5 节 / `/workspace/REA-逆向验证报告.md`），待用户决定是否接入 MCP 常驻 |
-| — | **推送本地全部提交到 GitHub**（截至本文撰写为 7 个：`3a0623f` P0-1、`601aaf9` 通知箱/分时 UI、`f4840b6` 引导页/模块自定义、`e8dbca4` P0-2、`e55b477` 身份修复、`5b02473`/`ce5aaea` HANDOVER 文档；实时数量 `git rev-list --count origin/main..main`）。remote `origin` 已配好，缺的是一个 `ghp_` / `github_pat_` 开头的 **PAT**（用户 10-18 提供的 `sk-` 是 DeepSeek Key，推不了 GitHub）。拿到后 `git push origin main` 即可，CI 会自动跑 |
+| — | **推送本地全部提交到 GitHub**（截至本文撰写为 9 个：`3a0623f` P0-1、`601aaf9` 通知箱/分时 UI、`f4840b6` 引导页/模块自定义、`e8dbca4` P0-2、`e55b477` 身份修复、`5b02473`/`ce5aaea`/`39cfd34` HANDOVER 文档、收尾提交；实时数量 `git rev-list --count origin/main..main`）。remote `origin` 已配好，缺的是一个 `ghp_` / `github_pat_` 开头的 **PAT**（用户 10-18 提供的 `sk-` 是 DeepSeek Key，推不了 GitHub）。拿到后 `git push origin main` 即可，CI 会自动跑 |
 | — | **轮换 DeepSeek API Key** | 该 Key 已在本轮对话中明文出现。验收已完成，建议用户在 DeepSeek 控制台作废旧 Key 换新，避免泄露风险 |
 
 ### 6.6 已完成的旧待办（留档）
@@ -624,5 +644,6 @@ npm run build
 - 新增 AI action 类型时，必须同步 4 处：`splitToSingleActions` 的 recordField、`isValidProposal` 的 switch、`applyAction` 的执行分支、前端 `AiActionCard` 的渲染。少一处就会出现「提案被静默丢弃」这类难查的 bug。
 - 涉及数据库结构：h2 与 mysql 两套迁移都要改，并补迁移测试。
 - 每次收工请在本文件第 5 节追加一条会话日志，并更新第 2 节的状态快照。
+- **刷新网盘同步产物时**（zip / bundle / 文档，根目录 `MTOwZfixfiEX`）：`git bundle create` 与 `git archive` 必须在**所有收尾提交之后**执行，否则网盘版本会缺提交（这次就差点漏了 2 个文档提交）；PUT 用「`file_upload` 返回 JSON 写文件 → Python 解析 → subprocess 调 curl」范式，一个字符都不要经手；**验证看响应的 `ETag` 是否等于本地 md5**，不要用下载能否成功来判定上传成败（下载通道自己出过故障，见 3.7）。流程与清单维护见 `/workspace/Git同步操作指引.md`。
 - **下一步方向不要自己拍脑袋**：`/workspace/下一步方向调研报告.md` 已给出四阶段路线与理由（先降本 → 再升智 → 再扩入口 → 最后 Agent 化），第 6 节是其落地拆解。若要调整路线，先读该报告第 8.1 节的顺序论证。
 - **新增 LLM provider 时**：实现 `LlmClient` 接口并在 `LlmClientRegistry` 注册，同时补 `LlmProperties` 的 providerId 说明；注意 `active()` 会先抛 503，`isConfigured()` 不是可达分支（见 3.7）。
