@@ -61,9 +61,9 @@ npm run build
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
 | 后端测试 | **151/151 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个） |
-| 前端 | typecheck 通过；lint **0 错误 / 7 警告**（7 个警告全在存量文件，属基线，不得新增）；build 通过 |
+| 前端 | typecheck 通过；lint **0 错误 / 8 警告**（8 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 见 `git status`（P0-1 成本治理埋点 + 用量看板已提交并推送） |
-| 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1 已完成**；**《产品界面与功能细化方案》第一轮（通知箱 + 分时 UI + 三级提醒 + 语音全局化 + 悬浮助手）已完成**。P0-2（预算熔断）与方案第二轮未开工。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
+| 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1 已完成**；**《产品界面与功能细化方案》第一轮（通知箱 + 分时 UI + 三级提醒 + 语音全局化 + 悬浮助手）与第二轮（启动引导页 + 使用指引 + 模块自定义排序显隐）均已完成**。P0-2（预算熔断）未开工。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
@@ -178,6 +178,8 @@ npm run build
 | **裸 `FloatButton` 会重叠** | antd 的 `FloatButton` 默认都定位在右下 24px，想放第二个必须用 `FloatButton.Group` 包起来，否则两个浮球叠在同一位置互相遮挡 |
 | **语音 hook 绑在会重挂载的组件上会被打断** | `useSpeechInput` 在组件卸载时 `abort`。录音途中用户切页面/关弹窗就会静默中断。全局语音能力必须提到 Provider 层（本项目是 `VoiceAssistantProvider` 挂在路由外层）。另外 `onTranscript` 给的是**累计全文**不是增量，必须用 ref 存住录音前的 base 文本再拼接 |
 | **埋点/统计类代码的两个通病** | ① 浮点金额直接返回 → 前端拿到 `0.026600000000000002`，必须 `roundMoney()` 取整 4 位；② 毫秒→秒换算里 `/10` 写了两次 → 耗时差 10 倍。两者都是**测试先发现的真实产品 bug**，别把断言改成迁就实现 |
+| **往长 JSX 里插函数时先看自己在不在 `return (` 里** | 给 `DashboardPage` 加 `renderModule` 时按「`<Row>` 这一行」定位插入点，结果函数被插进了 JSX 内部，报的是 `TS1382: Unexpected token. Did you mean {'>'}?` 这种完全指不到位置的错。**按行号脚本改动 JSX 文件后，第一件事是确认插入点相对 `return (` 的位置** |
+| **localStorage 里的用户配置必须读时清洗** | 存模块的 `order` / `hidden` 时，只过滤「认识的 key」还不够——**必须把默认列表里有、存档里没有的 key 补进去**。否则以后新增模块，老用户存档里没有它，就永远看不到这个新功能，而且根本不知道去哪开。JSON 解析失败要静默回默认，别让一个坏存档把首页搞白屏 |
 
 ---
 
@@ -216,11 +218,14 @@ npm run build
 
 | 文件 | 职责 |
 |---|---|
-| `pages/DashboardPage.tsx` | 首页（AI Dashboard）：档案问候、今日课程/任务、48h、考试、规则重点、每日计划 |
+| `pages/DashboardPage.tsx` | 首页（AI Dashboard）：档案问候、今日课程/任务、48h、考试、规则重点、每日计划 + **分时动态 UI**（早/午/晚三档内容权重，共用同一份数据）+ **模块自定义**（`renderModule` 按配置渲染，注意它必须在 `return (` 之前定义） |
 | `pages/AiChatPage.tsx` | AI 聊天（流式） |
 | `pages/SettingsPage.tsx` | 设置：小组件地址、AI Key、**长期记忆管理**、字体、作息表 |
 | `pages/StatsPage.tsx` | AI 用量统计（路由 `/stats`）：成本/调用/token/确认率 + 每日趋势 + 分场景 + 提案漏斗。**不引图表库** |
-| `pages/DashboardPage.tsx` | 首页 + **分时动态 UI**（早/午/晚三档内容权重）。三档共用同一份数据 |
+| `pages/OnboardingPage.tsx` | 启动引导页（3 步）+ 使用指引。**第 2 步的「它不会做什么」不许删**——避免过度承诺 |
+| `pages/UserManualPage.tsx` | 用户手册。顶部有「再看一次功能说明」常驻入口，跳转到 `/onboarding` |
+| `hooks/useDashboardModules.ts` | 首页模块排序/显隐，存 `timetable.dashboard.modules`。**时段可用性（`periods`）与用户开关分开**：前者不可改 |
+| `components/DashboardModuleSettings.tsx` | 模块自定义弹窗（上下箭头排序 + 开关 + 恢复默认） |
 | `components/NoticeInboxPanel.tsx` | 今日待阅卡片列表（加入日程/忽略/稍后提醒/了解详情） |
 | `components/NoticeDraftModal.tsx` | 通知草稿确认弹窗（human-in-the-loop） |
 | `store/VoiceAssistantContext.tsx` | 全局语音新增待办。**Provider 挂路由外层**，否则录音会被卸载打断 |
@@ -234,6 +239,27 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-17 · WorkBuddy ·《AI 校园助手产品界面与功能细化方案》第二轮：启动引导页 + 模块自定义
+
+**范围**：方案第一、二部分（启动引导页 / 使用指引页）+ 基础交互第 1 条（模块自定义排序显隐）。**纯前端，零后端改动**。
+
+**新增（前端）**
+
+| 文件 | 说明 |
+|---|---|
+| `pages/OnboardingPage.tsx` | 3 步引导（能帮你什么 / 怎么把信息给它 / 先让它认识你）。**第 2 步的「它不会做什么」卡片是这一页的核心**，明确写不会自动翻群聊邮箱、不会替你做决定、不提供天气食堂快递、不会「学会」偏好。产品最容易在这里过度承诺 |
+| `hooks/useDashboardModules.ts` | 模块排序 / 显隐，localStorage `timetable.dashboard.modules`。读时清洗：丢不认识的 key + **补齐后加的模块** |
+| `components/DashboardModuleSettings.tsx` | 自定义弹窗。用上下箭头而非拖拽（不为这一个弹窗引依赖库）；当前时段不可用的模块开关禁用并标注原因 |
+| `pages/UserManualPage.tsx`（改） | 顶部加「再看一次功能说明」常驻入口 → `/onboarding`；AI 学长章节补 ⑥ 今日待阅、⑦ 分时 UI + 语音 |
+| `App.tsx`（改） | `useOnboarded()` + `/onboarding` 路由。未看完引导页时**裸渲染**（不带侧栏浮球） |
+| `pages/DashboardPage.tsx`（改） | 8 个模块改由 `renderModule` 按配置渲染；时段栏加「自定义」按钮 |
+
+**一个刻意的设计取舍**：模块自定义**只让用户关，不让用户强行开**。分时段可用性（`periods`）是产品行为不给改——午间把「今日必做」收缩成小条是分时 UI 的核心，让用户强行打开只会把页面撑成长条。设置弹窗里这类模块开关禁用 + 标注「仅早间、晚间」，避免用户对着勾了也不生效的开关困惑。
+
+**踩坑**：按行号脚本往 `DashboardPage` 插 `renderModule`，定位用了 `<Row>` 那一行 → 函数被插进 JSX 内部，报 `TS1382: Unexpected token. Did you mean {'>'}?`。已记进 3.6。
+
+**验收**：后端 **151/151** 全绿（本轮未改后端，确认基线未漂移）；前端 typecheck 通过、lint **0 错误 / 8 警告**（全存量基线，未新增）、build 通过。
 
 ### 2026-10-16 · WorkBuddy ·《AI 校园助手产品界面与功能细化方案》第一轮
 

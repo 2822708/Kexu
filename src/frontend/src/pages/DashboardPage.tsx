@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -16,6 +17,7 @@ import {
   message,
 } from 'antd'
 import {
+  AppstoreOutlined,
   AudioOutlined,
   BulbOutlined,
   CalendarOutlined,
@@ -30,9 +32,11 @@ import {
 import type { Dayjs } from 'dayjs'
 import { dashboardApi, noticeApi, planApi } from '../api'
 import { useReminders, REMINDER_COLORS, REMINDER_LABELS } from '../hooks/useReminders'
+import DashboardModuleSettings from '../components/DashboardModuleSettings'
 import NoticeInboxPanel from '../components/NoticeInboxPanel'
 import PlanTimeline from '../components/PlanTimeline'
 import TaskCard from '../components/TaskCard'
+import { useDashboardModules, type DashboardModuleKey } from '../hooks/useDashboardModules'
 import { useApp } from '../store/AppContext'
 import { useVoiceAssistant } from '../store/VoiceAssistantContext'
 import type { Course, DashboardData, Exam, NoticeCard, Task } from '../types'
@@ -61,12 +65,23 @@ export default function DashboardPage() {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
   const [now, setNow] = useState<Dayjs>(() => dayjs())
+  const [customOpen, setCustomOpen] = useState(false)
 
   const period = useMemo(() => timeOfDay(now), [now])
   const { reminders, requestNotify, notifyEnabled } = useReminders(
     data?.todayTasks ?? [],
     true,
   )
+
+  /** 首页模块的排序与显隐（用户自定义，存 localStorage） */
+  const {
+    visible: modules,
+    order: moduleOrder,
+    hidden: moduleHidden,
+    move: moveModule,
+    toggle: toggleModule,
+    reset: resetModules,
+  } = useDashboardModules(period)
 
   const load = useCallback(async () => {
     try {
@@ -184,6 +199,383 @@ export default function DashboardPage() {
         ? '上课时间，只显示当前进度和最近的截止'
         : '今天收个尾，顺便看看明天'
 
+  /**
+   * 按用户配置渲染模块。
+   *
+   * 这里不是 Hook，只是个普通函数——它必须放在 early return 之后（要用到 groups 等
+   * 已算好的数据），而 Hook 放在 early return 之后会违反调用顺序规则。
+   */
+  const renderModule = (key: DashboardModuleKey): ReactNode => {
+    switch (key) {
+      /* ==================== 今日必做 ==================== */
+      case 'tasks':
+        return (
+          <Col key="tasks" xs={24} lg={14}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <ClockCircleOutlined />
+                  <span>今日必做</span>
+                  <Tag color="cyan">{todayTasks.length}</Tag>
+                </Space>
+              }
+              extra={
+                <Space size={8}>
+                  <Tooltip title="按截止时间自动分档：已逾期或今天截止的强制置顶，压过你手动设的优先级">
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      按截止分档
+                    </Typography.Text>
+                  </Tooltip>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<AudioOutlined />}
+                    onClick={openVoiceTask}
+                  >
+                    语音新增
+                  </Button>
+                </Space>
+              }
+              style={{ height: '100%' }}
+            >
+              {todayTasks.length === 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="今天没有截止任务，可以去待办区看看"
+                  style={{ margin: '12px 0' }}
+                />
+              ) : (
+                <Space direction="vertical" style={{ width: '100%' }} size={10}>
+                  {(['high', 'medium', 'low'] as const).map((tier) => {
+                    const list = groups[tier]
+                    if (list.length === 0) return null
+                    return (
+                      <div key={tier}>
+                        <div style={{ marginBottom: 6 }}>
+                          <Tag
+                            color={
+                              tier === 'high' ? 'red' : tier === 'medium' ? 'orange' : 'default'
+                            }
+                            style={{ marginInlineEnd: 0 }}
+                          >
+                            {tier === 'high'
+                              ? '高优先级 · 今日截止/强制参与'
+                              : tier === 'medium'
+                                ? '中优先级 · 建议完成'
+                                : '低优先级 · 可灵活延后'}
+                          </Tag>
+                        </div>
+                        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                          {list.map((task) => (
+                            <TaskCard
+                              key={task.id}
+                              task={task}
+                              now={now}
+                              hint={
+                                isAutoEscalated(task, now)
+                                  ? '临近截止自动置顶'
+                                  : taskHint(task, now)
+                              }
+                              hintColor={
+                                isAutoEscalated(task, now) ? 'red' : taskHintColor(task, now)
+                              }
+                            />
+                          ))}
+                        </Space>
+                      </div>
+                    )
+                  })}
+                </Space>
+              )}
+            </Card>
+          </Col>
+        )
+
+      /* ==================== 今日课程 ==================== */
+      case 'courses':
+        return (
+          <Col key="courses" xs={24} lg={10}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <ReadOutlined />
+                  <span>{period === 'day' ? '今日完整课表' : '今日课程'}</span>
+                  <Tag color="geekblue">{courses.length}</Tag>
+                </Space>
+              }
+              extra={
+                <Button type="link" size="small" onClick={() => navigate('/timetable')}>
+                  查看课表
+                </Button>
+              }
+              style={{ height: '100%' }}
+            >
+              {courses.length === 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="今天没有课，好好珍惜"
+                  style={{ margin: '12px 0' }}
+                />
+              ) : (
+                <List
+                  size="small"
+                  dataSource={[...courses].sort((a, b) => a.startPeriod - b.startPeriod)}
+                  renderItem={(course) => <CourseItem course={course} />}
+                />
+              )}
+            </Card>
+          </Col>
+        )
+
+      /* ==================== 考试倒计时 ==================== */
+      case 'exams':
+        return (
+          <Col key="exams" xs={24} lg={12}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <CalendarOutlined />
+                  <span>考试倒计时</span>
+                  <Tag color="red">{exams.length}</Tag>
+                </Space>
+              }
+              style={{ height: '100%' }}
+            >
+              {exams.length === 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="14 天内没有考试"
+                  style={{ margin: '12px 0' }}
+                />
+              ) : (
+                <List
+                  size="small"
+                  dataSource={exams}
+                  renderItem={(exam) => <ExamItem exam={exam} now={now} />}
+                />
+              )}
+            </Card>
+          </Col>
+        )
+
+      /* ==================== 48 小时内截止 ==================== */
+      case 'upcoming':
+        return (
+          <Col key="upcoming" xs={24} lg={12}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <ExclamationCircleOutlined />
+                  <span>48 小时内截止</span>
+                  <Tag color="volcano">{upcoming.length}</Tag>
+                </Space>
+              }
+              style={{ height: '100%' }}
+            >
+              {upcoming.length === 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="未来两天没有截止的任务"
+                  style={{ margin: '12px 0' }}
+                />
+              ) : (
+                <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                  {upcoming.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      now={now}
+                      hint="48 小时内"
+                      hintColor="volcano"
+                    />
+                  ))}
+                </Space>
+              )}
+            </Card>
+          </Col>
+        )
+
+      /* ==================== 今日待阅 ==================== */
+      case 'notices':
+        return (
+          <Col key="notices" xs={24} lg={24}>
+            <NoticeInboxPanel
+              notices={notices}
+              loading={noticeLoading}
+              error={noticeError}
+              onRefresh={loadNotices}
+              compact={period === 'day'}
+            />
+          </Col>
+        )
+
+      /* ==================== 明日课表预览（仅晚间） ==================== */
+      case 'tomorrow':
+        return (
+          <Col key="tomorrow" xs={24} lg={12}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <CalendarOutlined />
+                  <span>明日课表预览</span>
+                  <Tag color="geekblue">{tomorrow?.todayCourses.length ?? 0}</Tag>
+                </Space>
+              }
+              style={{ height: '100%' }}
+            >
+              {!tomorrow ? (
+                <Skeleton active paragraph={{ rows: 3 }} />
+              ) : tomorrow.todayCourses.length === 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="明天没课"
+                  style={{ margin: '12px 0' }}
+                />
+              ) : (
+                <List
+                  size="small"
+                  dataSource={[...tomorrow.todayCourses].sort(
+                    (a, b) => a.startPeriod - b.startPeriod,
+                  )}
+                  renderItem={(course) => <CourseItem course={course} />}
+                />
+              )}
+            </Card>
+          </Col>
+        )
+
+      /* ==================== 今日重点 ==================== */
+      case 'highlights':
+        return highlights.length === 0 ? null : (
+          <Col key="highlights" xs={24} lg={24}>
+            <Card size="small" title="今日重点">
+              <List
+                size="small"
+                dataSource={highlights}
+                renderItem={(line) => (
+                  <List.Item>
+                    <Space>
+                      <ExclamationCircleOutlined style={{ color: '#fa8c16' }} />
+                      <Typography.Text>{line}</Typography.Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            </Card>
+          </Col>
+        )
+
+      /* ==================== AI 学长建议 ==================== */
+      case 'plan':
+        return (
+          <Col key="plan" xs={24} lg={24}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <BulbOutlined />
+                  <span>{period === 'night' ? '深度内容与建议' : 'AI 学长建议'}</span>
+                  {data?.plan?.stale ? (
+                    <Tooltip title="生成计划之后，你的课程 / 任务 / 档案又有改动，这条时间线可能不再准确">
+                      <Tag color="orange">可能已过时</Tag>
+                    </Tooltip>
+                  ) : (
+                    data?.plan?.cached && <Tag color="green">今日已生成</Tag>
+                  )}
+                </Space>
+              }
+              extra={
+                data?.plan ? (
+                  // 已过时 → 走生成接口真正重算；否则纯刷新（命中缓存，不烧 token）
+                  data.plan.stale ? (
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<BulbOutlined />}
+                      loading={generating}
+                      onClick={() => void generate()}
+                    >
+                      重新生成
+                    </Button>
+                  ) : (
+                    <Button
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      loading={generating}
+                      onClick={() => void load()}
+                    >
+                      刷新
+                    </Button>
+                  )
+                ) : null
+              }
+            >
+              {error && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message={error}
+                  description="计划由模型生成，偶发不合规会被服务端拦下。稍等几秒重试即可，不会写入无效内容。"
+                />
+              )}
+              {data?.plan?.stale && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message="这份计划生成之后，你的课程、任务或档案又改过了"
+                  description="旧计划仍然可用，但可能漏掉新加的任务或沿用旧的课程时间。点右上角「重新生成」会按最新数据重排一次（会消耗一次模型调用）。"
+                />
+              )}
+              {data?.plan ? (
+                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  <Typography.Paragraph style={{ marginBottom: 0, fontSize: 15 }}>
+                    {data.plan.summary}
+                  </Typography.Paragraph>
+                  <PlanTimeline plan={data.plan} />
+                </Space>
+              ) : (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Typography.Text type="secondary">
+                    让学长把今天的课程、任务和休息排成一条时间线——课程块直接取自课表，
+                    任务块只排未完成的那些，全天至少留一段休息。
+                  </Typography.Text>
+                  <Space wrap>
+                    <Button
+                      type="primary"
+                      icon={<BulbOutlined />}
+                      loading={generating}
+                      onClick={() => void generate()}
+                    >
+                      生成今日计划
+                    </Button>
+                    <Button icon={<MessageOutlined />} onClick={() => navigate('/ai')}>
+                      去聊天
+                    </Button>
+                    <Button icon={<PlusOutlined />} onClick={() => navigate('/todos')}>
+                      管理待办
+                    </Button>
+                    <Button icon={<SettingOutlined />} onClick={() => navigate('/settings')}>
+                      完善档案
+                    </Button>
+                  </Space>
+                </Space>
+              )}
+            </Card>
+          </Col>
+        )
+
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="dashboard-page" data-period={period}>
       {/* 时段氛围条 */}
@@ -201,6 +593,16 @@ export default function DashboardPage() {
           {activeSchedule && (
             <Tag>{formatWeekInfo(activeSchedule.periodStartDate, activeSchedule.periodEndDate)}</Tag>
           )}
+          <Tooltip title="调整首页模块的顺序，或关掉用不上的模块">
+            <Button
+              size="small"
+              type="text"
+              icon={<AppstoreOutlined />}
+              onClick={() => setCustomOpen(true)}
+            >
+              自定义
+            </Button>
+          </Tooltip>
         </Space>
       </div>
 
@@ -334,351 +736,8 @@ export default function DashboardPage() {
       )}
 
       <Row gutter={[12, 12]}>
-        {/* ==================== 今日必做 ==================== */}
-        {/* 午间模式不渲染整块，已收缩成上面的小条 */}
-        {period !== 'day' && (
-          <Col xs={24} lg={period === 'morning' ? 14 : 24}>
-            <Card
-              size="small"
-              title={
-                <Space>
-                  <ClockCircleOutlined />
-                  <span>今日必做</span>
-                  <Tag color="cyan">{todayTasks.length}</Tag>
-                </Space>
-              }
-              extra={
-                <Space size={8}>
-                  <Tooltip title="按截止时间自动分档：已逾期或今天截止的强制置顶，压过你手动设的优先级">
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      按截止分档
-                    </Typography.Text>
-                  </Tooltip>
-                  <Button type="link" size="small" icon={<AudioOutlined />} onClick={openVoiceTask}>
-                    语音新增
-                  </Button>
-                </Space>
-              }
-              style={{ height: '100%' }}
-            >
-              {todayTasks.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="今天没有截止任务，可以去待办区看看"
-                  style={{ margin: '12px 0' }}
-                />
-              ) : (
-                <Space direction="vertical" style={{ width: '100%' }} size={10}>
-                  {(['high', 'medium', 'low'] as const).map((tier) => {
-                    const list = groups[tier]
-                    if (list.length === 0) return null
-                    return (
-                      <div key={tier}>
-                        <div style={{ marginBottom: 6 }}>
-                          <Tag
-                            color={
-                              tier === 'high' ? 'red' : tier === 'medium' ? 'orange' : 'default'
-                            }
-                            style={{ marginInlineEnd: 0 }}
-                          >
-                            {tier === 'high'
-                              ? '高优先级 · 今日截止/强制参与'
-                              : tier === 'medium'
-                                ? '中优先级 · 建议完成'
-                                : '低优先级 · 可灵活延后'}
-                          </Tag>
-                        </div>
-                        <Space direction="vertical" style={{ width: '100%' }} size={8}>
-                          {list.map((task) => (
-                            <TaskCard
-                              key={task.id}
-                              task={task}
-                              now={now}
-                              hint={
-                                isAutoEscalated(task, now)
-                                  ? '临近截止自动置顶'
-                                  : taskHint(task, now)
-                              }
-                              hintColor={
-                                isAutoEscalated(task, now) ? 'red' : taskHintColor(task, now)
-                              }
-                            />
-                          ))}
-                        </Space>
-                      </div>
-                    )
-                  })}
-                </Space>
-              )}
-            </Card>
-          </Col>
-        )}
-
-        {/* 今日课程：午间是主区域，早间次之，晚间不展示（改看明天） */}
-        {period !== 'night' && (
-          <Col xs={24} lg={period === 'day' ? 24 : 10}>
-            <Card
-              size="small"
-              title={
-                <Space>
-                  <ReadOutlined />
-                  <span>{period === 'day' ? '今日完整课表' : '今日课程'}</span>
-                  <Tag color="geekblue">{courses.length}</Tag>
-                </Space>
-              }
-              extra={
-                <Button type="link" size="small" onClick={() => navigate('/timetable')}>
-                  查看课表
-                </Button>
-              }
-              style={{ height: '100%' }}
-            >
-              {courses.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="今天没有课，好好珍惜"
-                  style={{ margin: '12px 0' }}
-                />
-              ) : (
-                <List
-                  size="small"
-                  dataSource={[...courses].sort((a, b) => a.startPeriod - b.startPeriod)}
-                  renderItem={(course) => <CourseItem course={course} />}
-                />
-              )}
-            </Card>
-          </Col>
-        )}
-
-        {/* ==================== 晚间：明日预览 ==================== */}
-        {period === 'night' && (
-          <Col xs={24} lg={12}>
-            <Card
-              size="small"
-              title={
-                <Space>
-                  <CalendarOutlined />
-                  <span>明日课表预览</span>
-                  <Tag color="geekblue">{tomorrow?.todayCourses.length ?? 0}</Tag>
-                </Space>
-              }
-              style={{ height: '100%' }}
-            >
-              {!tomorrow ? (
-                <Skeleton active paragraph={{ rows: 3 }} />
-              ) : tomorrow.todayCourses.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="明天没课"
-                  style={{ margin: '12px 0' }}
-                />
-              ) : (
-                <List
-                  size="small"
-                  dataSource={[...tomorrow.todayCourses].sort(
-                    (a, b) => a.startPeriod - b.startPeriod,
-                  )}
-                  renderItem={(course) => <CourseItem course={course} />}
-                />
-              )}
-            </Card>
-          </Col>
-        )}
-
-        {/* 考试倒计时：早间与午间展示 */}
-        {period !== 'night' && (
-          <Col xs={24} lg={12}>
-            <Card
-              size="small"
-              title={
-                <Space>
-                  <CalendarOutlined />
-                  <span>考试倒计时</span>
-                  <Tag color="red">{exams.length}</Tag>
-                </Space>
-              }
-              style={{ height: '100%' }}
-            >
-              {exams.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="14 天内没有考试"
-                  style={{ margin: '12px 0' }}
-                />
-              ) : (
-                <List
-                  size="small"
-                  dataSource={exams}
-                  renderItem={(exam) => <ExamItem exam={exam} now={now} />}
-                />
-              )}
-            </Card>
-          </Col>
-        )}
-
-        {/* 48 小时内截止：只在早间展示（午间已进小条，晚间看复盘） */}
-        {period === 'morning' && (
-          <Col xs={24} lg={12}>
-            <Card
-              size="small"
-              title={
-                <Space>
-                  <ExclamationCircleOutlined />
-                  <span>48 小时内截止</span>
-                  <Tag color="volcano">{upcoming.length}</Tag>
-                </Space>
-              }
-              style={{ height: '100%' }}
-            >
-              {upcoming.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="未来两天没有截止的任务"
-                  style={{ margin: '12px 0' }}
-                />
-              ) : (
-                <Space direction="vertical" style={{ width: '100%' }} size={8}>
-                  {upcoming.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      now={now}
-                      hint="48 小时内"
-                      hintColor="volcano"
-                    />
-                  ))}
-                </Space>
-              )}
-            </Card>
-          </Col>
-        )}
-
-        {/* ==================== 今日待阅：三档都展示 ==================== */}
-        <Col xs={24} lg={period === 'night' ? 12 : 24}>
-          <NoticeInboxPanel
-            notices={notices}
-            loading={noticeLoading}
-            error={noticeError}
-            onRefresh={loadNotices}
-            compact={period === 'day'}
-          />
-        </Col>
+        {modules.map((key) => renderModule(key))}
       </Row>
-
-      {/* 今日重点：后端规则计算（逾期/今天截止/48h/考试倒计时），确定性输出 */}
-      {highlights.length > 0 && period !== 'day' && (
-        <Card size="small" title="今日重点" style={{ marginTop: 12 }}>
-          <List
-            size="small"
-            dataSource={highlights}
-            renderItem={(line) => (
-              <List.Item>
-                <Space>
-                  <ExclamationCircleOutlined style={{ color: '#fa8c16' }} />
-                  <Typography.Text>{line}</Typography.Text>
-                </Space>
-              </List.Item>
-            )}
-          />
-        </Card>
-      )}
-
-      {/* AI 学长建议：已生成计划 → 时间线 + 总评；未生成 → 生成入口 */}
-      <Card
-        size="small"
-        title={
-          <Space>
-            <BulbOutlined />
-            <span>{period === 'night' ? '深度内容与建议' : 'AI 学长建议'}</span>
-            {data?.plan?.stale ? (
-              <Tooltip title="生成计划之后，你的课程 / 任务 / 档案又有改动，这条时间线可能不再准确">
-                <Tag color="orange">可能已过时</Tag>
-              </Tooltip>
-            ) : (
-              data?.plan?.cached && <Tag color="green">今日已生成</Tag>
-            )}
-          </Space>
-        }
-        extra={
-          data?.plan ? (
-            // 已过时 → 走生成接口真正重算；否则纯刷新（命中缓存，不烧 token）
-            data.plan.stale ? (
-              <Button
-                size="small"
-                type="primary"
-                icon={<BulbOutlined />}
-                loading={generating}
-                onClick={() => void generate()}
-              >
-                重新生成
-              </Button>
-            ) : (
-              <Button
-                size="small"
-                icon={<ReloadOutlined />}
-                loading={generating}
-                onClick={() => void load()}
-              >
-                刷新
-              </Button>
-            )
-          ) : null
-        }
-        style={{ marginTop: 12 }}
-      >
-        {error && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message={error}
-            description="计划由模型生成，偶发不合规会被服务端拦下。稍等几秒重试即可，不会写入无效内容。"
-          />
-        )}
-        {data?.plan?.stale && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="这份计划生成之后，你的课程、任务或档案又改过了"
-            description="旧计划仍然可用，但可能漏掉新加的任务或沿用旧的课程时间。点右上角「重新生成」会按最新数据重排一次（会消耗一次模型调用）。"
-          />
-        )}
-        {data?.plan ? (
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            <Typography.Paragraph style={{ marginBottom: 0, fontSize: 15 }}>
-              {data.plan.summary}
-            </Typography.Paragraph>
-            <PlanTimeline plan={data.plan} />
-          </Space>
-        ) : (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Typography.Text type="secondary">
-              让学长把今天的课程、任务和休息排成一条时间线——课程块直接取自课表，
-              任务块只排未完成的那些，全天至少留一段休息。
-            </Typography.Text>
-            <Space wrap>
-              <Button
-                type="primary"
-                icon={<BulbOutlined />}
-                loading={generating}
-                onClick={() => void generate()}
-              >
-                生成今日计划
-              </Button>
-              <Button icon={<MessageOutlined />} onClick={() => navigate('/ai')}>
-                去聊天
-              </Button>
-              <Button icon={<PlusOutlined />} onClick={() => navigate('/todos')}>
-                管理待办
-              </Button>
-              <Button icon={<SettingOutlined />} onClick={() => navigate('/settings')}>
-                完善档案
-              </Button>
-            </Space>
-          </Space>
-        )}
-      </Card>
 
       {/* 底部聊天入口：首页的核心动作 */}
       <div style={{ marginTop: 12, textAlign: 'center' }}>
@@ -686,6 +745,17 @@ export default function DashboardPage() {
           问 AI 学长：今天我该做什么？
         </Button>
       </div>
+
+      <DashboardModuleSettings
+        open={customOpen}
+        period={period}
+        order={moduleOrder}
+        hidden={moduleHidden}
+        onMove={moveModule}
+        onToggle={toggleModule}
+        onReset={resetModules}
+        onClose={() => setCustomOpen(false)}
+      />
     </div>
   )
 }

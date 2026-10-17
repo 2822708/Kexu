@@ -1,4 +1,5 @@
-import { Card, Collapse, Divider, Space, Typography } from 'antd'
+import { Alert, Button, Card, Collapse, Divider, Space, Typography } from 'antd'
+import { useNavigate } from 'react-router-dom'
 import {
   BookOutlined,
   CheckCircleOutlined,
@@ -64,6 +65,7 @@ const FAQ = [
 ]
 
 export default function UserManualPage() {
+  const navigate = useNavigate()
   return (
     <div className="manual-page">
       <Card
@@ -77,6 +79,28 @@ export default function UserManualPage() {
         extra={<Text type="secondary">给非技术朋友的白话教程</Text>}
       >
         <div className="manual-body">
+          {/*
+            引导页只在首次进入时自动弹一次，之后就再也找不到了。
+            这里留一个常驻入口，想回看「它能做什么 / 不做什么」时随时能翻出来。
+          */}
+          <Alert
+            type="info"
+            showIcon
+            icon={<RobotOutlined />}
+            message="第一次用？先花三分钟看功能说明"
+            description={
+              <Space direction="vertical" size={6} style={{ display: 'flex' }}>
+                <Text style={{ fontSize: 13 }}>
+                  说明页里写清楚了它能帮你做什么，以及它<strong>不会</strong>做什么
+                  （比如不会自动翻你的群聊和邮箱）。看完再动手，不容易用错方向。
+                </Text>
+                <Button size="small" type="primary" onClick={() => navigate('/onboarding')}>
+                  再看一次功能说明
+                </Button>
+              </Space>
+            }
+          />
+
           <section>
             <Title level={4}>怎么进入</Title>
             <Paragraph>在电脑或手机浏览器打开：</Paragraph>
@@ -300,6 +324,42 @@ export default function UserManualPage() {
               <li>首页「AI 建议」点「生成今日计划」，学长会按你今天的课、未完成的任务和作息表排出一条时间线，含休息。</li>
               <li>课程时间严格按课表和作息表来，不会瞎编；一天只生成一次，刷新页面不会重新烧掉你的额度。</li>
               <li>生成之后如果你又改了课程、任务或档案，卡片上会出现「可能已过时」，旧计划照常能看；点「重新生成」才会按最新数据重排一次。</li>
+            </ul>
+
+            <Paragraph strong>⑥ 今日待阅：把群通知变成卡片</Paragraph>
+            <ul>
+              <li>
+                看到班委群公告、教务通知、竞赛报名、讲座预告，复制文字或发截图给它，
+                它会提炼成「一句话核心 + 关键时间 + 相关要求」的卡片，放进首页「今日待阅」。
+              </li>
+              <li>
+                卡片有四个出口：<strong>加入日程</strong>（转成任务）、
+                <strong>一键了解详情</strong>（把报名条件、流程、收益拆开讲）、
+                <strong>稍后提醒</strong>（1–72 小时后再出现）、<strong>忽略</strong>。
+              </li>
+              <li>
+                原始聊天记录<strong>不会</strong>入库，只保存提炼后的卡片；
+                你忽略得多的来源会自动往后排，但它不会被隐藏。
+              </li>
+              <li>
+                提炼出来的卡片只是「待阅」，不等于待办——大量通知属于「知道了就行」，
+                全塞进待办反而会淹没真正要做的事。要不要变成待办，由你点「加入日程」决定。
+              </li>
+            </ul>
+
+            <Paragraph strong>⑦ 首页会随时间变，语音随时可用</Paragraph>
+            <ul>
+              <li>
+                首页按时间段换配色：早间暖橙、白天清爽蓝白、晚间深色护眼；
+                内容权重也跟着变——早上看今天的课和今天要交的，晚上多给你看明天的安排和当日小结。
+              </li>
+              <li>
+                右下角浮球和首页「语音新增」都能直接说话转待办；录音途中切页面不会被打断。
+              </li>
+              <li>
+                临近截止会提前 3 天、1 天、1 小时各提醒一次，每级只弹一次。
+                <strong>提醒只在应用打开时触发，关掉页面不会推送。</strong>
+              </li>
             </ul>
 
             <Paragraph type="secondary">
