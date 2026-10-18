@@ -266,6 +266,16 @@ npm run build
 
 ## 5. 会话日志（倒序，最新在最上）
 
+### 2026-10-18 · WorkBuddy · UI 换皮全部完成（32 个页面/组件全量明亮化，分支累计 13 提交）
+
+**背景**：用户指令「先把页面做完再推送」。
+
+- **第二批 3 子代理并行完成 12 文件**（设备手册组：DeviceConnectionPage/UserManualPage/WidgetPreviewPage；导入弹窗组：ScheduleCreateModal/ImportHtmlModal/QuickImportWidget/ExamManagerModal；任务通知组：TaskDraftModal/NoticeInboxPanel/NoticeDraftModal/MemoryManager/DashboardModuleSettings），+1515 行，按三分组提交。全量验收：tsc PASS、lint 0 error（9 个 warning 全是既有 react-refresh 提示）、build ✓、device-session 8/8。grep 验证零硬编码色值（剩余白字均为彩色面 on-color 前景）。
+- **自查揪出两个漏网并补齐**：① **OnboardingPage**（首次启动引导页，两批都漏了，还在用裸 antd）——改 b-hero 渐变欢迎卡 + 局部作用域把 antd Card 换成白底大圆角柔影 + 功能图标按语义着色 + 步骤序号 Tag 改 3D 圆形徽章 + 操作按钮改 b-btn-3d（新增 flat 次级变体）；② **RecurringFormModal**（循环任务规则弹窗，同样漏了）——模态 content 大圆角 + sh3 柔影、头/footer 分隔线、预览/校验告警蓝/红软色、单选组选中态立体按压、脚本编辑器浅底凹陷槽 + code 标签软底。**两者正文文字均一字未改，逻辑零改动**。
+- **至此 `components/` + `pages/` 全部 32 个 tsx 文件完成明亮化**（AppLayout 为壳层、样式在 index.css；RewardsBadge/RewardFloat 即奖励组件本身）。视觉原则贯穿全程：颜色全走 CSS 变量（暗色兼容）、antd 样式冲突一律局部作用域 `<style>` 解决、四层光影体系不混用。
+
+**遗留**：① GitHub 推送仍待用户权限操作（见下一条目）；② DeepSeek Key 轮换仍待用户执行。
+
 ### 2026-10-18 · WorkBuddy · UI 明亮化改版（分支 feature/duolingo-style-ui）+ GitHub 推送凭据链完全定位
 
 **背景**：用户喜欢多邻国 UI，原话「风格类似、不用闯关形式（抄袭太明显）、光影效果要注意、可以加奖励机制、搭好框架直接开始做」。
