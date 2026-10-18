@@ -20,6 +20,7 @@ import { formatWeekInfo } from '../utils/schedule'
 import QuickImportWidget from './QuickImportWidget'
 import RewardsBadge from './RewardsBadge'
 import RewardFloat from './RewardFloat'
+import PwaInstallPrompt from './PwaInstallPrompt'
 
 const NAV_ITEMS = [
   { key: '/', icon: <HomeOutlined />, label: '首页' },
@@ -196,6 +197,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </footer>
       <QuickImportWidget />
       <RewardFloat />
+      <PwaInstallPrompt />
     </div>
   )
 }

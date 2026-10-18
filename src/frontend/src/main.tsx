@@ -7,8 +7,11 @@ import { AppProvider } from './store/AppContext'
 import { FontProvider } from './store/FontContext'
 import { ThemeProvider } from './theme'
 import { RewardsProvider } from './store/RewardsContext'
+import { registerServiceWorker } from './pwa/registerServiceWorker'
 import './index.css'
 import './styles/bright.css'
+
+registerServiceWorker()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

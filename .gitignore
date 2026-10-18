@@ -61,3 +61,6 @@ src/android/local.properties
 *.jks
 *.keystore
 !src/android/gradle/wrapper/gradle-wrapper.jar
+
+# 崩溃启动可能在工作目录留下字面量 ~ 日志目录（app.data-dir 未展开时的残留）
+~/
