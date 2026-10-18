@@ -11,6 +11,8 @@ import com.timetable.dto.AiActionDto;
 import com.timetable.dto.AiConversationRequest;
 import com.timetable.dto.AiMessageRequest;
 import com.timetable.dto.AiMessageResponse;
+import com.timetable.dto.QueryPlanResult;
+import com.timetable.dto.QueryPlanRequest;
 import com.timetable.dto.RecurringTodoRequest;
 import com.timetable.dto.StudentProfilePatch;
 import com.timetable.dto.TaskDraft;
@@ -2342,5 +2344,97 @@ public class AiServiceImpl implements AiService {
             }
         }
         return true;
+    }
+
+    /**
+     * 查询计划整理（信息处理页 · AI 主动查询中心）。
+     *
+     * <p><b>不检索外部渠道</b>：没有爬虫、没有对接教务系统。AI 只把「怎么查这件事」
+     * 整理成结构化计划（去哪查、查什么、节点怎么排），具体动态由用户自己去查——
+     * 这是项目从第一天就定下的边界（不可靠 + 合规风险 + 「学生自己决定看什么」）。
+     *
+     * <p>失败降级为空计划 + note，与 NoticeServiceImpl.extract 同一套哲学：
+     * 能力故障不阻断页面，用户还能手动去查。
+     */
+    public QueryPlanResult queryPlan(QueryPlanRequest request) {
+        QueryPlanResult result = new QueryPlanResult();
+        PromptTemplateRegistry.PromptTemplate template = promptTemplates.get("query-plan");
+        if (template == null || template.body().isBlank()) {
+            result.setNote("查询规划能力暂未配置，请稍后重试");
+            return result;
+        }
+        LlmClient client = llmClients.active();
+        if (!client.isConfigured()) {
+            throw new BusinessException(503, "AI 尚未配置，暂时不能生成查询计划");
+        }
+
+        LocalDate today = LocalDate.now(clock);
+        String categoryLabel = switch (request.getCategory()) {
+            case "COMPETITION" -> "竞赛";
+            case "RECRUIT" -> "校招实习";
+            case "ACADEMIC" -> "教务政策";
+            default -> "讲座活动";
+        };
+        String systemPrompt = template.body()
+                + "\n\n当前日期：" + today + "（星期" + "一二三四五六日".charAt(today.getDayOfWeek().getValue() - 1) + "）";
+        String userPrompt = "查询分类：" + categoryLabel + "\n关键词：" + request.getKeyword().trim();
+
+        try {
+            List<LlmClient.Message> payload = List.of(
+                    new LlmClient.Message("system", systemPrompt),
+                    new LlmClient.Message("user", userPrompt));
+            result = toQueryPlan(parseJson(client.chatJson(LlmUsage.SCENE_QUERY, payload)));
+        } catch (BusinessException e) {
+            // 已知错误（未配置 / 限流 / 供应商故障）原样透传，前端展示具体原因
+            throw e;
+        } catch (Exception e) {
+            log.warn("查询计划生成失败（不影响其他功能）: {}", e.toString());
+            result = new QueryPlanResult();
+            result.setNote("AI 整理失败，请稍后重试，或按上面的渠道自己去查");
+        }
+        return result;
+    }
+
+    /** JSON → QueryPlanResult 清洗：截断超长字段，phases 最多 6 个，leadDays 夹到 [-30, 365]。 */
+    private QueryPlanResult toQueryPlan(JsonNode root) {
+        QueryPlanResult result = new QueryPlanResult();
+        result.setGoal(truncateText(root.path("goal").asText(""), 50));
+        result.setChannels(toStringList(root.path("channels"), 6, 40));
+        result.setWatchouts(toStringList(root.path("watchouts"), 5, 80));
+        List<QueryPlanResult.Phase> phases = new ArrayList<>();
+        JsonNode phasesNode = root.path("phases");
+        if (phasesNode.isArray()) {
+            for (JsonNode node : phasesNode) {
+                if (phases.size() >= 6) break;
+                if (node == null || !node.isObject()) continue;
+                QueryPlanResult.Phase phase = new QueryPlanResult.Phase();
+                phase.setName(truncateText(node.path("name").asText(""), 12));
+                phase.setHint(truncateText(node.path("hint").asText(""), 60));
+                int lead = node.path("leadDays").isInt() ? node.path("leadDays").asInt() : 0;
+                phase.setLeadDays(Math.max(-30, Math.min(365, lead)));
+                if (!phase.getName().isBlank()) phases.add(phase);
+            }
+        }
+        result.setPhases(phases);
+        result.setNote(truncateText(root.path("note").asText(""), 80));
+        return result;
+    }
+
+    private List<String> toStringList(JsonNode node, int max, int maxChars) {
+        List<String> out = new ArrayList<>();
+        if (node.isArray()) {
+            for (JsonNode item : node) {
+                if (out.size() >= max) break;
+                String text = item.isTextual() ? item.asText("").trim() : "";
+                if (!text.isBlank()) out.add(truncateText(text, maxChars));
+            }
+        }
+        return out;
+    }
+
+    private String truncateText(String value, int max) {
+        if (value == null) return "";
+        String trimmed = value.trim();
+        return trimmed.length() > max ? trimmed.substring(0, max) : trimmed;
     }
 }

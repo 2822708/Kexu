@@ -29,6 +29,14 @@ public interface NoticeService {
     /** 今日待阅：待决定且「稍后提醒」已到期的卡片；被高频忽略的来源排在后面。 */
     List<NoticeCard> listToday(String apiKey);
 
+    /**
+     * 最近 N 条卡片（**全状态**，按创建时间倒序）——信息处理页底部预览栏用。
+     *
+     * <p>与 {@link #listToday} 的区别：这里要能看出「哪些已加入日程、哪些被忽略」，
+     * 所以不过滤状态；limit 由调用方夹到 [1, 20]。
+     */
+    List<NoticeCard> listRecent(String apiKey, int limit);
+
     /** 加入日程：卡片转任务。返回的 task 由调用方决定怎么展示。 */
     NoticeCard toTask(Long id, String apiKey, com.timetable.dto.TaskDraft draft);
 

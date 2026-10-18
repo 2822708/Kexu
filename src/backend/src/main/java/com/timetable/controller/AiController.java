@@ -9,6 +9,8 @@ import com.timetable.dto.AiParseImageRequest;
 import com.timetable.dto.AiRenameRequest;
 import com.timetable.dto.ApiResponse;
 import com.timetable.dto.CursorPage;
+import com.timetable.dto.QueryPlanRequest;
+import com.timetable.dto.QueryPlanResult;
 import com.timetable.entity.AiConversation;
 import com.timetable.exception.BusinessException;
 import com.timetable.interceptor.RequestContext;
@@ -306,5 +308,16 @@ public class AiController {
     @PostMapping("/parse-image")
     public ApiResponse<Map<String, String>> parseImage(@Valid @RequestBody AiParseImageRequest request) {
         return ApiResponse.success(Map.of("text", aiService.parseImageText(request.getImageDataUrl())));
+    }
+
+    /**
+     * 查询计划整理（信息处理页 · AI 主动查询中心）。
+     *
+     * <p><b>不检索外部渠道</b>：AI 只把「怎么查」整理成结构化计划（去哪查、查什么、
+     * 节点怎么排），具体动态由用户按计划自己去查。没有爬虫、没有教务系统对接。
+     */
+    @PostMapping("/query-plan")
+    public ApiResponse<QueryPlanResult> queryPlan(@Valid @RequestBody QueryPlanRequest request) {
+        return ApiResponse.success(aiService.queryPlan(request));
     }
 }

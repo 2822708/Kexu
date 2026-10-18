@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -46,6 +47,17 @@ public class NoticeController {
     @GetMapping
     public ApiResponse<List<NoticeCard>> list() {
         return ApiResponse.success(noticeService.listToday(RequestContext.getApiKey()));
+    }
+
+    /**
+     * 最近 N 条卡片（全状态）——信息处理页底部预览栏。
+     *
+     * <p>limit 缺省 5，服务端夹到 [1, 20]。不按状态过滤：预览栏要展示
+     * 「哪些已加入日程（绿勾）、哪些被忽略」，这是用户管理信息流的抓手。
+     */
+    @GetMapping("/recent")
+    public ApiResponse<List<NoticeCard>> recent(@RequestParam(defaultValue = "5") int limit) {
+        return ApiResponse.success(noticeService.listRecent(RequestContext.getApiKey(), limit));
     }
 
     /** AI 提炼草稿，不落库。 */

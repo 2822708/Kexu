@@ -268,6 +268,19 @@ public class NoticeServiceImpl implements NoticeService {
         return sortByRelevanceThenMutedSource(pending, apiKey);
     }
 
+    @Override
+    public List<NoticeCard> listRecent(String apiKey, int limit) {
+        if (apiKey == null || apiKey.isBlank()) {
+            return List.of();
+        }
+        int safeLimit = Math.max(1, Math.min(20, limit));
+        return mapper.selectList(new LambdaQueryWrapper<NoticeCard>()
+                .eq(NoticeCard::getApiKey, apiKey)
+                .orderByDesc(NoticeCard::getCreatedAt)
+                .orderByDesc(NoticeCard::getId)
+                .last("LIMIT " + safeLimit));
+    }
+
     /**
      * 排序：关联度升序（1 高在前）→ 来源未降权在前 → 时间早的在前 → id。
      *

@@ -5,6 +5,8 @@ import com.timetable.dto.AiConversationRequest;
 import com.timetable.dto.AiMessageRequest;
 import com.timetable.dto.AiMessageResponse;
 import com.timetable.dto.CursorPage;
+import com.timetable.dto.QueryPlanRequest;
+import com.timetable.dto.QueryPlanResult;
 import com.timetable.dto.TaskExtractRequest;
 import com.timetable.dto.TaskExtractResult;
 import com.timetable.entity.AiConversation;
@@ -88,6 +90,14 @@ public interface AiService {
 
     /** Transcribes one ephemeral image; the image is never persisted by the application. */
     String parseImageText(String imageDataUrl);
+
+    /**
+     * 查询计划整理（信息处理页 · AI 主动查询中心）。
+     *
+     * <p><b>不检索外部渠道</b>：AI 只把「怎么查这件事」整理成结构化计划
+     * （去哪查、查什么、节点怎么排），具体动态由用户按计划自己去查。
+     */
+    QueryPlanResult queryPlan(QueryPlanRequest request);
 
     boolean isEnabled();
 }
