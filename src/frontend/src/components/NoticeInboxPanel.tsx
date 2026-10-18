@@ -7,7 +7,6 @@ import {
   Empty,
   Popconfirm,
   Space,
-  Tag,
   Tooltip,
   Typography,
   message,
@@ -28,7 +27,28 @@ import { dayjs } from '../utils/schedule'
 const { Text } = Typography
 
 const RELEVANCE_LABELS: Record<number, string> = { 1: '强相关', 2: '可能相关', 3: '泛泛相关' }
-const RELEVANCE_COLORS: Record<number, string> = { 1: 'red', 2: 'orange', 3: 'default' }
+/** 相关度药丸：强相关=蓝（重点未读语义），可能相关=黄，泛泛=中性 */
+const RELEVANCE_PILLS: Record<number, string> = { 1: 'blue', 2: 'yellow' }
+const NEUTRAL_PILL_STYLE = { background: 'var(--b-bg-soft)', color: 'var(--b-ink-faint)' } as const
+
+/** 通知类型推断（纯视觉映射：课程蓝 / 考试红 / 待办黄 / 系统绿） */
+function noticeTypePill(source: string): { variant: string; label: string } {
+  if (/考试|六级|四级|考研|期末|测验/.test(source)) return { variant: 'red', label: '考试' }
+  if (/课程|选课|教务|教学|调课|实验/.test(source)) return { variant: 'blue', label: '课程' }
+  if (/报名|截止|活动|竞赛|讲座|通知/.test(source)) return { variant: 'yellow', label: '待办' }
+  return { variant: 'green', label: '系统' }
+}
+
+/** 列表项卡片：白底 + 柔影 + 大圆角 */
+const NOTICE_CARD_STYLE = {
+  padding: '12px 14px',
+  borderRadius: 'var(--b-radius)',
+  background: 'var(--bg-card)',
+  boxShadow: 'var(--b-sh2)',
+} as const
+
+/** 主操作 3D 小按钮（绿） */
+const PRIMARY_BTN_STYLE = { fontSize: 13, padding: '5px 14px' } as const
 
 /**
  * 通知卡片「一键了解详情」走的 prompt。
@@ -135,7 +155,7 @@ export default function NoticeInboxPanel({
         <Space>
           <BellOutlined />
           <span>今日待阅</span>
-          <Tag color="blue">{notices.length}</Tag>
+          <span className="b-pill blue">{notices.length}</span>
         </Space>
       }
       extra={
@@ -144,17 +164,24 @@ export default function NoticeInboxPanel({
           size="small"
           icon={<ImportOutlined />}
           onClick={() => navigate('/ai')}
+          style={{ color: 'var(--b-blue-ink)', fontWeight: 800 }}
         >
           转发通知给助手
         </Button>
       }
       loading={loading}
+      style={{ borderRadius: 'var(--b-radius)', boxShadow: 'var(--b-sh2)' }}
     >
       {(err || error) && (
         <Alert
           type="error"
           showIcon
-          style={{ marginBottom: 12 }}
+          style={{
+            marginBottom: 12,
+            borderRadius: 'var(--b-radius-sm)',
+            background: 'var(--b-red-soft)',
+            border: '1px solid var(--b-line)',
+          }}
           message={err ?? error}
           action={
             <Button size="small" onClick={onRefresh}>
@@ -165,73 +192,89 @@ export default function NoticeInboxPanel({
       )}
 
       {notices.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={
-            <Space direction="vertical" align="center" size={2}>
-              <span>暂时没有待你决定的通知</span>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                把群公告、教务通知转发给助手，它会提炼成卡片放在这里
-              </Text>
-            </Space>
-          }
-          style={{ margin: '12px 0' }}
-        />
+        <div
+          style={{
+            background: 'var(--b-bg-soft)',
+            borderRadius: 'var(--b-radius)',
+            padding: '18px 12px',
+          }}
+        >
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <Space direction="vertical" align="center" size={2}>
+                <span style={{ color: 'var(--b-ink-soft)' }}>暂时没有待你决定的通知</span>
+                <Text type="secondary" style={{ fontSize: 12, color: 'var(--b-ink-faint)' }}>
+                  把群公告、教务通知转发给助手，它会提炼成卡片放在这里
+                </Text>
+              </Space>
+            }
+            style={{ margin: '12px 0' }}
+          />
+        </div>
       ) : (
-        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        <Space direction="vertical" style={{ width: '100%' }} size={10}>
           {notices.map((card) => (
-            <div
-              key={card.id}
-              style={{
-                padding: '10px 12px',
-                borderRadius: 8,
-                border: '1px solid var(--border-light)',
-                background: 'var(--bg-card)',
-              }}
-            >
-              <Space size={6} wrap style={{ marginBottom: 4 }}>
-                <Tag color="geekblue" style={{ marginInlineEnd: 0 }}>
+            <div key={card.id} style={NOTICE_CARD_STYLE}>
+              <Space size={6} wrap style={{ marginBottom: 6 }}>
+                <span className={`b-pill ${noticeTypePill(card.source).variant}`}>
+                  {noticeTypePill(card.source).label}
+                </span>
+                <span className="b-pill" style={NEUTRAL_PILL_STYLE}>
                   {card.source}
-                </Tag>
-                <Tag
-                  color={RELEVANCE_COLORS[card.relevance] ?? 'default'}
-                  style={{ marginInlineEnd: 0 }}
+                </span>
+                <span
+                  className={RELEVANCE_PILLS[card.relevance] ? `b-pill ${RELEVANCE_PILLS[card.relevance]}` : 'b-pill'}
+                  style={RELEVANCE_PILLS[card.relevance] ? undefined : NEUTRAL_PILL_STYLE}
                 >
                   {RELEVANCE_LABELS[card.relevance] ?? '可能相关'}
-                </Tag>
+                </span>
                 {card.keyTime && (
-                  <Tag icon={<CalendarOutlined />} color="volcano" style={{ marginInlineEnd: 0 }}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      color: 'var(--b-ink-faint)',
+                    }}
+                  >
+                    <CalendarOutlined />
                     {dayjs(card.keyTime).format('MM-DD HH:mm')}
-                  </Tag>
+                  </span>
                 )}
               </Space>
 
               <div>
-                <Typography.Text strong>{card.title}</Typography.Text>
+                <Typography.Text strong style={{ color: 'var(--b-ink)' }}>
+                  {card.title}
+                </Typography.Text>
               </div>
 
               {!compact && card.summary && (
-                <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 2 }}>
+                <div style={{ color: 'var(--b-ink-soft)', fontSize: 12, marginTop: 2 }}>
                   {card.summary}
                 </div>
               )}
               {!compact && card.requirement && (
-                <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 2 }}>
+                <div style={{ color: 'var(--b-ink-soft)', fontSize: 12, marginTop: 2 }}>
                   要求：{card.requirement}
                 </div>
               )}
 
               <Space size={6} wrap style={{ marginTop: 8 }}>
                 <Tooltip title="把这条通知转成任务，放进今日必做">
-                  <Button
-                    size="small"
-                    type="primary"
-                    icon={<CheckOutlined />}
-                    loading={busyId === card.id}
+                  <button
+                    type="button"
+                    className="b-btn-3d"
+                    disabled={busyId === card.id}
                     onClick={() => toTask(card)}
+                    style={PRIMARY_BTN_STYLE}
                   >
+                    <CheckOutlined />
                     加入日程
-                  </Button>
+                  </button>
                 </Tooltip>
                 <Button
                   size="small"
@@ -253,7 +296,12 @@ export default function NoticeInboxPanel({
                   cancelText="取消"
                   onConfirm={() => void guard(card.id, () => noticeApi.ignore(card.id), '已忽略')}
                 >
-                  <Button size="small" icon={<CloseOutlined />} loading={busyId === card.id}>
+                  <Button
+                    size="small"
+                    icon={<CloseOutlined />}
+                    disabled={busyId === card.id}
+                    style={{ color: 'var(--b-red-ink)' }}
+                  >
                     忽略
                   </Button>
                 </Popconfirm>

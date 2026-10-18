@@ -1,8 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Alert, Checkbox, Input, Modal, Space, Tag, Typography } from 'antd'
+import { Alert, Checkbox, Input, Modal, Space, Typography } from 'antd'
+import { LoadingOutlined } from '@ant-design/icons'
 import type { NoticeDraft, NoticeExtractResult } from '../types'
 
 const RELEVANCE_LABELS: Record<number, string> = { 1: '强相关', 2: '可能相关', 3: '泛泛相关' }
+/** 相关度药丸：强相关=蓝（重点未读语义），可能相关=黄，泛泛=中性 */
+const RELEVANCE_PILLS: Record<number, string> = { 1: 'blue', 2: 'yellow' }
+const NEUTRAL_PILL_STYLE = { background: 'var(--b-bg-soft)', color: 'var(--b-ink-faint)' } as const
+
+/** 草稿卡：白底 + 大圆角 + 柔影 */
+const DRAFT_CARD_STYLE = {
+  padding: 12,
+  borderRadius: 'var(--b-radius)',
+  background: 'var(--bg-card)',
+  boxShadow: 'var(--b-sh2)',
+} as const
+
+/** 弹脚 3D 按钮尺寸（内联覆盖 .b-btn-3d 大号默认值，非颜色锁定） */
+const FOOTER_BTN_STYLE = { fontSize: 13.5, padding: '7px 16px' } as const
 
 interface NoticeDraftModalProps {
   open: boolean
@@ -70,28 +85,66 @@ export default function NoticeDraftModal({
         )
       }
       width={620}
+      footer={
+        /* 弹脚 3D 按钮：加入待阅（绿）/ 取消（蓝）；原生 button 避开旧 !important 规则 */
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button
+            type="button"
+            className="b-btn-3d blue"
+            disabled={confirming}
+            onClick={onCancel}
+            style={FOOTER_BTN_STYLE}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="b-btn-3d"
+            disabled={chosenCount === 0 || confirming}
+            onClick={() =>
+              onConfirm(
+                cards
+                  .map((card, index) => ({
+                    ...card,
+                    title: (titles[index] ?? card.title).trim() || card.title,
+                  }))
+                  .filter((_, index) => selected[index]),
+              )
+            }
+            style={FOOTER_BTN_STYLE}
+          >
+            {confirming && <LoadingOutlined spin />}
+            {`加入待阅（${chosenCount}）`}
+          </button>
+        </div>
+      }
       destroyOnClose
     >
       <Space direction="vertical" size={10} style={{ display: 'flex' }}>
         {result?.note && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12, color: 'var(--b-ink-soft)' }}>
             {result.note}
           </Typography.Text>
         )}
-        {error && <Alert type="error" showIcon message={error} />}
+        {error && (
+          <Alert
+            type="error"
+            showIcon
+            message={error}
+            style={{
+              borderRadius: 'var(--b-radius-sm)',
+              background: 'var(--b-red-soft)',
+              border: '1px solid var(--b-line)',
+            }}
+          />
+        )}
         {cards.length === 0 ? (
-          <Typography.Text type="secondary">没有提炼出通知卡片。</Typography.Text>
+          <Typography.Text type="secondary" style={{ color: 'var(--b-ink-soft)' }}>
+            没有提炼出通知卡片。
+          </Typography.Text>
         ) : (
           cards.map((card, index) => (
-            <div
-              key={index}
-              style={{
-                padding: '10px 12px',
-                borderRadius: 8,
-                border: '1px solid var(--border-light)',
-                background: 'var(--bg-card)',
-              }}
-            >
+            <div key={index} style={DRAFT_CARD_STYLE}>
               <Space align="start" style={{ width: '100%' }}>
                 <Checkbox
                   checked={selected[index] ?? false}
@@ -99,16 +152,26 @@ export default function NoticeDraftModal({
                 />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Space size={6} wrap style={{ marginBottom: 6 }}>
-                    <Tag color="geekblue" style={{ marginInlineEnd: 0 }}>
+                    <span className="b-pill purple">AI 提炼</span>
+                    <span className="b-pill" style={NEUTRAL_PILL_STYLE}>
                       {card.source}
-                    </Tag>
-                    <Tag style={{ marginInlineEnd: 0 }}>
+                    </span>
+                    <span
+                      className={RELEVANCE_PILLS[card.relevance] ? `b-pill ${RELEVANCE_PILLS[card.relevance]}` : 'b-pill'}
+                      style={RELEVANCE_PILLS[card.relevance] ? undefined : NEUTRAL_PILL_STYLE}
+                    >
                       {RELEVANCE_LABELS[card.relevance] ?? '可能相关'}
-                    </Tag>
+                    </span>
                     {card.keyTime && (
-                      <Tag color="volcano" style={{ marginInlineEnd: 0 }}>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                          color: 'var(--b-ink-faint)',
+                        }}
+                      >
                         {card.keyTime.replace('T', ' ').slice(0, 16)}
-                      </Tag>
+                      </span>
                     )}
                   </Space>
                   <Input
@@ -117,12 +180,12 @@ export default function NoticeDraftModal({
                     size="small"
                   />
                   {card.summary && (
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 4 }}>
+                    <div style={{ color: 'var(--b-ink-soft)', fontSize: 12, marginTop: 4 }}>
                       {card.summary}
                     </div>
                   )}
                   {card.requirement && (
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 2 }}>
+                    <div style={{ color: 'var(--b-ink-soft)', fontSize: 12, marginTop: 2 }}>
                       要求：{card.requirement}
                     </div>
                   )}

@@ -9,27 +9,28 @@ import {
   Select,
   Space,
   Table,
-  Tag,
   Typography,
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons'
 import { memoryApi } from '../api'
 import type { Memory, MemoryType } from '../types'
 
-/** 记忆类型的中文名（与后端类型白名单一致） */
+/** 记忆类型的中文名与药丸色（偏好紫 / 事实蓝 / 习惯绿，与后端类型白名单一致） */
 const TYPE_OPTIONS: { value: MemoryType; label: string; color: string }[] = [
-  { value: 'GOAL', label: '目标', color: 'red' },
-  { value: 'INTEREST', label: '兴趣', color: 'orange' },
+  { value: 'GOAL', label: '目标', color: 'yellow' },
+  { value: 'INTEREST', label: '兴趣', color: 'red' },
   { value: 'ABILITY', label: '能力', color: 'blue' },
   { value: 'HABIT', label: '习惯', color: 'green' },
   { value: 'PREFERENCE', label: '偏好', color: 'purple' },
 ]
 
-const TYPE_COLOR: Record<string, string> = Object.fromEntries(
+const TYPE_PILL: Record<string, string> = Object.fromEntries(
   TYPE_OPTIONS.map((o) => [o.value, o.color]),
 )
+
+const NEUTRAL_PILL_STYLE = { background: 'var(--b-bg-soft)', color: 'var(--b-ink-faint)' } as const
 
 const IMPORTANCE_OPTIONS = [1, 2, 3, 4, 5].map((v) => ({
   value: v,
@@ -133,9 +134,12 @@ export default function MemoryManager() {
       dataIndex: 'type',
       width: 84,
       render: (type: MemoryType) => (
-        <Tag color={TYPE_COLOR[type] ?? 'default'}>
+        <span
+          className={TYPE_PILL[type] ? `b-pill ${TYPE_PILL[type]}` : 'b-pill'}
+          style={TYPE_PILL[type] ? undefined : NEUTRAL_PILL_STYLE}
+        >
           {TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type}
-        </Tag>
+        </span>
       ),
     },
     {
@@ -151,7 +155,7 @@ export default function MemoryManager() {
             onPressEnter={() => void saveEdit(row.id)}
           />
         ) : (
-          <Typography.Text>{content}</Typography.Text>
+          <Typography.Text style={{ color: 'var(--b-ink)' }}>{content}</Typography.Text>
         ),
     },
     {
@@ -167,7 +171,7 @@ export default function MemoryManager() {
             onChange={setEditImportance}
           />
         ) : (
-          <Typography.Text style={{ letterSpacing: 1 }}>
+          <Typography.Text style={{ letterSpacing: 1, color: 'var(--b-yellow-ink)' }}>
             {'★'.repeat(importance)}
             <span style={{ opacity: 0.3 }}>{'★'.repeat(5 - importance)}</span>
           </Typography.Text>
@@ -179,7 +183,13 @@ export default function MemoryManager() {
       width: 76,
       responsive: ['md', 'lg', 'xl', 'xxl'],
       render: (source: string) =>
-        source === 'AI' ? <Tag color="magenta">AI</Tag> : <Tag>手动</Tag>,
+        source === 'AI' ? (
+          <span className="b-pill purple">AI</span>
+        ) : (
+          <span className="b-pill" style={NEUTRAL_PILL_STYLE}>
+            手动
+          </span>
+        ),
     },
     {
       title: '操作',
@@ -187,10 +197,21 @@ export default function MemoryManager() {
       render: (_, row) =>
         editingId === row.id ? (
           <Space size={4}>
-            <Button type="link" size="small" loading={saving} onClick={() => void saveEdit(row.id)}>
+            <Button
+              type="link"
+              size="small"
+              loading={saving}
+              onClick={() => void saveEdit(row.id)}
+              style={{ color: 'var(--b-green-ink)', fontWeight: 800 }}
+            >
               保存
             </Button>
-            <Button type="link" size="small" onClick={() => setEditingId(null)}>
+            <Button
+              type="link"
+              size="small"
+              onClick={() => setEditingId(null)}
+              style={{ color: 'var(--b-ink-soft)', fontWeight: 800 }}
+            >
               取消
             </Button>
           </Space>
@@ -204,14 +225,26 @@ export default function MemoryManager() {
                 setEditContent(row.content)
                 setEditImportance(row.importance)
               }}
+              style={{ color: 'var(--b-blue-ink)', fontWeight: 800 }}
             >
               编辑
             </Button>
-            <Button type="link" size="small" onClick={() => void archive(row.id)}>
+            <Button
+              type="link"
+              size="small"
+              onClick={() => void archive(row.id)}
+              style={{ color: 'var(--b-ink-soft)', fontWeight: 800 }}
+            >
               归档
             </Button>
             <Popconfirm title="彻底删除这条记忆？" onConfirm={() => void remove(row.id)}>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                style={{ color: 'var(--b-red-ink)', fontWeight: 800 }}
+              />
             </Popconfirm>
           </Space>
         ),
@@ -224,52 +257,89 @@ export default function MemoryManager() {
     <Card
       title="长期记忆"
       extra={
-        <Button size="small" onClick={() => void load()} loading={loading}>
+        /* 刷新：中性 3D 小按钮（原生 button 避开旧 !important 规则） */
+        <button
+          type="button"
+          className="b-btn-3d"
+          disabled={loading}
+          onClick={() => void load()}
+          style={{
+            fontSize: 12.5,
+            padding: '5px 14px',
+            background: 'var(--b-bg-soft)',
+            color: 'var(--b-ink)',
+          }}
+        >
+          {loading && <LoadingOutlined spin />}
           刷新
-        </Button>
+        </button>
       }
+      style={{ borderRadius: 'var(--b-radius)', boxShadow: 'var(--b-sh2)' }}
     >
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Alert
           type="info"
           showIcon
           message="学长会把对话中跨天成立的事实记在这里，回答时自动参考。同一件事只保留一条（会自动合并），不想要的内容可以直接改掉或删除。"
+          style={{
+            borderRadius: 'var(--b-radius-sm)',
+            background: 'var(--b-blue-soft)',
+            border: '1px solid var(--b-line)',
+          }}
         />
-        <Space.Compact style={{ width: '100%' }}>
-          <Select
-            value={draft.type}
-            options={TYPE_OPTIONS.map(({ value, label }) => ({ value, label }))}
-            style={{ width: 96 }}
-            onChange={(type) => setDraft({ ...draft, type })}
-          />
-          <Input
-            placeholder="例如：准备 12 月 CET-6 考试"
-            value={draft.content}
-            maxLength={200}
-            onChange={(e) => setDraft({ ...draft, content: e.target.value })}
-            onPressEnter={() => void add()}
-          />
-          <Select
-            value={draft.importance}
-            options={IMPORTANCE_OPTIONS}
-            style={{ width: 132 }}
-            onChange={(importance) => setDraft({ ...draft, importance })}
-          />
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            loading={saving}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Space.Compact style={{ flex: 1, minWidth: 0 }}>
+            <Select
+              value={draft.type}
+              options={TYPE_OPTIONS.map(({ value, label }) => ({ value, label }))}
+              style={{ width: 96 }}
+              onChange={(type) => setDraft({ ...draft, type })}
+            />
+            <Input
+              placeholder="例如：准备 12 月 CET-6 考试"
+              value={draft.content}
+              maxLength={200}
+              onChange={(e) => setDraft({ ...draft, content: e.target.value })}
+              onPressEnter={() => void add()}
+            />
+            <Select
+              value={draft.importance}
+              options={IMPORTANCE_OPTIONS}
+              style={{ width: 132 }}
+              onChange={(importance) => setDraft({ ...draft, importance })}
+            />
+          </Space.Compact>
+          {/* 记住：主操作 3D 按钮（绿） */}
+          <button
+            type="button"
+            className="b-btn-3d"
+            disabled={saving}
             onClick={() => void add()}
+            style={{ fontSize: 13.5, padding: '7px 18px', flex: 'none' }}
           >
+            {saving ? <LoadingOutlined spin /> : <PlusOutlined />}
             记住
-          </Button>
-        </Space.Compact>
+          </button>
+        </div>
 
         {items.length === 0 && !loading ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="还没有记忆，和学长多聊几句就会自动记下要点"
-          />
+          <div
+            style={{
+              background: 'var(--b-bg-soft)',
+              borderRadius: 'var(--b-radius)',
+              padding: '18px 12px',
+            }}
+          >
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <span style={{ color: 'var(--b-ink-soft)' }}>
+                  还没有记忆，和学长多聊几句就会自动记下要点
+                </span>
+              }
+              style={{ margin: 0 }}
+            />
+          </div>
         ) : (
           <Table
             size="small"
@@ -282,7 +352,7 @@ export default function MemoryManager() {
         )}
 
         {overflow && (
-          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+          <Typography.Text type="warning" style={{ fontSize: 12, color: 'var(--b-yellow-ink)' }}>
             共 {items.length} 条，按重要度只有前 {limit} 条会进入 AI 上下文；其余归档或删除后才会被看到。
           </Typography.Text>
         )}
