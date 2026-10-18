@@ -467,3 +467,37 @@ export interface NoticeExtractResult {
   confidence: number
   note: string
 }
+
+/** 查询分类：竞赛 / 校招实习 / 教务政策 / 讲座活动 */
+export type QueryCategory = 'COMPETITION' | 'RECRUIT' | 'ACADEMIC' | 'LECTURE'
+
+/** 查询计划阶段：名称 + 要做什么 + 建议提前天数（相对锚点日） */
+export interface QueryPlanPhase {
+  name: string
+  hint: string
+  leadDays: number
+}
+
+/**
+ * 查询计划结果（AI 主动查询中心）。
+ *
+ * 边界：**AI 不检索外部渠道**，只把「怎么查」整理成结构化计划——
+ * 去哪查、查什么、节点怎么排。具体动态由用户按计划自己去查。
+ */
+export interface QueryPlan {
+  goal: string
+  channels: string[]
+  watchouts: string[]
+  phases: QueryPlanPhase[]
+  note: string
+}
+
+/** 查询订阅条目（localStorage 持久化，V1 不落库） */
+export interface QuerySubscription {
+  id: string
+  category: QueryCategory
+  keyword: string
+  createdAt: string
+  /** 最近一次关联到新材料的时刻 */
+  lastMatchedAt?: string
+}

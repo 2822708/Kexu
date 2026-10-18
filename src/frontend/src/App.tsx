@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage'
 import TimetablePage from './pages/TimetablePage'
 import TodosPage from './pages/TodosPage'
 import AiChatPage from './pages/AiChatPage'
+import InfoHubPage from './pages/InfoHubPage'
 import SettingsPage from './pages/SettingsPage'
 import StatsPage from './pages/StatsPage'
 import OnboardingPage from './pages/OnboardingPage'
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/timetable" element={<TimetablePage />} />
           <Route path="/todos" element={<TodosPage />} />
+          <Route path="/info" element={<InfoHubPage />} />
           <Route path="/ai" element={<AiChatPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/manual" element={<UserManualPage />} />

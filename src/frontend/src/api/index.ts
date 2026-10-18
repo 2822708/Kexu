@@ -22,6 +22,8 @@ import type {
   ParseHtmlResult,
   PeriodConfig,
   ProposalFunnel,
+  QueryCategory,
+  QueryPlan,
   RecurringScriptTemplate,
   RecurringScriptTestResult,
   RecurringTodo,
@@ -180,6 +182,8 @@ export const planApi = {
 export const noticeApi = {
   /** 待决定且「稍后提醒」已到期的卡片；被高频忽略的来源排在后面 */
   list: () => request<NoticeCard[]>('/notices'),
+  /** 最近 N 条全状态卡片（信息处理页底部预览栏）；limit 缺省 5，服务端夹到 [1,20] */
+  recent: (limit = 5) => request<NoticeCard[]>(`/notices/recent?limit=${limit}`),
   /** AI 提炼草稿，不落库。只接受文本——截图先走 aiApi.parseImageText 转文本 */
   extract: (text: string) =>
     request<NoticeExtractResult>('/notices/extract', { method: 'POST', body: { text } }),
@@ -289,4 +293,12 @@ export const aiApi = {
       method: 'POST',
       body: { imageDataUrl },
     }),
+  /**
+   * 查询计划整理（信息处理页 · AI 主动查询中心）。
+   *
+   * 边界：不检索外部渠道（没有爬虫、没有教务系统对接），
+   * AI 只把「怎么查」整理成结构化计划，具体动态由用户自己去查。
+   */
+  queryPlan: (body: { category: QueryCategory; keyword: string }) =>
+    request<QueryPlan>('/ai/query-plan', { method: 'POST', body }),
 }
