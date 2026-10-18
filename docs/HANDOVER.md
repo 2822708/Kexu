@@ -274,6 +274,22 @@ npm run build
 
 ## 5. 会话日志（倒序，最新在最上）
 
+### 2026-10-19 · WorkBuddy · PWA 化：可安装 Web App（manifest + SW + 安装提示），含 manifest MIME 坑
+
+**背景**：用户要求「做成 webapp」。落地为 PWA（渐进增强，不动任何业务逻辑）：
+
+- `public/manifest.json`：standalone / theme #58CC02 / 三尺寸图标（含 maskable 安全区版 + apple-touch + favicon）
+- `public/sw.js`：静态资源 stale-while-revalidate（秒开 + 后台更新）、导航 network-first 失败回退缓存 index.html（`/info` 等深链离线可开）、`/api` 一律走网络**不伪造数据**、activate 清旧版本缓存（升级靠 bump `CACHE` 常量）
+- `PwaInstallPrompt`：拦截 `beforeinstallprompt` 统一走应用内安装卡（b 风格 3D 按钮），iOS 无该事件改文字指引，dismiss 记 7 天、standalone 模式不出现；刻意不做自动弹窗
+- `main.tsx` 仅生产注册 SW；`index.html` 补 manifest/theme-color/apple meta
+
+**踩坑记录（续写前必读）**：
+1. **manifest 必须用 `.json` 扩展名**。`.webmanifest` 在 Spring Boot 3.2 静态托管下返回 `application/octet-stream`——`MediaTypeFactory` 不认识该扩展且显式设置了 octet-stream，`server.tomcat.mime-mappings` 与 `spring.web.resources.media-types` 两条配置通道都无效（前者被 Spring 显式 content-type 绕过，后者对默认静态处理器不生效）。Chrome 严格校验 manifest MIME，octet-stream 直接拒绝安装。改 `manifest.json` 后全链路零配置返回 `application/json`（nginx 等所有服务器同理适用）。
+2. **jar 不同步 = 白改**：sync 脚本更新 static 后**必须重新 `mvnw clean package -Pstandalone`**（且必须带 `clean`——不带会残留旧 hash chunk，jar 里出现双份 assets）。
+3. `pkill -f` 与 `java -jar` 写进同一条复合命令会自杀（shell cmdline 含 jar 名被自己匹配），杀进程和启动必须分成两条命令。
+
+**验证**（standalone jar 17817 + Playwright）：SW activated/scope 正确；manifest application/json 全字段；壳资源全入缓存；**离线 reload 后 root 正常渲染**，应用诚实展示「设备连接-暂时无法连接」+ 重试按钮（离线无法验证设备会话，不伪造界面），无 Chrome 恐龙页、无 JS 崩溃。tsc/lint/build 全过。
+
 ### 2026-10-18 · WorkBuddy · 桌面封装链路修复（既有 C# 壳 + jar 托管前端）+ 撤销重复 Electron 壳
 
 **背景**：用户要求「跑在本地看看，封装到桌面」。排查发现项目 baseline 里**早已有完整的 Windows 桌面壳**（`src/desktop/`：.NET Framework 4.8 + WebView2，577 行 Program.cs + 157 行 DesktopSecurity.cs，DPAPI 账号、Job Object 回收、端口所有权校验、`build-desktop.ps1` 锁版本流水线 + 隔离冒烟 + 发布清单）。曾新建 Electron 壳，识别出重复造轮子后**已删除**，路线改回既有 C# 壳。
