@@ -59,7 +59,7 @@ npm run build
 | 项 | 状态 |
 |---|---|
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
-| 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效） |
+| 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效）；**信息处理中心 `/info` 落地**（信息收纳盒 + AI 查询中心 + 最近解析预览，两处边界适配见 3.9） |
 | 后端测试 | **171/171 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个） |
 | 前端 | typecheck 通过；lint **0 错误 / 8 警告**（8 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 见 `git status`。**本地领先 origin 的提交均未推送**（数量以 `git rev-list --count origin/main..main` 实时为准，含 P0-1、通知箱/分时 UI、引导页/模块自定义、P0-2、身份修复及收工文档提交）。缺 `ghp_`/`github_pat_` 开头的 PAT，见 6.5 |
@@ -68,13 +68,13 @@ npm run build
 | **网盘同步产物** | 根目录 `MTOwZfixfiEX`。`ai-campus-agent-git-bundle.bundle`（949,805 B，md5 `7b509d010dd527aaa6905c6186d91f2c`）+ `ai-campus-agent-源码快照-<HEAD>.zip`（md5 见《Git同步操作指引》§7）+ 三份文档，均已刷新到当前 HEAD 并经 **ETag == 本地 md5** 验证。上传/下载通道的坑见 3.7 与第 5 节当日收尾条目 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
-**代码规模（2026-10-15 实测）**
+**代码规模（2026-10-18 实测，含信息处理中心）**
 
 | 层 | 文件数 | 行数 |
 |---|---|---|
-| 后端主代码 | 139 | 12,173（`service` 层 8,043 行，占 66%） |
-| 后端测试 | 19 | 4,606 |
-| 前端 | 48 | 9,561（8 页面 / 19 组件 / 4 API / 2 store） |
+| 后端主代码 | 165 | 14,449（`service` 层占大头） |
+| 后端测试 | 24 | 5,712 |
+| 前端 | 62 | 16,042（11 页面 / 26 组件 / 4 API / 2 store） |
 
 | 缺口 | 状态 |
 |---|---|
@@ -203,6 +203,14 @@ npm run build
 
 **统计口径与用量看板完全一致**（同自然月、同单价表、失败调用同样计入），否则会出现「看板说没超，但请求被拦」这种无法解释的现象。额度按自然月结算，每月 1 号自动归零，无定时任务。
 
+### 3.9 信息处理中心的两处边界适配（`/info`，2026-10-18）
+
+用户设计稿里有两处要求与项目登记禁区/工程现实冲突，落地时做了适配，**续写或扩展该页面前必读**：
+
+1. **「AI 自动检索官方渠道最新动态」≠ 自动爬取**。登记禁区明确「不做自动爬学校系统」。因此 `queryPlan` 的定位是**结构化查询计划**：AI 输出「目标 / 去哪查（channels，只给渠道名称不给实时内容）/ 注意事项 / 分阶段节点（phases + leadDays 通用周期经验值）」，prompt 模板里写明「你不联网、不检索、不知道最新动态」，note 字段必须提醒以官方渠道当期公告为准。**若未来要做真检索**，方向是用户显式授权下的官方源白名单 + 定时轮询，且要重新过禁区评审，不要直接在该端点上加抓取逻辑。
+2. **「上传文件仅存本地浏览器缓存」的真实语义**。文本类文件（PDF/DOCX/TXT/MD/CSV/JS/HTML）确实是纯客户端本地提取（pdfjs / mammoth 在浏览器内完成，字节不出设备）；但截图 OCR 复用既有 `aiApi.parseImageText`，**经服务器瞬态转发、不落盘**；解析产生的 notice 元数据落设备工作区（服务端）。页面文案因此写「文件在浏览器本地读取，原文不作保存」，**不要**写「自动存入本地并解析」——原文件并不保存，写了就是误导。
+3. **订阅 = 本地收藏查询条件**。`timetable.querySubs.v1` 只存 id/category/keyword/时间，作用是「之后一键重新生成计划」。没有后台匹配、没有推送——文案不得声称「会提醒你」。
+
 ---
 
 ## 4. 关键文件地图
@@ -265,6 +273,23 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-18 · WorkBuddy · 信息处理中心落地（`/info`，两处边界适配已向用户说明）+ 端到端截图验收
+
+**背景**：用户发来《AI校园助手 · 信息处理页产品与UI设计方案》：新增「信息处理中心」二级页——左侧「信息收纳盒」（超大拖拽上传卡 + 快捷粘贴解析）、右侧「AI 主动查询中心」（四分类 + 一键获取最新动态 + 订阅）、底部「最近解析」预览栏，要求全链路联动首页今日必做/待阅/专业速览与三级提醒。
+
+**落地内容**（提交 `39c419f` 后端 + `e57ab26` 前端，分支 `feature/duolingo-style-ui`）：
+
+- **后端**：`POST /api/ai/query-plan`（四分类结构化查询计划，prompt 模板 `resources/prompts/query-plan.md` version 1，`LlmUsage.SCENE_QUERY` 计量，模板缺失/未配置降级为空计划 + note 不阻断页面）；`GET /api/notices/recent?limit=5`（全状态按创建时间倒序，`Math.max(1,Math.min(20,limit))` 夹取 + MyBatis `.last("LIMIT " + n)`）。
+- **前端**：`InfoHubPage`（1.35fr/1fr 双栏网格、960px 退单列、顶栏返回/标题/`navigator.storage.estimate` 容量 pill/设置入口、底部 5 卡状态 pill：DONE 绿勾「已加入日程」/IGNORED/PENDING）；`InfoDropZone`（719 行：clamp(240px,30vh,380px) 薄荷绿虚线拖拽卡 + 拖入实色吸附高亮、截图→`aiApi.parseImageText`、PDF/DOCX→`extractImportFileText` 客户端本地提取、文本直读；Enter 解析带 isComposing 保护；NoticeDraftModal 人工核对；三动作加入日程/查看详情/忽略）；`InfoQueryPanel`（895 行：四分类 pill tabs、查询计划时间线可按锚点日 DatePicker 推算各阶段日期并「同步到待办」Promise.allSettled 部分成功处理、历史 8 条去重置顶、订阅存 `timetable.querySubs.v1` 防重复）。`App.tsx` 加 `/info` 路由、`AppLayout` 侧栏加入口。
+
+**⚠️ 两处设计稿与项目红线的边界适配（后续续写前必读，详见 3.9）**：
+
+1. **「AI 自动检索官方渠道并生成最新动态」未实现为自动抓取**——触碰登记禁区「自动爬学校系统」。落地为**结构化查询计划**：AI 只整理「去哪查/查什么/各阶段节点怎么排」（channels/watchouts/phases+leadDays），具体动态由用户按官方渠道当期公告自查；UI 显著标注「本中心不抓取教务系统、不监听群聊」「非实时检索结果」。
+2. **「所有上传文件仅保存在本地浏览器缓存」部分成立**——文本类文件（PDF/DOCX/TXT/MD/CSV/JS/HTML）确实纯客户端本地提取；但截图 OCR 走服务器瞬态转发（不落盘）；解析产生的 notice 元数据落设备工作区。已把拖拽卡误导文案「自动存入本地并解析」改为「自动读取并解析」。
+3. **「订阅更新」诚实化**：仅本地收藏查询条件 + 一键重新生成计划，无后台匹配推送（已去除「会提醒你回这里看」类表述）。
+
+**验收**：tsc 0 error、lint 0 error（9 个既有 react-refresh warning）、build ✓、device-session 8/8、后端 171/171 + 新 jar 以 `-Pstandalone` 重建（h2 驱动在默认 profile 是 test 作用域，漏 profile 会启动失败）后两端点 401 鉴权正常。**Playwright 端到端截图**（预置 `timetable.onboarded=1` 绕过引导守卫）确认三区渲染：拖拽卡/查询面板/最近解析栏/侧栏入口均在，无控制台错误（仅存量 antd `destroyOnClose` 弃用提示）。
 
 ### 2026-10-18 · WorkBuddy · UI 换皮全部完成（32 个页面/组件全量明亮化，分支累计 13 提交）
 
