@@ -298,6 +298,8 @@ npm run build
 - SSH 方案已备好：沙箱密钥 `/root/.ssh/id_ed25519_github.pub`（`POST /user/keys` 需账户级 "Git SSH keys" 权限，token 未授）。
 - **待用户一步操作**：编辑 token 勾选 Contents: Read and write（+ 可选 Git SSH keys: Read and write），或手动把上述公钥加到 github.com/settings/keys。完成后 `git push` 立即可执行（本地已积压 main 9 + 本分支 7 个提交）。
 
+**2026-10-18 晚复核（凭据链终态）**：① 用户此前提供的**两个 PAT 均已失效**（API 401 Bad credentials，需重新签发）；② IDE 凭据助手自带的 token 经响应头 `x-accepted-github-permissions: metadata=read` 证实是**只有元数据读权限的 fine-grained token**——API 返回的 `push/admin=true` 是**用户本人对该仓库的权限**而非 token 权限（与 token2 同一个陷阱，这是 403 的最终根因）；③ SSH 通道就绪度确认：密钥 `/root/.ssh/id_ed25519_github` 存在、22 端口连通、服务器正确返回 `Permission denied (publickey)`（即只差注册公钥）。`/workspace/push-to-github.sh` 已重写为**双分支（main 9 + feature 14 个提交）+ 双模式（`--ssh` / `GH_TOKEN`）**，含 token 有效性预检与密钥兜底扫描，用户完成任一步操作后一条命令即可推完。
+
 **遗留**：① 推送待 token 权限；② 概念稿与落地的视觉对齐度待用户在 dev server 实测；③ DeepSeek Key 轮换仍待用户执行。
 
 ### 2026-10-18 · WorkBuddy · 收尾：GitHub 推送受阻确认 + 网盘同步产物刷新 + 同步通道防坑
