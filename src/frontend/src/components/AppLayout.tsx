@@ -17,6 +17,7 @@ import { useTheme } from '../theme'
 import { formatWeekInfo } from '../utils/schedule'
 import QuickImportWidget from './QuickImportWidget'
 import { useVisualViewport } from '../hooks/useVisualViewport'
+import { LOCAL_MODE } from '../local/mode'
 
 const NAV_ITEMS = [
   { key: '/timetable', icon: <CalendarOutlined />, label: '课表' },
@@ -91,13 +92,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               {weekInfo}
             </Tag>
           )}
-          <Tooltip title="立即同步">
+          <Tooltip title={LOCAL_MODE ? '重新读取本机数据' : '立即同步'}>
             <button
               type="button"
               className="icon-btn-round"
               aria-label="刷新数据"
               disabled={loading}
-              onClick={() => refreshAll().catch(() => message.error('同步失败，请稍后重试'))}
+              onClick={() =>
+                refreshAll().catch(() =>
+                  message.error(
+                    LOCAL_MODE ? '读取本机数据失败，请稍后重试' : '同步失败，请稍后重试',
+                  ),
+                )
+              }
               style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : 'auto' }}
             >
               <ReloadOutlined spin={loading} />
@@ -113,12 +120,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               {mode === 'dark' ? '☀' : '☾'}
             </button>
           </Tooltip>
-          <Tooltip title="本机已自动连接；原有账户会继续使用。设备范围和连接说明见用户手册。">
+          <Tooltip
+            title={
+              LOCAL_MODE
+                ? '课表和待办保存在此浏览器；备份状态请到设置查看。'
+                : '本机已自动连接；原有账户会继续使用。设备范围和连接说明见用户手册。'
+            }
+          >
             <div
               className="icon-btn-round device-connection-badge"
               style={{ width: 'auto', padding: '0 12px', fontSize: 13 }}
             >
-              <DesktopOutlined /> {label || '本机空间'} · 已连接
+              <DesktopOutlined /> {label || '本机空间'} · {LOCAL_MODE ? '本地存储' : '已连接'}
             </div>
           </Tooltip>
         </div>
@@ -230,7 +243,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <span className="app-footer-text">© 2026 大切课程表 | 正切的课程表</span>
         <span className="app-footer-text">˶ˊᜊˋ˶</span>
       </footer>
-      <QuickImportWidget />
+      {!location.pathname.startsWith('/ai') && <QuickImportWidget />}
     </div>
   )
 }

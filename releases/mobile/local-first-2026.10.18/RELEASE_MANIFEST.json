@@ -1,0 +1,31 @@
+{
+  "version": "2026.10.18-local-first-preview.1",
+  "sourceCommit": "266fa5aebc5de51774246164d00dfc3ccedf8c00",
+  "sourceDirty": false,
+  "createdAt": "2026-10-18T10:17:28.629836+00:00",
+  "archive": {
+    "file": "TangentTimetable-local-first-2026.10.18-preview.1.zip",
+    "bytes": 1099880,
+    "entries": 45,
+    "sha256": "52849d33cd0d8d8f0c01e9d4549843dd5f84b835c5286ba774ab40f2dd6f9925",
+    "crc": "PASS"
+  },
+  "package": {
+    "files": 43,
+    "manifestSha256": "b7fbe5a15579adcda21b557bcc928b05a82816abe7893b79bfe16bcbfc413fca"
+  },
+  "verification": {
+    "automatedChecks": 120,
+    "passed": 120,
+    "failed": 0,
+    "packageHttpRoutes": 9,
+    "packageHttpWebAssets": 26,
+    "browserSourceUi": "PASS: local writes, reload, server-stopped offline write/reload, manual snapshot restore, mock AI confirmation, mobile 360/390px",
+    "finalPackageBrowser": "Not completed: separate-process localhost connection timed out; in-process actual-package HTTP and asset verification passed",
+    "productionDeployment": "BLOCKED: SSH EOF before server identification; no remote commands executed",
+    "physicalPhone": "not_run",
+    "liveModelSemanticCases": 12,
+    "liveModelSemanticStatus": "not_run: no dedicated endpoint/model/key",
+    "linuxNginxSystemd": "not_run on target server"
+  }
+}

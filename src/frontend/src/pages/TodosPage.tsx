@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Button,
   Card,
@@ -32,11 +33,20 @@ import { todoApi } from '../api'
 import { useApp } from '../store/AppContext'
 import type { Todo } from '../types'
 import { dayjs, formatCountdown } from '../utils/schedule'
+import { LOCAL_MODE } from '../local/mode'
 
 type Filter = 'active' | 'completed' | 'all'
 
 export default function TodosPage() {
-  const { todos, recurringTodos, refreshTodos, refreshRecurring } = useApp()
+  const {
+    todos,
+    recurringTodos,
+    refreshTodos,
+    refreshRecurring,
+    refreshSchedules,
+    setActiveScheduleId,
+  } = useApp()
+  const navigate = useNavigate()
   const [filter, setFilter] = useState<Filter>('active')
   const [tick, setTick] = useState(0)
   const [modal, setModal] = useState<{ open: boolean; todo: Todo | null }>({
@@ -72,7 +82,34 @@ export default function TodosPage() {
     return { active: active.length, overdue: overdue.length, soon: soon.length }
   }, [todos, now])
 
+  const manageExam = async (todo: Todo) => {
+    if (!LOCAL_MODE || todo.examId == null) return
+    try {
+      const { readLocalState } = await import('../local/db')
+      const state = await readLocalState()
+      const exam = state.exams.find((item) => item.id === todo.examId)
+      if (!exam) {
+        message.info('这场考试已被删除，请刷新待办列表。')
+        return
+      }
+      const schedules = await refreshSchedules()
+      if (!schedules.some((item) => item.id === exam.scheduleId)) {
+        message.info('考试所属课表已被删除，请刷新待办列表。')
+        return
+      }
+      setActiveScheduleId(exam.scheduleId)
+      navigate('/timetable')
+      message.info('已切换到考试所属课表，请点击「考试管理」修改；关联待办会同步更新。')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '无法打开考试所属课表')
+    }
+  }
+
   const openModal = (todo: Todo | null) => {
+    if (LOCAL_MODE && todo?.examId != null) {
+      void manageExam(todo)
+      return
+    }
     setModal({ open: true, todo })
     if (todo) {
       form.setFieldsValue({ title: todo.title, ddl: dayjs(todo.ddl) })
@@ -172,16 +209,33 @@ export default function TodosPage() {
               <List.Item
                 className="todo-record"
                 actions={[
-                  <Button
-                    key="edit"
-                    type="text"
-                    aria-label={`编辑待办 ${todo.title}`}
-                    icon={<EditOutlined />}
-                    onClick={() => openModal(todo)}
-                  />,
+                  LOCAL_MODE && todo.examId != null ? (
+                    <Button
+                      key="exam"
+                      type="text"
+                      aria-label={`管理考试 ${todo.title}`}
+                      icon={<ScheduleOutlined />}
+                      onClick={() => void manageExam(todo)}
+                    >
+                      考试管理
+                    </Button>
+                  ) : (
+                    <Button
+                      key="edit"
+                      type="text"
+                      aria-label={`编辑待办 ${todo.title}`}
+                      icon={<EditOutlined />}
+                      onClick={() => openModal(todo)}
+                    />
+                  ),
                   <Popconfirm
                     key="del"
                     title="确定删除该待办吗？"
+                    description={
+                      LOCAL_MODE && todo.examId != null
+                        ? '只删除关联待办，考试记录会保留。'
+                        : undefined
+                    }
                     okText="删除"
                     cancelText="取消"
                     onConfirm={() => remove(todo)}
@@ -226,7 +280,13 @@ export default function TodosPage() {
                         </Tooltip>
                       )}
                       {todo.examId !== null && (
-                        <Tooltip title="来自考试：ddl=考试开始时间，考试结束后自动完成">
+                        <Tooltip
+                          title={
+                            LOCAL_MODE
+                              ? '来自考试：截止时间随考试同步；请点「考试管理」修改，应用运行时在考试结束后自动完成。'
+                              : '来自考试：ddl=考试开始时间，考试结束后自动完成'
+                          }
+                        >
                           <Tag icon={<ScheduleOutlined />} color="red">
                             考试
                           </Tag>

@@ -1,3 +1,6 @@
+import { LOCAL_MODE } from '../local/mode'
+import LocalBackupSettings from '../components/LocalBackupSettings'
+import AiConnectionSettings from '../components/AiConnectionSettings'
 import { useEffect, useState } from 'react'
 import {
   Alert,
@@ -46,7 +49,7 @@ export default function SettingsPage() {
   } = useApp()
   const { globalScale, ttScale, setGlobalScale, setTtScale } = useFont()
   const [rows, setRows] = useState<PeriodConfig[]>([])
-  const [widgetKey] = useState(() => getApiKey() ?? '')
+  const [widgetKey] = useState(() => (LOCAL_MODE ? '' : (getApiKey() ?? '')))
   const [aiConfig, setAiConfig] = useState<AiConfig | null>(null)
   const [aiKeyInput, setAiKeyInput] = useState('')
   const [savingKey, setSavingKey] = useState(false)
@@ -60,7 +63,7 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    void loadAiConfig()
+    if (!LOCAL_MODE) void loadAiConfig()
   }, [])
 
   const saveAiKey = async () => {
@@ -236,84 +239,92 @@ export default function SettingsPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Card
-        title="桌面小组件网页地址"
-        extra={
-          <Button type="primary" icon={<CopyOutlined />} onClick={copyWidgetApi}>
-            一键复制
-          </Button>
-        }
-      >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Alert
-            type="info"
-            showIcon
-            message="复制下面的网页地址，填入支持加载网页（WebView）的桌面小组件 App（iPad / Android），即可在小尺寸小组件中直接展示本课表的课程与待办。若使用全屏应用，直接打开本站首页即可（已适配窄屏）。"
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <Typography.Text strong>选择课表</Typography.Text>
-            <Select
-              style={{ minWidth: 220, flex: 1 }}
-              placeholder="选择课表"
-              value={activeScheduleId ?? undefined}
-              onChange={(id) => setActiveScheduleId(id)}
-              options={schedules.map((s) => ({ label: s.name, value: s.id }))}
+      {!LOCAL_MODE && (
+        <Card
+          title="桌面小组件网页地址"
+          extra={
+            <Button type="primary" icon={<CopyOutlined />} onClick={copyWidgetApi}>
+              一键复制
+            </Button>
+          }
+        >
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Alert
+              type="info"
+              showIcon
+              message="复制下面的网页地址，填入支持加载网页（WebView）的桌面小组件 App（iPad / Android），即可在小尺寸小组件中直接展示本课表的课程与待办。若使用全屏应用，直接打开本站首页即可（已适配窄屏）。"
             />
-            {activeSchedule && (
-              <Typography.Text type="secondary">当前：{activeSchedule.name}</Typography.Text>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <Typography.Text strong>选择课表</Typography.Text>
+              <Select
+                style={{ minWidth: 220, flex: 1 }}
+                placeholder="选择课表"
+                value={activeScheduleId ?? undefined}
+                onChange={(id) => setActiveScheduleId(id)}
+                options={schedules.map((s) => ({ label: s.name, value: s.id }))}
+              />
+              {activeSchedule && (
+                <Typography.Text type="secondary">当前：{activeSchedule.name}</Typography.Text>
+              )}
+            </div>
+            <Input readOnly value={widgetPageUrl} onFocus={(e) => e.currentTarget.select()} />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              该地址包含你的 API Key，仅供自己使用，请勿公开。
+            </Typography.Text>
+          </Space>
+        </Card>
+      )}
+
+      {LOCAL_MODE ? (
+        <AiConnectionSettings />
+      ) : (
+        <Card title="AI 助手（DeepSeek）">
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Alert
+              type={aiConfig?.configured ? 'success' : 'warning'}
+              showIcon
+              message={
+                aiConfig?.configured
+                  ? `AI 功能已启用（来源：${
+                      aiConfig.source === 'local' ? '本机设置' : '环境变量 / 配置文件'
+                    }${aiConfig.keyMasked ? `，Key：${aiConfig.keyMasked}` : ''}）`
+                  : aiConfig?.canEdit
+                    ? 'AI 功能未启用：填入 DeepSeek API Key 后即可使用自然语言增删改与 HTML 课表导入'
+                    : 'AI 功能尚未配置，请由管理员完成服务设置'
+              }
+            />
+            {aiConfig?.canEdit && (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <Input.Password
+                  style={{ minWidth: 280, flex: 1 }}
+                  placeholder="sk-..."
+                  value={aiKeyInput}
+                  onChange={(e) => setAiKeyInput(e.target.value)}
+                  onPressEnter={saveAiKey}
+                />
+                <Button type="primary" loading={savingKey} onClick={saveAiKey}>
+                  保存
+                </Button>
+                <Button
+                  danger
+                  loading={savingKey}
+                  disabled={!aiConfig?.configured || aiConfig.source !== 'local'}
+                  onClick={clearAiKey}
+                >
+                  清除本机 Key
+                </Button>
+              </div>
             )}
-          </div>
-          <Input readOnly value={widgetPageUrl} onFocus={(e) => e.currentTarget.select()} />
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            该地址包含你的 API Key，仅供自己使用，请勿公开。
-          </Typography.Text>
-        </Space>
-      </Card>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {aiConfig?.canEdit
+                ? '桌面版将 Key 加密保存在本机配置中，并在请求 AI 服务时发送给所配置的服务提供方。请勿分享数据目录中的凭据文件。'
+                : '此部署的 AI 服务配置由管理员管理；Web 部署通过服务器环境变量设置服务密钥。'}
+            </Typography.Text>
+          </Space>
+        </Card>
+      )}
 
-      <Card title="AI 助手（DeepSeek）">
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Alert
-            type={aiConfig?.configured ? 'success' : 'warning'}
-            showIcon
-            message={
-              aiConfig?.configured
-                ? `AI 功能已启用（来源：${
-                    aiConfig.source === 'local' ? '本机设置' : '环境变量 / 配置文件'
-                  }${aiConfig.keyMasked ? `，Key：${aiConfig.keyMasked}` : ''}）`
-                : aiConfig?.canEdit
-                  ? 'AI 功能未启用：填入 DeepSeek API Key 后即可使用自然语言增删改与 HTML 课表导入'
-                  : 'AI 功能尚未配置，请由管理员完成服务设置'
-            }
-          />
-          {aiConfig?.canEdit && <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Input.Password
-              style={{ minWidth: 280, flex: 1 }}
-              placeholder="sk-..."
-              value={aiKeyInput}
-              onChange={(e) => setAiKeyInput(e.target.value)}
-              onPressEnter={saveAiKey}
-            />
-            <Button type="primary" loading={savingKey} onClick={saveAiKey}>
-              保存
-            </Button>
-            <Button
-              danger
-              loading={savingKey}
-              disabled={!aiConfig?.configured || aiConfig.source !== 'local'}
-              onClick={clearAiKey}
-            >
-              清除本机 Key
-            </Button>
-          </div>}
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {aiConfig?.canEdit
-              ? '桌面版将 Key 加密保存在本机配置中，并在请求 AI 服务时发送给所配置的服务提供方。请勿分享数据目录中的凭据文件。'
-              : '此部署的 AI 服务配置由管理员管理；Web 部署通过服务器环境变量设置服务密钥。'}
-          </Typography.Text>
-        </Space>
-      </Card>
-
-      {isAdmin && <BackupSettings />}
+      {LOCAL_MODE ? <LocalBackupSettings /> : isAdmin && <BackupSettings />}
 
       <Card
         title="字体大小"
@@ -381,7 +392,11 @@ export default function SettingsPage() {
           <Alert
             type="info"
             showIcon
-            message="作息时间表为全局配置，修改后课表视图与 AI 解析都会按新时间计算。"
+            message={
+              LOCAL_MODE
+                ? '作息时间保存在本机，当前设备的课表与 AI 上下文会使用这些时间。'
+                : '作息时间表为全局配置，修改后课表视图与 AI 解析都会按新时间计算。'
+            }
             style={{ marginBottom: 16 }}
           />
         ) : (

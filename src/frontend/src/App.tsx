@@ -1,5 +1,6 @@
+import { LOCAL_MODE } from './local/mode'
 import { lazy, Suspense } from 'react'
-import { Spin } from 'antd'
+import { Alert, Button, Spin } from 'antd'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import PwaStatus from './components/PwaStatus'
@@ -34,7 +35,7 @@ export default function App() {
 }
 
 function AppRoutes() {
-  const { ready, authed } = useApp()
+  const { ready, authed, connectionError, reconnect } = useApp()
   const location = useLocation()
   const widgetRoute = location.pathname.startsWith('/widget')
   const explicitWidgetKey = (
@@ -42,13 +43,34 @@ function AppRoutes() {
     new URLSearchParams(location.search).get('key')
   )?.trim()
 
-  if (widgetRoute && explicitWidgetKey) {
+  if (!LOCAL_MODE && widgetRoute && explicitWidgetKey) {
     return <WidgetPreviewPage />
   }
 
+  if (LOCAL_MODE && (!ready || !authed)) {
+    return (
+      <div className="app-loading-page">
+        {!ready ? (
+          <Spin tip="正在打开本机数据">
+            <div style={{ height: 48 }} />
+          </Spin>
+        ) : (
+          <Alert
+            type="error"
+            showIcon
+            message="本机数据暂时无法打开"
+            description={connectionError ?? '请允许浏览器保存数据，并保留当前网站数据后重试。'}
+            action={<Button onClick={() => void reconnect()}>重试</Button>}
+          />
+        )}
+      </div>
+    )
+  }
   if (!ready || !authed) {
     return <DeviceConnectionPage />
   }
+
+  if (LOCAL_MODE && widgetRoute) return <Navigate to="/focus" replace />
 
   if (widgetRoute) {
     return <WidgetPreviewPage />

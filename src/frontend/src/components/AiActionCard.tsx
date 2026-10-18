@@ -3,6 +3,7 @@ import type { ColumnsType } from 'antd/es/table'
 import type { AiAction } from '../types'
 import { formatWeeks, weekDayName } from '../utils/schedule'
 import { describeOffset } from '../utils/recurring'
+import { LOCAL_MODE } from '../local/mode'
 
 const ACTION_LABELS: Record<string, string> = {
   CREATE_COURSE: '添加课程',
@@ -40,12 +41,29 @@ interface DiffRow {
   changed: boolean
 }
 
-export default function AiActionCard({ action, executing, onExecute, onReject, disabled, scheduleName }: Props) {
+export default function AiActionCard({
+  action,
+  executing,
+  onExecute,
+  onReject,
+  disabled,
+  scheduleName,
+}: Props) {
   const data = (action.data ?? {}) as Dict
   const pending = action.status === 'PENDING'
   const stale = action.status === 'STALE'
-  const affected = ['courses', 'todos', 'rules', 'exams', 'courseIds', 'todoIds', 'recurringIds', 'examIds']
-    .map((key) => data[key]).find(Array.isArray) as unknown[] | undefined
+  const affected = [
+    'courses',
+    'todos',
+    'rules',
+    'exams',
+    'courseIds',
+    'todoIds',
+    'recurringIds',
+    'examIds',
+  ]
+    .map((key) => data[key])
+    .find(Array.isArray) as unknown[] | undefined
 
   const statusTag =
     action.status === 'EXECUTED' ? (
@@ -102,7 +120,9 @@ export default function AiActionCard({ action, executing, onExecute, onReject, d
       <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
         {action.scope === 'COURSE'
           ? `目标课表：${scheduleName ?? (action.scheduleId ? `课表 #${action.scheduleId}（已删除或不可用）` : '未绑定')}`
-          : '作用范围：当前账号的待办（所有课表共用）'}
+          : LOCAL_MODE
+            ? '作用范围：本机待办（各课表共用）'
+            : '作用范围：当前账号的待办（所有课表共用）'}
         {' · '}影响 {affected?.length ?? 0} 条记录
         {action.type === 'DELETE_EXAM' && '；对应考试待办也会删除'}
       </Typography.Paragraph>

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import ts from 'typescript'
 
@@ -11,6 +13,24 @@ const compiled = ts.transpileModule(
 const exported = {}
 vm.runInNewContext(compiled, { exports: exported })
 const { createServiceWorkerSource } = exported
+const pluginExports = {}
+const nativeRequire = createRequire(import.meta.url)
+vm.runInNewContext(
+  ts.transpileModule(readFileSync(new URL('../src/pwa/buildPlugin.mjs', import.meta.url), 'utf8'), {
+    compilerOptions: {
+      allowJs: true,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: 'buildPlugin.js',
+  }).outputText,
+  {
+    exports: pluginExports,
+    Buffer,
+    URL,
+    require: (name) => (name === './serviceWorkerSource' ? exported : nativeRequire(name)),
+  },
+)
 const updateExports = {}
 vm.runInNewContext(
   ts.transpileModule(readFileSync(new URL('../src/pwa/updateState.ts', import.meta.url), 'utf8'), {
@@ -21,7 +41,14 @@ vm.runInNewContext(
 const { findWaitingUpdate } = updateExports
 const origin = 'https://timetable.example'
 
-function fixture({ base = '/', version = 'v2', offline = false, cacheControl = '' } = {}) {
+function fixture({
+  base = '/',
+  version = 'v2',
+  offline = false,
+  cacheControl = '',
+  failInstallAt = '',
+  source = null,
+} = {}) {
   const events = new Map()
   const storage = new Map()
   const fetches = []
@@ -36,6 +63,7 @@ function fixture({ base = '/', version = 'v2', offline = false, cacheControl = '
     return {
       addAll: async (requests) => {
         for (const request of requests) {
+          if (path(request) === failInstallAt) throw new Error('One offline dependency failed')
           precached.push(request)
           contents.set(
             path(request),
@@ -69,12 +97,13 @@ function fixture({ base = '/', version = 'v2', offline = false, cacheControl = '
     return new Request(new URL(url, origin), options)
   }
   vm.runInNewContext(
-    createServiceWorkerSource({
-      version,
-      base,
-      precache: [`${base}index.html`, `${base}assets/app-123.js`],
-      assets: [`${base}index.html`, `${base}assets/app-123.js`, `${base}assets/lazy-456.js`],
-    }),
+    source ??
+      createServiceWorkerSource({
+        version,
+        base,
+        precache: [`${base}index.html`, `${base}assets/app-123.js`, `${base}assets/lazy-456.js`],
+        assets: [`${base}index.html`, `${base}assets/app-123.js`, `${base}assets/lazy-456.js`],
+      }),
     {
       self,
       caches,
@@ -135,6 +164,10 @@ test('API, authentication, AI/SSE, backups, mutations and identity queries bypas
     '/ai/status',
     '/backups/file',
     '/backup/file',
+    '/api/v1/snapshots/private/content',
+    '/snapshots/private/content',
+    '/vaults/private',
+    '/cloud/private',
     '/widget?key=secret',
     '/assets/app-123.js?token=secret',
   ]) {
@@ -187,6 +220,106 @@ test('offline navigation opens only the precached shell, not a cached business r
   assert.ok(
     f.precached.every((request) => request.credentials === 'omit' && request.cache === 'reload'),
   )
+})
+
+test('first offline visit to an unvisited lazy dependency succeeds after full installation', async () => {
+  const f = fixture({ offline: true })
+  await f.lifetime('install')
+  assert.equal(await (await f.request('/assets/lazy-456.js')).response.text(), 'cached shell')
+  assert.equal(f.fetches.length, 0)
+})
+
+test('offline readiness requires all public resources and detects later cache eviction', async () => {
+  const f = fixture()
+  const states = []
+  const query = () =>
+    f.lifetime('message', {
+      data: { type: 'GET_OFFLINE_STATUS' },
+      ports: [{ postMessage: (data) => states.push(data) }],
+    })
+  await query()
+  assert.equal(states.at(-1).ready, false)
+  await f.lifetime('install')
+  await query()
+  assert.equal(states.at(-1).ready, true)
+  assert.equal(states.at(-1).assetCount, 3)
+  f.storage.get('tangent-mobile-shell-/-v2').delete('/assets/lazy-456.js')
+  await query()
+  assert.equal(states.at(-1).ready, false)
+  assert.equal(states.at(-1).missingCount, 1)
+})
+
+test('a failed lazy resource installation never reports complete offline readiness', async () => {
+  const f = fixture({ failInstallAt: '/assets/lazy-456.js' })
+  await assert.rejects(f.lifetime('install'), /offline dependency failed/)
+  let status
+  await f.lifetime('message', {
+    data: { type: 'GET_OFFLINE_STATUS' },
+    ports: [
+      {
+        postMessage: (data) => {
+          status = data
+        },
+      },
+    ],
+  })
+  assert.equal(status.ready, false)
+  assert.equal(f.storage.get('tangent-mobile-shell-/-v2').has('/__pwa_ready__'), false)
+  assert.equal(f.skipWaitingCalls(), 0)
+})
+
+test('mobile build plugin precaches lazy routes, transitive parser workers, public icons and manifest', async () => {
+  const plugin = pluginExports.mobilePwa()
+  plugin.configResolved({
+    base: '/timetable/',
+    publicDir: fileURLToPath(new URL('../public/', import.meta.url)),
+  })
+  const bundle = {
+    'index.html': { type: 'asset', source: '<html></html>' },
+    'assets/main-AbCd1234.js': {
+      type: 'chunk',
+      code: 'main',
+      isEntry: true,
+      imports: [],
+      dynamicImports: ['assets/TodosPage-AbCd1234.js'],
+    },
+    'assets/TodosPage-AbCd1234.js': {
+      type: 'chunk',
+      code: 'todos lazy route',
+      imports: ['assets/parser-AbCd1234.js'],
+      dynamicImports: [],
+    },
+    'assets/parser-AbCd1234.js': {
+      type: 'chunk',
+      code: 'parser dependency',
+      imports: [],
+      dynamicImports: [],
+    },
+    'assets/pdf-worker-AbCd1234.mjs': { type: 'asset', source: 'pdf worker' },
+    'assets/main-AbCd1234.css': { type: 'asset', source: 'body{}' },
+    'assets/main-AbCd1234.js.map': { type: 'asset', source: 'private source map' },
+  }
+  const generated = new Map()
+  plugin.generateBundle.call(
+    { emitFile: (item) => generated.set(item.fileName, item.source) },
+    {},
+    bundle,
+  )
+  const f = fixture({ source: generated.get('sw.js'), offline: true })
+  await f.lifetime('install')
+  const paths = f.precached.map((r) => new URL(r.url).pathname)
+  for (const file of [
+    'index.html',
+    'assets/TodosPage-AbCd1234.js',
+    'assets/parser-AbCd1234.js',
+    'assets/pdf-worker-AbCd1234.mjs',
+    'pwa/icon.svg',
+    'manifest.webmanifest',
+  ])
+    assert.ok(paths.includes(`/timetable/${file}`), file)
+  assert.ok(paths.every((p) => !p.endsWith('.map') && !p.includes('/api/')))
+  assert.match(JSON.parse(generated.get('manifest.webmanifest')).description, /本机保存/)
+  assert.match(JSON.parse(generated.get('manifest.webmanifest')).description, /快照/)
 })
 
 test('online navigation responses are never put into cache', async () => {

@@ -7,8 +7,12 @@
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 新目录下的开发命令和 Git 工作流 |
 | [WORKSPACE_SETUP.md](WORKSPACE_SETUP.md) | 项目来源、整理范围、基线及验证 |
 | [desktop/README.md](desktop/README.md) | 桌面版安全、备份恢复和构建说明 |
-| [mobile/README.md](mobile/README.md) | 联网手机 PWA 首版运行包、功能、验证边界与启动说明 |
-| [mobile/DEPLOYMENT.md](mobile/DEPLOYMENT.md) | 同源 HTTPS、Java/H2、SSE 反代与隔离接口验证 |
+| [mobile/LOCAL_DATA_CLOUD_SNAPSHOTS.md](mobile/LOCAL_DATA_CLOUD_SNAPSHOTS.md) | 2026-10-18 最新目标：设备本地主库、自动云快照、手动确认恢复与更新分发；含旧联网包的迁移边界 |
+| [mobile/README.md](mobile/README.md) | 当前本地主数据PWA：运行包、离线使用、备份与验证边界 |
+| [mobile/DEPLOYMENT.md](mobile/DEPLOYMENT.md) | 当前本地版独立HTTPS静态站、Node密文快照与部署边界 |
+| [mobile/ACCEPTANCE_2026_10_18.md](mobile/ACCEPTANCE_2026_10_18.md) | 本地版自动回归、浏览器断服测试与未完成的外部验收 |
+| [ai/EVALUATION_2026-10-18.md](ai/EVALUATION_2026-10-18.md) | AI契约、故障调试、真实模型评测边界 |
+| [ai/OPTIMIZATION_PLAN.md](ai/OPTIMIZATION_PLAN.md) | 提示词与AI能力后续优化门槛 |
 | [android/ANDROID_IMPLEMENTATION_PLAN.md](android/ANDROID_IMPLEMENTATION_PLAN.md) | Android 离线单机版实施架构、数据模型、提醒、AI、导入导出与验收计划 |
 | [android/ANDROID_IMPLEMENTATION_STATUS.md](android/ANDROID_IMPLEMENTATION_STATUS.md) | Android 源码已落地部分、未完成范围与构建验证边界 |
 | [android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md](android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md) | Windows 安卓环境安装入口、固定版本、SDK/IDE路径和当前验证状态 |

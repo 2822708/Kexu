@@ -29,6 +29,11 @@
 }
 
 @media (max-width: 767px) {
+  /* The composer occupies the space above mobile navigation. Installation and
+     updates remain available on the other pages without covering Send. */
+  .pwa-controls.pwa-controls-chat {
+    display: none;
+  }
   .pwa-controls {
     bottom: calc(var(--mobile-nav-height, calc(60px + env(safe-area-inset-bottom))) + 16px);
   }

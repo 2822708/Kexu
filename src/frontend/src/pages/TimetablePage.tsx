@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Card, Empty, Radio, Segmented, Space, Typography, message } from 'antd'
 import {
   ImportOutlined,
@@ -20,6 +20,16 @@ import { aiApi, courseApi, examApi, scheduleApi } from '../api'
 import { useApp } from '../store/AppContext'
 import type { Course, CoursePayload, Exam, ExamPayload, Schedule } from '../types'
 import { currentWeekOf, dayjs, totalWeeks } from '../utils/schedule'
+import { LOCAL_MODE } from '../local/mode'
+import {
+  assertEditorRecord,
+  assertEditorGeneration,
+  assertEditorScope,
+  captureEditorScope,
+  LocalEditorScopeError,
+  recordPublicId,
+  type LocalEditorScope,
+} from '../local/editorScope'
 import '../day-agenda.css'
 
 export default function TimetablePage() {
@@ -45,14 +55,111 @@ export default function TimetablePage() {
     open: boolean
     course: Course | null
     defaults: { dayOfWeek?: number; startPeriod?: number } | null
-  }>({ open: false, course: null, defaults: null })
+    scope: LocalEditorScope | null
+  }>({ open: false, course: null, defaults: null, scope: null })
   const [saving, setSaving] = useState(false)
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [importScope, setImportScope] = useState<LocalEditorScope | null>(null)
+  const importGeneration = useRef(0)
   const [examModalOpen, setExamModalOpen] = useState(false)
+  const [examScope, setExamScope] = useState<LocalEditorScope | null>(null)
   const [examSaving, setExamSaving] = useState(false)
   const [aiEnabled, setAiEnabled] = useState(false)
+  const activeScheduleRef = useRef(activeSchedule)
+  activeScheduleRef.current = activeSchedule
+  const activePublicId = recordPublicId(activeSchedule)
+  const closeBoundEditors = useCallback(() => {
+    importGeneration.current++
+    setCourseModal({ open: false, course: null, defaults: null, scope: null })
+    setImportOpen(false)
+    setImportScope(null)
+    setExamModalOpen(false)
+    setExamScope(null)
+  }, [])
+  useEffect(() => {
+    if (!LOCAL_MODE) return
+    const mismatched = (scope: LocalEditorScope | null) =>
+      !scope || scope.scheduleId !== activeScheduleId || scope.schedulePublicId !== activePublicId
+    if (
+      (courseModal.open && mismatched(courseModal.scope)) ||
+      (importOpen && mismatched(importScope)) ||
+      (examModalOpen && mismatched(examScope))
+    ) {
+      closeBoundEditors()
+      message.warning(
+        '当前课表已切换或恢复替换，原编辑窗口已关闭；未保存的草稿已丢弃，请在目标课表重新录入。',
+      )
+    }
+  }, [
+    activeScheduleId,
+    activePublicId,
+    courseModal.open,
+    courseModal.scope,
+    importOpen,
+    importScope,
+    examModalOpen,
+    examScope,
+    closeBoundEditors,
+  ])
+  useEffect(
+    () => () => {
+      importGeneration.current++
+    },
+    [],
+  )
+  const validateScope = async (
+    scope: LocalEditorScope | null,
+    record?: { collection: 'courses' | 'exams'; value: Course | Exam },
+  ) => {
+    if (!LOCAL_MODE) return activeScheduleId
+    const { readLocalState } = await import('../local/db')
+    const state = await readLocalState()
+    assertEditorScope(scope, activeScheduleRef.current, state)
+    if (record) assertEditorRecord(state, scope, record.collection, record.value)
+    return scope.scheduleId
+  }
+  const handleScopeFailure = (error: unknown, generation: number) => {
+    // A late failure from a previous window must never discard a newer draft.
+    if (
+      LOCAL_MODE &&
+      error instanceof LocalEditorScopeError &&
+      generation === importGeneration.current
+    )
+      closeBoundEditors()
+  }
+  const openExamManager = () => {
+    try {
+      importGeneration.current++
+      setExamScope(LOCAL_MODE ? captureEditorScope(activeScheduleRef.current) : null)
+      setExamModalOpen(true)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '请先选择课表')
+    }
+  }
+  const openImport = () => {
+    try {
+      importGeneration.current++
+      setImportScope(LOCAL_MODE ? captureEditorScope(activeScheduleRef.current) : null)
+      setImportOpen(true)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '请先选择课表')
+    }
+  }
+  const openEditCourse = (course: Course) => {
+    try {
+      importGeneration.current++
+      setCourseModal({
+        open: true,
+        course,
+        defaults: null,
+        scope: LOCAL_MODE ? captureEditorScope(activeScheduleRef.current) : null,
+      })
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '请先选择课表')
+    }
+  }
 
   const total = useMemo(
     () =>
@@ -84,7 +191,17 @@ export default function TimetablePage() {
         message.warning('请先创建或选择一个课表')
         return
       }
-      setCourseModal({ open: true, course: null, defaults: { dayOfWeek, startPeriod } })
+      try {
+        importGeneration.current++
+        setCourseModal({
+          open: true,
+          course: null,
+          defaults: { dayOfWeek, startPeriod },
+          scope: LOCAL_MODE ? captureEditorScope(activeScheduleRef.current) : null,
+        })
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '请先选择课表')
+      }
     },
     [activeScheduleId],
   )
@@ -92,17 +209,25 @@ export default function TimetablePage() {
   const submitCourse = async (payload: CoursePayload) => {
     if (!activeScheduleId) return
     setSaving(true)
+    const generation = importGeneration.current
     try {
+      const target = await validateScope(
+        courseModal.scope,
+        courseModal.course ? { collection: 'courses', value: courseModal.course } : undefined,
+      )
+      if (!target) throw new Error('请先选择课表')
       if (courseModal.course) {
         await courseApi.update(courseModal.course.id, payload)
         message.success('课程已更新')
       } else {
-        await courseApi.create(activeScheduleId, payload)
+        await courseApi.create(target, payload)
         message.success('课程已添加')
       }
-      setCourseModal({ open: false, course: null, defaults: null })
+      if (generation === importGeneration.current)
+        setCourseModal({ open: false, course: null, defaults: null, scope: null })
       await refreshCourses()
     } catch (e) {
+      handleScopeFailure(e, generation)
       message.error(e instanceof Error ? e.message : '保存失败')
     } finally {
       setSaving(false)
@@ -110,12 +235,23 @@ export default function TimetablePage() {
   }
 
   const deleteCourse = async (course: Course) => {
+    const generation = importGeneration.current
     try {
+      await validateScope(
+        courseModal.open && courseModal.course?.id === course.id
+          ? courseModal.scope
+          : LOCAL_MODE
+            ? captureEditorScope(activeScheduleRef.current)
+            : null,
+        { collection: 'courses', value: course },
+      )
       await courseApi.remove(course.id)
       message.success('课程已删除')
-      setCourseModal({ open: false, course: null, defaults: null })
+      if (generation === importGeneration.current)
+        setCourseModal({ open: false, course: null, defaults: null, scope: null })
       await refreshCourses()
     } catch (e) {
+      handleScopeFailure(e, generation)
       message.error(e instanceof Error ? e.message : '删除失败')
     }
   }
@@ -143,13 +279,17 @@ export default function TimetablePage() {
   const createExam = async (payload: ExamPayload) => {
     if (!activeScheduleId) throw new Error('请先选择课表')
     setExamSaving(true)
+    const generation = importGeneration.current
     try {
-      await examApi.create(activeScheduleId, payload)
+      const target = await validateScope(examScope)
+      if (!target) throw new Error('请先选择课表')
+      await examApi.create(target, payload)
       message.success('考试已添加')
       await Promise.all([refreshExams(), refreshTodos()]).catch(() =>
         message.warning('考试已保存，列表刷新失败，请稍后刷新'),
       )
     } catch (e) {
+      handleScopeFailure(e, generation)
       message.error(e instanceof Error ? e.message : '保存失败')
       throw e
     } finally {
@@ -157,15 +297,24 @@ export default function TimetablePage() {
     }
   }
 
-  const updateExam = async (id: number, payload: ExamPayload) => {
+  const updateExam = async (id: number, payload: ExamPayload, expectedExam?: Exam) => {
     setExamSaving(true)
+    const generation = importGeneration.current
     try {
+      const original = expectedExam ?? exams.find((e) => e.id === id)
+      if (LOCAL_MODE && !original)
+        throw new LocalEditorScopeError('原考试已删除，请重新打开考试管理')
+      await validateScope(
+        examScope,
+        original ? { collection: 'exams', value: original } : undefined,
+      )
       await examApi.update(id, payload)
       message.success('考试已更新')
       await Promise.all([refreshExams(), refreshTodos()]).catch(() =>
         message.warning('考试已保存，列表刷新失败，请稍后刷新'),
       )
     } catch (e) {
+      handleScopeFailure(e, generation)
       message.error(e instanceof Error ? e.message : '保存失败')
       throw e
     } finally {
@@ -174,11 +323,14 @@ export default function TimetablePage() {
   }
 
   const deleteExam = async (exam: Exam) => {
+    const generation = importGeneration.current
     try {
+      await validateScope(examScope, { collection: 'exams', value: exam })
       await examApi.remove(exam.id)
       message.success('考试已删除')
       await Promise.all([refreshExams(), refreshTodos()])
     } catch (e) {
+      handleScopeFailure(e, generation)
       message.error(e instanceof Error ? e.message : '删除失败')
     }
   }
@@ -258,10 +410,10 @@ export default function TimetablePage() {
           <Button icon={<PlusOutlined />} type="primary" onClick={() => openCreate()}>
             添加课程
           </Button>
-          <Button icon={<TrophyOutlined />} onClick={() => setExamModalOpen(true)}>
+          <Button icon={<TrophyOutlined />} onClick={openExamManager}>
             考试管理
           </Button>
-          <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
+          <Button icon={<ImportOutlined />} onClick={openImport}>
             导入课表
           </Button>
           <Button icon={<SettingOutlined />} onClick={() => setScheduleModalOpen(true)}>
@@ -286,8 +438,8 @@ export default function TimetablePage() {
               ),
             )
           }}
-          onEdit={(course) => setCourseModal({ open: true, course, defaults: null })}
-          onExamClick={() => setExamModalOpen(true)}
+          onEdit={openEditCourse}
+          onExamClick={openExamManager}
           onCreate={openCreate}
         />
       ) : viewMode === 'week' ? (
@@ -298,18 +450,14 @@ export default function TimetablePage() {
             periods={periods}
             week={week}
             semesterStart={activeSchedule?.periodStartDate ?? null}
-            onCourseClick={(course) => setCourseModal({ open: true, course, defaults: null })}
-            onExamClick={() => setExamModalOpen(true)}
+            onCourseClick={openEditCourse}
+            onExamClick={openExamManager}
             onEmptyClick={(day, period) => openCreate(day, period)}
           />
         </div>
       ) : (
         <div className="tt-list">
-          <CourseListView
-            courses={courses}
-            onEdit={(course) => setCourseModal({ open: true, course, defaults: null })}
-            onDelete={deleteCourse}
-          />
+          <CourseListView courses={courses} onEdit={openEditCourse} onDelete={deleteCourse} />
         </div>
       )}
 
@@ -321,7 +469,10 @@ export default function TimetablePage() {
         totalWeeks={total}
         currentWeek={realCurrentWeek}
         saving={saving}
-        onCancel={() => setCourseModal({ open: false, course: null, defaults: null })}
+        onCancel={() => {
+          importGeneration.current++
+          setCourseModal({ open: false, course: null, defaults: null, scope: null })
+        }}
         onSubmit={submitCourse}
         onDelete={deleteCourse}
       />
@@ -336,29 +487,64 @@ export default function TimetablePage() {
       />
 
       <ImportHtmlModal
-        key={activeScheduleId}
+        key={LOCAL_MODE ? `${activeScheduleId}:${importGeneration.current}` : activeScheduleId}
         open={importOpen}
         aiEnabled={aiEnabled}
         scheduleName={activeSchedule?.name ?? '未选择课表'}
         totalWeeks={total}
         periodNumbers={periods.map((p) => p.periodNumber)}
         existingCourses={courses}
-        onCancel={() => setImportOpen(false)}
+        onCancel={() => {
+          importGeneration.current++
+          setImportOpen(false)
+          setImportScope(null)
+        }}
         onParse={async (html) => {
-          return aiApi.parseHtml(html, activeScheduleId)
+          const generation = importGeneration.current
+          try {
+            const target = await validateScope(importScope)
+            if (LOCAL_MODE) assertEditorGeneration(generation, importGeneration.current)
+            const result = await aiApi.parseHtml(html, target)
+            if (LOCAL_MODE) {
+              assertEditorGeneration(generation, importGeneration.current)
+              await validateScope(importScope)
+              assertEditorGeneration(generation, importGeneration.current)
+            }
+            return result
+          } catch (error) {
+            handleScopeFailure(error, generation)
+            throw error
+          }
         }}
         onImport={async (list) => {
-          if (!activeScheduleId) throw new Error('请先选择课表')
-          await courseApi.batchCreate(activeScheduleId, list)
-          await refreshCourses()
+          const generation = importGeneration.current
+          try {
+            const target = await validateScope(importScope)
+            if (!target) throw new Error('请先选择课表')
+            if (LOCAL_MODE) assertEditorGeneration(generation, importGeneration.current)
+            await courseApi.batchCreate(target, list)
+            await refreshCourses()
+          } catch (error) {
+            handleScopeFailure(error, generation)
+            throw error
+          }
         }}
       />
 
       <ExamManagerModal
+        key={
+          LOCAL_MODE
+            ? `${examScope?.scheduleId ?? 'closed'}:${examScope?.schedulePublicId ?? ''}:${importGeneration.current}`
+            : undefined
+        }
         open={examModalOpen}
         exams={exams}
         saving={examSaving}
-        onCancel={() => setExamModalOpen(false)}
+        onCancel={() => {
+          importGeneration.current++
+          setExamModalOpen(false)
+          setExamScope(null)
+        }}
         onCreate={createExam}
         onUpdate={updateExam}
         onDelete={deleteExam}

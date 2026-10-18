@@ -25,7 +25,7 @@ interface Props {
   saving: boolean
   onCancel: () => void
   onCreate: (payload: ExamPayload) => Promise<void>
-  onUpdate: (id: number, payload: ExamPayload) => Promise<void>
+  onUpdate: (id: number, payload: ExamPayload, expectedExam?: Exam) => Promise<void>
   onDelete: (exam: Exam) => Promise<void>
 }
 
@@ -99,7 +99,7 @@ export default function ExamManagerModal({
       const values = await form.validateFields()
       const payload = toPayload(values)
       if (editing === 'new') await onCreate(payload)
-      else if (editing) await onUpdate(editing.id, payload)
+      else if (editing) await onUpdate(editing.id, payload, editing)
       setEditing(null)
     } catch {
       // Validation or server write failed; preserve the editor and its draft.
