@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Card, Space, Steps, Tag, Typography } from 'antd'
+import { Button, Card, Space, Steps, Typography } from 'antd'
 import {
   BellOutlined,
   CalendarOutlined,
@@ -10,7 +10,7 @@ import {
   RobotOutlined,
 } from '@ant-design/icons'
 
-const { Title, Paragraph, Text } = Typography
+const { Paragraph, Text } = Typography
 
 /**
  * 首次进入的功能说明页（方案第一部分「启动引导页」+ 第二部分「使用指引页」）。
@@ -41,15 +41,69 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px 48px' }}>
+    <div
+      className="b-onboarding"
+      style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px 48px' }}
+    >
+      <style>{`
+        .b-onboarding .ant-card {
+          border: none;
+          border-radius: var(--b-radius);
+          box-shadow: var(--b-sh2);
+        }
+        .b-onboarding .ant-card-head {
+          border-bottom: 2px solid var(--b-line);
+        }
+        .b-onboarding .ant-card-head-title,
+        .b-onboarding .ant-card-extra {
+          font-weight: 900;
+        }
+        .b-onboarding .ant-steps-item-title {
+          font-weight: 800;
+        }
+        .b-onboarding .b-btn-3d.flat {
+          background: var(--bg-card);
+          color: var(--b-ink);
+          border: 2px solid var(--b-line);
+          box-shadow: var(--b-sh1);
+        }
+        .b-onboarding .b-btn-3d.flat:active {
+          transform: translateY(3px);
+          box-shadow: none;
+        }
+        .b-onboarding .b-step-num {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: var(--b-blue);
+          color: #fff;
+          font-family: var(--b-font);
+          font-weight: 900;
+          font-size: 13px;
+          box-shadow: var(--b-hi-top), var(--b-thick-bottom);
+        }
+      `}</style>
       <Space direction="vertical" size={16} style={{ display: 'flex' }}>
-        <div>
-          <Title level={3} style={{ marginBottom: 4 }}>
+        <div className="b-hero">
+          <div className="b-hero-title">ONBOARDING · 三分钟上手</div>
+          <div
+            style={{
+              fontSize: 21,
+              fontWeight: 900,
+              marginTop: 8,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
             <RobotOutlined /> 欢迎使用 AI 校园助手
-          </Title>
-          <Text type="secondary">
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 800, opacity: 0.92, marginTop: 8 }}>
             它是你的课表 + 待办 + 一个能读懂校园通知的学长。三分钟看完这一页。
-          </Text>
+          </div>
         </div>
 
         <Steps
@@ -62,7 +116,15 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
         {/* ==================== 第 1 步：价值 ==================== */}
         {step === 0 && (
           <Space direction="vertical" size={12} style={{ display: 'flex' }}>
-            <Card size="small" title={<Space><ImportOutlined />信息提炼</Space>}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <ImportOutlined style={{ color: 'var(--b-blue)' }} />
+                  信息提炼
+                </Space>
+              }
+            >
               <Paragraph style={{ marginBottom: 8 }}>
                 把班委群公告、教务通知、竞赛报名、讲座预告这类信息<strong>转发给助手</strong>，
                 它会提炼成「一句话核心 + 关键时间 + 相关要求」的精简卡片，
@@ -74,7 +136,15 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
               </Text>
             </Card>
 
-            <Card size="small" title={<Space><CalendarOutlined />日程规划</Space>}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <CalendarOutlined style={{ color: 'var(--b-green)' }} />
+                  日程规划
+                </Space>
+              }
+            >
               <Paragraph style={{ marginBottom: 8 }}>
                 结合你的课表和作息，把考试、作业截止、讲座、报名这些事项排进一天里，
                 按截止时间自动分档：<strong>今天截止的强制置顶</strong>，
@@ -85,7 +155,15 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
               </Text>
             </Card>
 
-            <Card size="small" title={<Space><BellOutlined />分级提醒</Space>}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <BellOutlined style={{ color: 'var(--b-yellow-ink)' }} />
+                  分级提醒
+                </Space>
+              }
+            >
               <Paragraph style={{ marginBottom: 8 }}>
                 覆盖网课、考试、作业截止、班会、活动报名这些高频遗忘场景，
                 提醒时间和强度都能自己调。不方便打字时用语音直接说，它帮你记成待办。
@@ -103,7 +181,7 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
             <Card size="small" title="三种方式把信息交给它">
               <Space direction="vertical" size={10} style={{ display: 'flex' }}>
                 <div>
-                  <Tag color="blue">1</Tag> <strong>直接转发或粘贴</strong>
+                  <span className="b-step-num">1</span> <strong>直接转发或粘贴</strong>
                   <div style={{ marginTop: 4 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       把群里看到的重要通知复制进来，点右下角浮球 → 快速导入 → 「存为待阅通知」。
@@ -111,7 +189,7 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
                   </div>
                 </div>
                 <div>
-                  <Tag color="blue">2</Tag> <strong>发截图</strong>
+                  <span className="b-step-num">2</span> <strong>发截图</strong>
                   <div style={{ marginTop: 4 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       截图不用手打，它会先识别文字再提炼。识别时图片会经本服务器转发到
@@ -120,7 +198,7 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
                   </div>
                 </div>
                 <div>
-                  <Tag color="blue">3</Tag> <strong>直接说话</strong>
+                  <span className="b-step-num">3</span> <strong>直接说话</strong>
                   <div style={{ marginTop: 4 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       右下角浮球或首页「语音新增」，说完自动转成待办。
@@ -132,7 +210,12 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
 
             <Card
               size="small"
-              title={<Space><MessageOutlined />随时问它</Space>}
+              title={
+                <Space>
+                  <MessageOutlined style={{ color: 'var(--b-purple)' }} />
+                  随时问它
+                </Space>
+              }
             >
               <Paragraph style={{ marginBottom: 0 }}>
                 不确定要不要报名、想不出怎么排时间、想让它把一条通知讲透——
@@ -168,7 +251,15 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
         {/* ==================== 第 3 步：建档 ==================== */}
         {step === 2 && (
           <Space direction="vertical" size={12} style={{ display: 'flex' }}>
-            <Card size="small" title={<Space><ProfileOutlined />花三分钟告诉它你是谁</Space>}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <ProfileOutlined style={{ color: 'var(--b-green)' }} />
+                  花三分钟告诉它你是谁
+                </Space>
+              }
+            >
               <Paragraph style={{ marginBottom: 8 }}>
                 在设置页填写<strong>学校、专业、年级、未来规划</strong>（保研 / 就业 / 考研）、
                 学习习惯。这些信息会进入它的上下文，回答才不会是通用模板。
@@ -193,22 +284,25 @@ export default function OnboardingPage({ onDone }: { onDone?: () => void } = {})
         )}
 
         <Space wrap>
-          {step > 0 && <Button onClick={() => setStep((s) => s - 1)}>上一步</Button>}
+          {step > 0 && (
+            <button type="button" className="b-btn-3d flat" onClick={() => setStep((s) => s - 1)}>
+              上一步
+            </button>
+          )}
           {step < 2 && (
-            <Button type="primary" onClick={() => setStep((s) => s + 1)}>
+            <button type="button" className="b-btn-3d" onClick={() => setStep((s) => s + 1)}>
               下一步
-            </Button>
+            </button>
           )}
           {step === 2 && (
             <>
-              <Button
-                type="primary"
-                icon={<ProfileOutlined />}
-                onClick={() => finish(true)}
-              >
+              <button type="button" className="b-btn-3d" onClick={() => finish(true)}>
+                <ProfileOutlined />
                 去填写档案
-              </Button>
-              <Button onClick={() => finish(false)}>先看看首页</Button>
+              </button>
+              <button type="button" className="b-btn-3d flat" onClick={() => finish(false)}>
+                先看看首页
+              </button>
             </>
           )}
           {step < 2 && (
