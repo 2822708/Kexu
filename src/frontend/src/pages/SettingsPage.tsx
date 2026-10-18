@@ -36,6 +36,30 @@ const CATEGORY_OPTIONS: { value: PeriodCategory; label: string }[] = [
   { value: 'EVENING', label: '晚上' },
 ]
 
+/** 分区卡片统一质感：白底 + 柔影 + 大圆角（明亮风） */
+const sectionCardStyle = {
+  borderRadius: 'var(--b-radius)',
+  boxShadow: 'var(--b-sh2)',
+} as const
+
+/** 分区标题前的色条点缀（明亮风分区标识） */
+function SectionTitle({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span
+        style={{
+          width: 4,
+          height: 15,
+          borderRadius: 99,
+          background: color,
+          flex: 'none',
+        }}
+      />
+      {children}
+    </span>
+  )
+}
+
 export default function SettingsPage() {
   const {
     periods,
@@ -238,8 +262,26 @@ export default function SettingsPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <div>
+        <div
+          style={{
+            fontSize: 22,
+            fontWeight: 900,
+            color: 'var(--b-ink)',
+            letterSpacing: 0.5,
+            lineHeight: 1.2,
+          }}
+        >
+          设置
+        </div>
+        <div style={{ marginTop: 3, fontSize: 13, fontWeight: 800, color: 'var(--b-ink-soft)' }}>
+          档案、AI 助手、备份与课表偏好，一屏管理
+        </div>
+      </div>
+
       <Card
-        title="桌面小组件网页地址"
+        title={<SectionTitle color="var(--b-blue)">桌面小组件网页地址</SectionTitle>}
+        style={sectionCardStyle}
         extra={
           <Button type="primary" icon={<CopyOutlined />} onClick={copyWidgetApi}>
             一键复制
@@ -272,7 +314,10 @@ export default function SettingsPage() {
         </Space>
       </Card>
 
-      <Card title="AI 助手（DeepSeek）">
+      <Card
+        title={<SectionTitle color="var(--b-purple)">AI 助手（DeepSeek）</SectionTitle>}
+        style={sectionCardStyle}
+      >
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <Alert
             type={aiConfig?.configured ? 'success' : 'warning'}
@@ -303,6 +348,7 @@ export default function SettingsPage() {
               loading={savingKey}
               disabled={!aiConfig?.configured || aiConfig.source !== 'local'}
               onClick={clearAiKey}
+              style={{ color: 'var(--b-red-ink)', borderColor: 'var(--b-red)', fontWeight: 800 }}
             >
               清除本机 Key
             </Button>
@@ -322,7 +368,8 @@ export default function SettingsPage() {
       {isAdmin && <BackupSettings />}
 
       <Card
-        title="字体大小"
+        title={<SectionTitle color="var(--b-yellow)">字体大小</SectionTitle>}
+        style={sectionCardStyle}
         extra={
           <Button
             size="small"
@@ -371,7 +418,8 @@ export default function SettingsPage() {
       </Card>
 
       <Card
-        title="作息时间表"
+        title={<SectionTitle color="var(--b-green)">作息时间表</SectionTitle>}
+        style={sectionCardStyle}
         extra={
           <Space>
             {dirty && <Typography.Text type="warning">有未保存的修改</Typography.Text>}

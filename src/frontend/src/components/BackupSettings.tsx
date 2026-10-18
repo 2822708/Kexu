@@ -31,6 +31,49 @@ const readableSize = (bytes: number) => bytes < 1024 * 1024
   ? `${(bytes / 1024).toFixed(1)} KB`
   : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
+/** 卡片质感：白底 + 柔影 + 大圆角（明亮风） */
+const backupCardStyle = {
+  borderRadius: 'var(--b-radius)',
+  boxShadow: 'var(--b-sh2)',
+} as const
+
+/** 标题前的色条点缀（明亮风分区标识） */
+function SectionTitle({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span
+        style={{
+          width: 4,
+          height: 15,
+          borderRadius: 99,
+          background: color,
+          flex: 'none',
+        }}
+      />
+      {children}
+    </span>
+  )
+}
+
+/** 导出类 3D 按钮（绿）；禁用时退为中性灰 */
+const exportBtnStyle = (disabled: boolean) =>
+  ({
+    background: disabled ? 'var(--b-bg-soft)' : 'var(--b-green)',
+    borderColor: disabled ? 'var(--b-line)' : 'var(--b-green)',
+    color: disabled ? 'var(--b-ink-faint)' : 'var(--text-on-accent)',
+    padding: '6px 14px',
+    fontSize: 13,
+  }) as const
+
+/** 导入/恢复类 3D 按钮（蓝） */
+const importBtnStyle = {
+  background: 'var(--b-blue)',
+  borderColor: 'var(--b-blue)',
+  color: 'var(--text-on-accent)',
+  padding: '6px 14px',
+  fontSize: 13,
+} as const
+
 export default function BackupSettings() {
   const [status, setStatus] = useState<BackupStatus | null>(null)
   const [backups, setBackups] = useState<BackupInfo[]>([])
@@ -90,15 +133,46 @@ export default function BackupSettings() {
   })
 
   return (
-    <Card title="数据库备份与恢复" extra={status?.available && (
-      <Button type="primary" loading={busy} onClick={() => void create()}>立即备份</Button>
-    )}>
+    <Card
+      title={<SectionTitle color="var(--b-blue)">数据库备份与恢复</SectionTitle>}
+      style={backupCardStyle}
+      extra={status?.available && (
+        <Button
+          className="b-btn-3d"
+          type="primary"
+          loading={busy}
+          onClick={() => void create()}
+          style={{
+            background: 'var(--b-green)',
+            borderColor: 'var(--b-green)',
+            color: 'var(--text-on-accent)',
+          }}
+        >
+          立即备份
+        </Button>
+      )}
+    >
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         {error && <Alert type="error" showIcon message={error} action={
           <Button loading={busy} onClick={() => void operate(load)}>重试</Button>
         } />}
         {status && <Alert type="info" showIcon message={status.message} />}
         {status?.lastError && <Alert type="warning" showIcon message={status.lastError} />}
+        {status && (
+          <Space wrap>
+            <span className={status.available ? 'b-pill green' : 'b-pill red'}>
+              {status.available
+                ? `自动备份已开启 · 保留最近 ${status.retainedCopies} 份`
+                : '自动备份未开启'}
+            </span>
+            {status.lastSuccess && (
+              <span className="b-pill blue">
+                上次成功 {new Date(status.lastSuccess).toLocaleString()}
+              </span>
+            )}
+            {status.lastError && <span className="b-pill red">{status.lastError}</span>}
+          </Space>
+        )}
         {status?.available && <>
           <Typography.Text type="secondary">
             每天自动备份，保留最近 {status.retainedCopies} 份。备份包含全部课表、待办、AI 对话和账号凭据，请保存在自己的设备上。
@@ -115,8 +189,24 @@ export default function BackupSettings() {
               { title: '大小', dataIndex: 'sizeBytes', render: readableSize },
               { title: '操作', render: (_, record) => (
                 <Space wrap>
-                  <Button size="small" disabled={busy} onClick={() => void inspect(record.name)}>恢复前预览</Button>
-                  <Button size="small" disabled={busy} onClick={() => void download(record.name)}>下载</Button>
+                  <Button
+                    className="b-btn-3d blue"
+                    size="small"
+                    disabled={busy}
+                    onClick={() => void inspect(record.name)}
+                    style={importBtnStyle}
+                  >
+                    恢复前预览
+                  </Button>
+                  <Button
+                    className="b-btn-3d"
+                    size="small"
+                    disabled={busy}
+                    onClick={() => void download(record.name)}
+                    style={exportBtnStyle(busy)}
+                  >
+                    下载
+                  </Button>
                 </Space>
               ) },
             ]}
@@ -126,7 +216,19 @@ export default function BackupSettings() {
       <Modal title="恢复前预览" open={preview !== null} onCancel={() => setPreview(null)} footer={preview && (
         <Space>
           <Button onClick={() => setPreview(null)}>关闭</Button>
-          <Button type="primary" loading={busy} onClick={() => void download(preview.name)}>下载这份备份</Button>
+          <Button
+            className="b-btn-3d"
+            type="primary"
+            loading={busy}
+            onClick={() => void download(preview.name)}
+            style={{
+              background: 'var(--b-green)',
+              borderColor: 'var(--b-green)',
+              color: 'var(--text-on-accent)',
+            }}
+          >
+            下载这份备份
+          </Button>
         </Space>
       )} width={720}>
         {preview && <Space direction="vertical" size={12} style={{ width: '100%' }}>

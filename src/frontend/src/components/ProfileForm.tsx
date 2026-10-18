@@ -6,7 +6,6 @@ import {
   Input,
   Select,
   Space,
-  Tag,
   Typography,
   message,
 } from 'antd'
@@ -40,6 +39,30 @@ const EMPTY: StudentProfile = {
   skills: [],
   learningStyle: '',
   updatedBy: null,
+}
+
+/** 卡片质感：白底 + 柔影 + 大圆角（明亮风） */
+const profileCardStyle = {
+  borderRadius: 'var(--b-radius)',
+  boxShadow: 'var(--b-sh2)',
+} as const
+
+/** 标题前的色条点缀（明亮风分区标识） */
+function SectionTitle({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span
+        style={{
+          width: 4,
+          height: 15,
+          borderRadius: 99,
+          background: color,
+          flex: 'none',
+        }}
+      />
+      {children}
+    </span>
+  )
 }
 
 /**
@@ -102,12 +125,20 @@ export default function ProfileForm() {
 
   return (
     <Card
-      title="学生档案"
+      title={<SectionTitle color="var(--b-green)">学生档案</SectionTitle>}
       loading={loading}
+      style={profileCardStyle}
       extra={
         <Space>
           {dirty && <Typography.Text type="warning">有未保存的修改</Typography.Text>}
-          <Button type="primary" size="small" loading={saving} disabled={!dirty} onClick={() => void save()}>
+          <Button
+            className="b-btn-3d"
+            type="primary"
+            size="small"
+            loading={saving}
+            disabled={!dirty}
+            onClick={() => void save()}
+          >
             保存
           </Button>
         </Space>
@@ -149,11 +180,16 @@ export default function ProfileForm() {
             最近更新来源：
           </Typography.Text>
           {profile.updatedBy === 'AI' ? (
-            <Tag color="magenta">AI 学长提炼</Tag>
+            <span className="b-pill purple">AI 学长提炼</span>
           ) : profile.updatedBy === 'USER' ? (
-            <Tag>手动填写</Tag>
+            <span className="b-pill blue">手动填写</span>
           ) : (
-            <Tag>尚未填写</Tag>
+            <span
+              className="b-pill"
+              style={{ background: 'var(--b-bg-soft)', color: 'var(--b-ink-soft)' }}
+            >
+              尚未填写
+            </span>
           )}
           <Button type="link" size="small" onClick={() => navigate('/')}>
             回首页看看 AI 怎么用这份档案

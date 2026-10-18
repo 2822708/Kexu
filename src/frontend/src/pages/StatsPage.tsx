@@ -11,7 +11,6 @@ import {
   Space,
   Statistic,
   Table,
-  Tag,
   Tooltip,
   Typography,
   message,
@@ -46,6 +45,30 @@ const formatDecideSeconds = (s: number | null) => {
   if (s < 60) return `${s.toFixed(1)} 秒`
   if (s < 3600) return `${(s / 60).toFixed(1)} 分钟`
   return `${(s / 3600).toFixed(1)} 小时`
+}
+
+/** 统计卡片统一质感：白底 + 柔影 + 大圆角（明亮风） */
+const statCardStyle = {
+  borderRadius: 'var(--b-radius)',
+  boxShadow: 'var(--b-sh2)',
+} as const
+
+/** 卡片标题前的色条点缀（明亮风分区标识） */
+function SectionTitle({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span
+        style={{
+          width: 4,
+          height: 15,
+          borderRadius: 99,
+          background: color,
+          flex: 'none',
+        }}
+      />
+      {children}
+    </span>
+  )
 }
 
 export default function StatsPage() {
@@ -135,7 +158,22 @@ export default function StatsPage() {
   return (
     <div>
       <div className="page-header">
-        <h4>AI 用量统计</h4>
+        <div>
+          <div
+            style={{
+              fontSize: 22,
+              fontWeight: 900,
+              color: 'var(--b-ink)',
+              letterSpacing: 0.5,
+              lineHeight: 1.2,
+            }}
+          >
+            AI 用量统计
+          </div>
+          <div style={{ marginTop: 3, fontSize: 13, fontWeight: 800, color: 'var(--b-ink-soft)' }}>
+            看看 AI 学长最近帮你干了多少活
+          </div>
+        </div>
         <Space>
           <Segmented
             value={days}
@@ -181,7 +219,7 @@ export default function StatsPage() {
         <>
           <Row gutter={[12, 12]} style={{ marginTop: 16 }}>
             <Col xs={12} sm={12} md={6}>
-              <Card size="small">
+              <Card size="small" style={statCardStyle}>
                 <Statistic
                   title={
                     <Tooltip title="按后端配置的单价表估算，不是账单数字。调价后数值会变。">
@@ -189,7 +227,7 @@ export default function StatsPage() {
                     </Tooltip>
                   }
                   value={formatCost(usage.estimatedCost, usage.currency)}
-                  valueStyle={{ fontSize: 22 }}
+                  valueStyle={{ fontSize: 22, fontWeight: 900, color: 'var(--b-yellow-ink)' }}
                 />
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   近 {usage.days} 天
@@ -197,16 +235,16 @@ export default function StatsPage() {
               </Card>
             </Col>
             <Col xs={12} sm={12} md={6}>
-              <Card size="small">
+              <Card size="small" style={statCardStyle}>
                 <Statistic
                   title="调用次数"
                   value={usage.callCount}
-                  valueStyle={{ fontSize: 22 }}
+                  valueStyle={{ fontSize: 22, fontWeight: 900, color: 'var(--b-green-ink)' }}
                   suffix={
                     usage.errorCount > 0 ? (
-                      <Text type="danger" style={{ fontSize: 12 }}>
-                        / 失败 {usage.errorCount}
-                      </Text>
+                      <span className="b-pill red" style={{ fontSize: 11 }}>
+                        失败 {usage.errorCount}
+                      </span>
                     ) : null
                   }
                 />
@@ -216,11 +254,11 @@ export default function StatsPage() {
               </Card>
             </Col>
             <Col xs={12} sm={12} md={6}>
-              <Card size="small">
+              <Card size="small" style={statCardStyle}>
                 <Statistic
                   title="Token 合计"
                   value={usage.totalTokens}
-                  valueStyle={{ fontSize: 22 }}
+                  valueStyle={{ fontSize: 22, fontWeight: 900, color: 'var(--b-blue-ink)' }}
                 />
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   入 {withSeparator(usage.promptTokens)} / 出{' '}
@@ -229,26 +267,23 @@ export default function StatsPage() {
               </Card>
             </Col>
             <Col xs={12} sm={12} md={6}>
-              <Card size="small">
+              <Card size="small" style={statCardStyle}>
                 <Tooltip
                   title="已落库口径：读消息时的失效复核（STALE）不落库，所以这里的确认率是上界，真实值只会更低。"
                 >
-                  <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-                    提案确认率
-                  </span>
+                  <span style={{ fontSize: 14, color: 'var(--b-ink-soft)' }}>提案确认率</span>
                 </Tooltip>
                 <div style={{ marginTop: 6 }}>
                   {confirmPercent == null ? (
                     <Text type="secondary">暂无已决定提案</Text>
                   ) : (
-                    <>
-                      <Progress
-                        type="dashboard"
-                        percent={confirmPercent}
-                        size={78}
-                        status={confirmPercent < 50 ? 'exception' : 'normal'}
-                      />
-                    </>
+                    <Progress
+                      type="dashboard"
+                      percent={confirmPercent}
+                      size={78}
+                      status={confirmPercent < 50 ? 'exception' : 'normal'}
+                      strokeColor={confirmPercent < 50 ? 'var(--b-red)' : 'var(--b-green)'}
+                    />
                   )}
                 </div>
               </Card>
@@ -263,13 +298,19 @@ export default function StatsPage() {
             到底是哪一项超了，而不是只知道「AI 不能用了」。
           */}
           {usage.budget && (
-            <Card size="small" title="本月预算" style={{ marginTop: 12 }}>
+            <Card
+              size="small"
+              title={
+                <SectionTitle color="var(--b-yellow)">本月预算</SectionTitle>
+              }
+              style={{ marginTop: 12, ...statCardStyle }}
+            >
               <Row gutter={[12, 12]}>
                 <Col xs={12} md={6}>
                   <Statistic
                     title="已用"
                     value={formatCost(usage.budget.usedCny, usage.currency)}
-                    valueStyle={{ fontSize: 20 }}
+                    valueStyle={{ fontSize: 20, fontWeight: 900, color: 'var(--b-blue-ink)' }}
                   />
                 </Col>
                 <Col xs={12} md={6}>
@@ -280,7 +321,7 @@ export default function StatsPage() {
                         ? '不限'
                         : formatCost(usage.budget.monthlyLimitCny, usage.currency)
                     }
-                    valueStyle={{ fontSize: 20 }}
+                    valueStyle={{ fontSize: 20, fontWeight: 900 }}
                   />
                 </Col>
                 <Col xs={12} md={6}>
@@ -293,7 +334,8 @@ export default function StatsPage() {
                     }
                     valueStyle={{
                       fontSize: 20,
-                      color: usage.budget.blocked ? '#cf1322' : undefined,
+                      fontWeight: 900,
+                      color: usage.budget.blocked ? 'var(--b-red-ink)' : 'var(--b-green-ink)',
                     }}
                   />
                 </Col>
@@ -303,7 +345,8 @@ export default function StatsPage() {
                     value={usage.budget.blocked ? '已熔断' : '正常'}
                     valueStyle={{
                       fontSize: 20,
-                      color: usage.budget.blocked ? '#cf1322' : '#3f8600',
+                      fontWeight: 900,
+                      color: usage.budget.blocked ? 'var(--b-red-ink)' : 'var(--b-green-ink)',
                     }}
                   />
                 </Col>
@@ -318,13 +361,18 @@ export default function StatsPage() {
                         <Text type="secondary" style={{ fontSize: 12 }}>
                           {formatCost(s.usedCny, usage.currency)} /{' '}
                           {formatCost(s.limitCny, usage.currency)}
-                          {s.exceeded && <Tag color="red" style={{ marginInlineStart: 6 }}>已用完</Tag>}
+                          {s.exceeded && (
+                            <span className="b-pill red" style={{ marginInlineStart: 6, fontSize: 11 }}>
+                              已用完
+                            </span>
+                          )}
                         </Text>
                       </Space>
                       <Progress
                         percent={Math.min(100, Math.round((s.usedCny / s.limitCny) * 100))}
                         size="small"
                         status={s.exceeded ? 'exception' : 'normal'}
+                        strokeColor={s.exceeded ? 'var(--b-red)' : 'var(--b-green)'}
                         showInfo={false}
                       />
                     </div>
@@ -339,7 +387,11 @@ export default function StatsPage() {
 
           {/* 每日趋势：纯 div 柱状，避免为一张图引一个图表库 */}
           {trend.daily.length > 0 && (
-            <Card size="small" title="每日 Token 用量" style={{ marginTop: 12 }}>
+            <Card
+              size="small"
+              title={<SectionTitle color="var(--b-green)">每日 Token 用量</SectionTitle>}
+              style={{ marginTop: 12, ...statCardStyle }}
+            >
               <div
                 style={{
                   display: 'flex',
@@ -355,8 +407,8 @@ export default function StatsPage() {
                       style={{
                         flex: '0 0 10px',
                         height: `${Math.max(4, (d.totalTokens / trend.peak) * 100)}%`,
-                        background: 'var(--accent, #8b7355)',
-                        borderRadius: 2,
+                        background: 'linear-gradient(180deg, var(--b-green), var(--b-green-deep))',
+                        borderRadius: 3,
                         opacity: 0.85,
                       }}
                     />
@@ -371,7 +423,11 @@ export default function StatsPage() {
 
           <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
             <Col xs={24} lg={14}>
-              <Card size="small" title="分场景用量">
+              <Card
+                size="small"
+                title={<SectionTitle color="var(--b-blue)">分场景用量</SectionTitle>}
+                style={statCardStyle}
+              >
                 <Table<UsageSceneBreakdown>
                   size="small"
                   rowKey="scene"
@@ -383,11 +439,15 @@ export default function StatsPage() {
               </Card>
             </Col>
             <Col xs={24} lg={10}>
-              <Card size="small" title="提案漏斗">
+              <Card
+                size="small"
+                title={<SectionTitle color="var(--b-purple)">提案漏斗</SectionTitle>}
+                style={statCardStyle}
+              >
                 <Statistic
                   title="待确认"
                   value={funnel?.pendingCount ?? 0}
-                  valueStyle={{ fontSize: 20 }}
+                  valueStyle={{ fontSize: 20, fontWeight: 900, color: 'var(--b-purple-ink)' }}
                 />
                 <div style={{ marginTop: 12 }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>
@@ -404,7 +464,11 @@ export default function StatsPage() {
             </Col>
           </Row>
 
-          <Card size="small" title="每日明细" style={{ marginTop: 12 }}>
+          <Card
+            size="small"
+            title={<SectionTitle color="var(--b-ink-faint)">每日明细</SectionTitle>}
+            style={{ marginTop: 12, ...statCardStyle }}
+          >
             <Table<UsageDailyPoint>
               size="small"
               rowKey="date"
@@ -418,7 +482,11 @@ export default function StatsPage() {
       )}
 
       {!hasUsage && !errMsg && funnel && (funnel.pendingCount > 0 || funnel.decidedCount > 0) && (
-        <Card size="small" title="提案漏斗" style={{ marginTop: 16 }}>
+        <Card
+          size="small"
+          title={<SectionTitle color="var(--b-purple)">提案漏斗</SectionTitle>}
+          style={{ marginTop: 16, ...statCardStyle }}
+        >
           <Space direction="vertical">
             <Text>
               待确认 <strong>{funnel.pendingCount}</strong> 条
