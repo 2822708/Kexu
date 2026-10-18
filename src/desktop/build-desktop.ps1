@@ -141,6 +141,11 @@ try {
     & $npmExe run build; Assert-Exit 'Frontend build'
 } finally { Pop-Location }
 
+# 把 dist 同步进后端 static 再打 jar：单机版由 jar 直接托管前端产物，
+# 少这一步桌面壳打开 http://127.0.0.1:17817/ 只会看到空白页。
+Write-Host 'Syncing frontend dist into backend static resources...'
+& $nodeExe (Join-Path $projectRoot 'scripts\sync-frontend-dist.mjs'); Assert-Exit 'Frontend dist sync'
+
 Write-Host 'Verifying and packaging standalone backend...'
 Push-Location $backendDir
 try {
