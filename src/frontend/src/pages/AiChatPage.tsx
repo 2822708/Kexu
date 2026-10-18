@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import {
   Alert,
   Button,
@@ -9,7 +10,6 @@ import {
   List,
   Space,
   Spin,
-  Tag,
   Typography,
   message,
 } from 'antd'
@@ -18,6 +18,7 @@ import {
   EditOutlined,
   MenuOutlined,
   PlusOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AiActionCard from '../components/AiActionCard'
@@ -33,6 +34,50 @@ const EXAMPLES = [
   '删掉周五上午的课，再加一条周三交实验报告的待办',
   '下周五下午5点前交高数作业',
 ]
+
+/** AI 消息气泡：紫色软底 + 左上尾角 + 微浮起（明亮风） */
+const AI_BUBBLE_STYLE: CSSProperties = {
+  background: 'var(--b-purple-soft)',
+  color: 'var(--b-purple-ink)',
+  border: 'none',
+  borderRadius: 'var(--b-radius)',
+  borderTopLeftRadius: 4,
+  boxShadow: 'var(--b-sh1)',
+}
+
+/** 用户消息气泡：绿色软底 + 右上尾角（与 AI 紫色形成「学习 vs 助手」区分） */
+const USER_BUBBLE_STYLE: CSSProperties = {
+  background: 'var(--b-green-soft)',
+  color: 'var(--b-green-ink)',
+  border: 'none',
+  borderRadius: 'var(--b-radius)',
+  borderTopRightRadius: 4,
+  boxShadow: 'var(--b-sh1)',
+}
+
+/** AI 形象圆牌：径向渐变球面 + 上高光/下厚度双层 inset 光影 */
+const AI_AVATAR_STYLE: CSSProperties = {
+  width: 34,
+  height: 34,
+  flexShrink: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: '50%',
+  fontSize: 17,
+  color: 'var(--b-purple-ink)',
+  background: 'radial-gradient(circle at 34% 28%, rgba(255,255,255,1), var(--b-purple-soft) 75%)',
+  boxShadow:
+    'inset 0 2px 0 rgba(255,255,255,.38), inset 0 -4px 7px color-mix(in srgb, var(--b-purple-deep) 22%, transparent)',
+}
+
+function AiAvatar() {
+  return (
+    <span style={AI_AVATAR_STYLE} aria-hidden="true">
+      <RobotOutlined />
+    </span>
+  )
+}
 
 /** 单个对话的流式进行状态 */
 interface StreamState {
@@ -491,7 +536,15 @@ export default function AiChatPage() {
         className={`conv-panel${convPanelOpen ? ' open' : ''}`}
         size="small"
         title="对话记录"
-        style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column' }}
+        style={{
+          width: 240,
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 'var(--b-radius)',
+          boxShadow: 'var(--b-sh2)',
+          border: 'none',
+        }}
         styles={{
           body: {
             overflowY: 'auto',
@@ -500,6 +553,7 @@ export default function AiChatPage() {
             minHeight: 0,
             padding: '8px 12px',
           },
+          header: { borderBottom: 'none' },
         }}
         extra={
           listMode === 'normal' ? (
@@ -565,8 +619,12 @@ export default function AiChatPage() {
               <List.Item
                 style={{
                   cursor: listMode === 'normal' ? 'pointer' : 'default',
-                  background: active || selected ? 'var(--accent)' : undefined,
-                  borderRadius: 4,
+                  background: active
+                    ? 'var(--b-purple-soft)'
+                    : selected
+                      ? 'var(--b-red-soft)'
+                      : undefined,
+                  borderRadius: 'var(--b-radius-sm)',
                   paddingInline: 8,
                 }}
                 onClick={() => {
@@ -616,9 +674,18 @@ export default function AiChatPage() {
 
       <Card
         size="small"
-        style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 'var(--b-radius)',
+          boxShadow: 'var(--b-sh2)',
+          border: 'none',
+        }}
         styles={{
           body: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: 16 },
+          header: { borderBottom: 'none' },
         }}
         title={
           <Space wrap={false}>
@@ -630,18 +697,25 @@ export default function AiChatPage() {
             >
               对话
             </Button>
-            <span>AI 助手</span>
+            <span style={{ fontWeight: 900 }}>AI 助手</span>
             {convScheduleName ? (
-              <Tag color={workspaceMismatch ? 'red' : 'blue'}>
+              <span className={`b-pill ${workspaceMismatch ? 'red' : 'blue'}`}>
                 {workspaceMismatch ? '⚠ ' : ''}
                 {convScheduleName}
-              </Tag>
+              </span>
             ) : activeSchedule ? (
-              <Tag color="blue">{activeSchedule.name}</Tag>
+              <span className="b-pill blue">{activeSchedule.name}</span>
             ) : (
-              <Tag color="orange">未选择课表</Tag>
+              <span className="b-pill yellow">未选择课表</span>
             )}
-            {activeSchedule && !workspaceMismatch && weekInfo && <Tag>{weekInfo}</Tag>}
+            {activeSchedule && !workspaceMismatch && weekInfo && (
+              <span
+                className="b-pill"
+                style={{ background: 'var(--b-bg-soft)', color: 'var(--b-ink-soft)' }}
+              >
+                {weekInfo}
+              </span>
+            )}
           </Space>
         }
       >
@@ -675,7 +749,7 @@ export default function AiChatPage() {
         <div className="chat-layout">
           <div className="chat-messages" ref={chatScrollRef}>
             {messageCursor && !loadingMessages && <div style={{ textAlign: 'center', paddingBottom: 12 }}>
-              <Button size="small" loading={loadingOlder} disabled={sending} onClick={loadOlderMessages}>
+              <Button size="small" loading={loadingOlder} disabled={sending} onClick={loadOlderMessages} style={{ borderRadius: 99 }}>
                 加载更早的消息
               </Button>
             </div>}
@@ -690,7 +764,17 @@ export default function AiChatPage() {
                     <span>用一句话管理课表和待办，支持一次做多件事</span>
                     <Space wrap style={{ justifyContent: 'center' }}>
                       {EXAMPLES.map((ex, i) => (
-                        <Typography.Text key={i} className="example-chip" type="secondary">
+                        <Typography.Text
+                          key={i}
+                          className="example-chip"
+                          type="secondary"
+                          style={{
+                            background: 'var(--b-bg-soft)',
+                            borderColor: 'var(--b-line)',
+                            color: 'var(--b-ink-soft)',
+                            fontWeight: 700,
+                          }}
+                        >
                           {ex}
                         </Typography.Text>
                       ))}
@@ -711,11 +795,13 @@ export default function AiChatPage() {
                   key={msg.messageId}
                   className={`chat-row${msg.role === 'user' ? ' chat-row-user' : ''}`}
                 >
+                  {msg.role !== 'user' && <AiAvatar />}
                   <div>
                     <div
                       className={`chat-bubble chat-bubble-${
                         msg.role === 'user' ? 'user' : 'assistant'
                       }`}
+                      style={msg.role === 'user' ? USER_BUBBLE_STYLE : AI_BUBBLE_STYLE}
                     >
                       {msg.text}
                     </div>
@@ -739,10 +825,11 @@ export default function AiChatPage() {
             {stream && (
               <>
                 <div className="chat-row chat-row-user">
-                  <div className="chat-bubble chat-bubble-user">{stream.userText}</div>
+                  <div className="chat-bubble chat-bubble-user" style={USER_BUBBLE_STYLE}>{stream.userText}</div>
                 </div>
                 <div className="chat-row">
-                  <div className="chat-bubble chat-bubble-assistant">
+                  <AiAvatar />
+                  <div className="chat-bubble chat-bubble-assistant" style={AI_BUBBLE_STYLE}>
                     {stream.phase === 'thinking' && (
                       <Space size={6}>
                         <Spin size="small" />
@@ -772,12 +859,18 @@ export default function AiChatPage() {
           {currentId !== null && context && (
             <div className="chat-context-chips">
               <Space size={4} wrap>
-                <Tag color={context.profilePresent ? 'green' : 'default'}>
+                <span className={`b-pill ${context.profilePresent ? 'green' : 'yellow'}`}>
                   {context.profilePresent ? '档案 ✓' : '档案 未填写'}
-                </Tag>
-                <Tag color="geekblue">课表 {context.courseCount} 门</Tag>
-                <Tag color="purple">任务 {context.taskCount}{context.tasksTruncated ? '+' : ''}</Tag>
-                <Tag color="magenta">记忆 {context.memoryCount}{context.memoriesTruncated ? '+' : ''}</Tag>
+                </span>
+                <span className="b-pill blue">课表 {context.courseCount} 门</span>
+                <span className="b-pill purple">
+                  任务 {context.taskCount}
+                  {context.tasksTruncated ? '+' : ''}
+                </span>
+                <span className="b-pill yellow">
+                  记忆 {context.memoryCount}
+                  {context.memoriesTruncated ? '+' : ''}
+                </span>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   学长每轮回答前会读取这些数据
                 </Typography.Text>

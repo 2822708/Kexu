@@ -235,6 +235,8 @@ export default function AiChatComposer({
   const micDisabled = !speech.recording && (disabled || !!busy || sending || !speech.supported)
   const micTitle = speech.recording ? '停止语音输入' : !speech.supported
     ? '当前浏览器不支持语音识别，可直接输入或拖入文件' : '语音输入'
+  const sendBtnDisabled =
+    disabled || sendDisabled || busy === 'files' || speech.recording || (!value.trim() && !images.length)
   const mic = (
     <Tooltip title={micTitle}>
       <Button
@@ -259,6 +261,12 @@ export default function AiChatComposer({
     <div className="chat-input-bar ai-chat-composer">
       <div
         className={`ai-chat-composer-field${dragging ? ' is-dragging' : ''}${disabled ? ' is-disabled' : ''}`}
+        style={{
+          background: 'var(--bg-card)',
+          borderWidth: 2,
+          borderRadius: 'var(--b-radius)',
+          boxShadow: 'var(--b-sh2)',
+        }}
         onDragEnter={(event) => {
           if (!handlesDrag(event)) return
           event.preventDefault()
@@ -279,7 +287,11 @@ export default function AiChatComposer({
         {!!images.length && (
           <div className="ai-chat-composer-images">
             {images.map((image) => (
-              <span className="ai-chat-composer-image" key={image.id}>
+              <span
+                className="ai-chat-composer-image"
+                key={image.id}
+                style={{ borderRadius: 99, borderColor: 'var(--b-line)', background: 'var(--b-bg-soft)' }}
+              >
                 <Tooltip title={`${image.file.name} · 点击发送后会将图片交给已配置的 AI 服务识别文字`}>
                   <span className="ai-chat-composer-image-name">{image.file.name}</span>
                 </Tooltip>
@@ -342,18 +354,27 @@ export default function AiChatComposer({
         </Popconfirm>
       </div>
       {sending ? (
-        <Button danger icon={<StopOutlined />} onClick={onStop}>停止</Button>
+        <button
+          type="button"
+          className="b-btn-3d"
+          onClick={onStop}
+          style={{ background: 'var(--b-red)', alignSelf: 'flex-end' }}
+        >
+          <StopOutlined />
+          停止
+        </button>
       ) : (
         <Tooltip title={images.length ? '发送后将图片交给已配置的 AI 服务识别，再生成待确认提案' : undefined}>
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            loading={busy === 'images'}
-            disabled={disabled || sendDisabled || busy === 'files' || speech.recording || (!value.trim() && !images.length)}
+          <button
+            type="button"
+            className="b-btn-3d purple"
+            disabled={sendBtnDisabled}
             onClick={() => void send()}
+            style={{ opacity: sendBtnDisabled ? 0.55 : 1, alignSelf: 'flex-end' }}
           >
+            {busy === 'images' ? <LoadingOutlined spin /> : <SendOutlined />}
             {busy === 'images' ? '识图中' : '发送'}
-          </Button>
+          </button>
         </Tooltip>
       )}
     </div>

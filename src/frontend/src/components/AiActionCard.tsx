@@ -1,4 +1,5 @@
-import { Button, Card, Space, Table, Tag, Tooltip, Typography } from 'antd'
+import { Card, Space, Table, Tooltip, Typography } from 'antd'
+import { LoadingOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { AiAction, AiActionScope } from '../types'
 import { formatWeeks, weekDayName } from '../utils/schedule'
@@ -27,13 +28,16 @@ const ACTION_LABELS: Record<string, string> = {
 }
 
 /** 作用域标签：循环任务归待办域，但卡片上单独标明，避免与普通待办混淆。 */
-const SCOPE_TAGS: Record<AiActionScope, { color: string; label: string }> = {
-  COURSE: { color: 'geekblue', label: '课表' },
-  TODO: { color: 'purple', label: '待办' },
-  TASK: { color: 'cyan', label: '任务' },
-  PROFILE: { color: 'gold', label: '档案' },
-  MEMORY: { color: 'magenta', label: '记忆' },
+const SCOPE_TAGS: Record<AiActionScope, { pill: string; label: string }> = {
+  COURSE: { pill: 'blue', label: '课表' },
+  TODO: { pill: 'purple', label: '待办' },
+  TASK: { pill: 'yellow', label: '任务' },
+  PROFILE: { pill: 'yellow', label: '档案' },
+  MEMORY: { pill: 'purple', label: '记忆' },
 }
+
+/** 中性药丸（无对应色板变体时的兜底样式） */
+const NEUTRAL_PILL_STYLE = { background: 'var(--b-bg-soft)', color: 'var(--b-ink-faint)' }
 
 /** 长期记忆类型的中文名（与后端 Memory 类型白名单一致）。 */
 const MEMORY_TYPE_LABELS: Record<string, string> = {
@@ -81,51 +85,68 @@ export default function AiActionCard({ action, executing, onExecute, onReject, d
   const stale = action.status === 'STALE'
   const affected = ['courses', 'todos', 'tasks', 'rules', 'exams', 'courseIds', 'todoIds', 'recurringIds', 'examIds', 'memories']
     .map((key) => data[key]).find(Array.isArray) as unknown[] | undefined
-  const scopeTag = SCOPE_TAGS[action.scope] ?? { color: 'purple', label: action.scope }
+  const scopeTag = SCOPE_TAGS[action.scope] ?? { pill: 'purple', label: action.scope }
   const scopeLabel = action.scope === 'TODO' && action.type.includes('RECURRING') ? '循环任务' : scopeTag.label
 
   const statusTag =
     action.status === 'EXECUTED' ? (
-      <Tag color="green">已执行</Tag>
+      <span className="b-pill green">已执行</span>
     ) : action.status === 'REJECTED' ? (
-      <Tag>已取消</Tag>
+      <span className="b-pill" style={NEUTRAL_PILL_STYLE}>已取消</span>
     ) : action.status === 'EXECUTING' ? (
-      <Tag color="processing">执行中</Tag>
+      <span className="b-pill blue">执行中</span>
     ) : stale ? (
       <Tooltip title="相关数据已变化，或已有更新的提案，此提案不能再执行">
-        <Tag color="default">已失效</Tag>
+        <span className="b-pill" style={NEUTRAL_PILL_STYLE}>已失效</span>
       </Tooltip>
     ) : (
-      <Tag color="orange">待确认</Tag>
+      <span className="b-pill purple">待确认</span>
     )
 
   return (
     <Card
       className="chat-action-card"
       size="small"
-      style={stale ? { opacity: 0.6 } : undefined}
+      style={{
+        borderRadius: 'var(--b-radius)',
+        boxShadow: 'var(--b-sh2)',
+        border: 'none',
+        ...(stale ? { opacity: 0.6 } : undefined),
+      }}
+      styles={{ header: { borderBottom: 'none' } }}
       title={
         <Space>
           <span>{ACTION_LABELS[action.type] ?? action.type}</span>
-          <Tag color={scopeTag.color}>{scopeLabel}</Tag>
+          <span className={`b-pill ${scopeTag.pill}`}>{scopeLabel}</span>
           {statusTag}
         </Space>
       }
       extra={
         pending && (
           <Space>
-            <Button
-              size="small"
-              type="primary"
-              loading={executing}
+            <button
+              type="button"
+              className="b-btn-3d purple"
               disabled={disabled || executing}
               onClick={onExecute}
+              style={{ opacity: disabled || executing ? 0.55 : 1 }}
             >
+              {executing && <LoadingOutlined spin />}
               确认执行
-            </Button>
-            <Button size="small" disabled={disabled || executing} onClick={onReject}>
+            </button>
+            <button
+              type="button"
+              className="b-btn-3d"
+              disabled={disabled || executing}
+              onClick={onReject}
+              style={{
+                background: 'var(--b-bg-soft)',
+                color: 'var(--b-ink)',
+                opacity: disabled || executing ? 0.55 : 1,
+              }}
+            >
               取消
-            </Button>
+            </button>
           </Space>
         )
       }
@@ -237,8 +258,8 @@ function renderBody(type: string, data: Dict) {
         {rules.map((r, i) => (
           <div key={i}>
             <Typography.Text strong>{str(r.title)}</Typography.Text>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{recurringLine(r)}</div>
-            {r.script ? <pre className="ai-script-block">{String(r.script)}</pre> : null}
+            <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>{recurringLine(r)}</div>
+            {r.script ? <pre className="ai-script-block" style={{ borderRadius: 'var(--b-radius-sm)' }}>{String(r.script)}</pre> : null}
           </div>
         ))}
       </Space>
@@ -261,7 +282,7 @@ function renderBody(type: string, data: Dict) {
                 dataSource={recurringDiff(b, a)}
                 pagination={false}
               />
-              {scriptChanged ? <pre className="ai-script-block">{String(a.script)}</pre> : null}
+              {scriptChanged ? <pre className="ai-script-block" style={{ borderRadius: 'var(--b-radius-sm)' }}>{String(a.script)}</pre> : null}
             </div>
           )
         })}
@@ -283,7 +304,7 @@ function renderBody(type: string, data: Dict) {
               <Typography.Text delete={type === 'DELETE_RECURRING'} strong>
                 {str(r.title)}
               </Typography.Text>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+              <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>
                 {recurringLine(r)}
                 {type === 'TOGGLE_RECURRING' &&
                   `（当前${r.enabled ? '启用' : '停用'} → ${r.enabled ? '停用' : '启用'}）`}
@@ -308,7 +329,7 @@ function renderBody(type: string, data: Dict) {
           return (
             <div key={i}>
               <Typography.Text strong>{str(a.name ?? b.name)}</Typography.Text>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{courseLine(a)}</div>
+              <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>{courseLine(a)}</div>
               {changedRows.length > 0 && (
                 <Table
                   size="small"
@@ -357,7 +378,7 @@ function renderBody(type: string, data: Dict) {
         {tasks.map((t, i) => (
           <div key={i}>
             <Typography.Text strong>{str(t.title)}</Typography.Text>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{taskLine(t)}</div>
+            <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>{taskLine(t)}</div>
           </div>
         ))}
       </Space>
@@ -374,7 +395,7 @@ function renderBody(type: string, data: Dict) {
           return (
             <div key={i}>
               <Typography.Text strong>{str(a.title ?? b.title)}</Typography.Text>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{taskLine(a)}</div>
+              <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>{taskLine(a)}</div>
               {changedRows.length > 0 && (
                 <Table
                   size="small"
@@ -399,7 +420,7 @@ function renderBody(type: string, data: Dict) {
         {courses.map((c, i) => (
           <div key={i}>
             <Typography.Text strong>{str(c.name)}</Typography.Text>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{courseLine(c)}</div>
+            <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>{courseLine(c)}</div>
           </div>
         ))}
       </Space>
@@ -413,7 +434,7 @@ function renderBody(type: string, data: Dict) {
         {todos.map((t, i) => (
           <div key={i}>
             <Typography.Text strong>{str(t.title)}</Typography.Text>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>截止 {str(t.ddl)}</div>
+            <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>截止 {str(t.ddl)}</div>
           </div>
         ))}
       </Space>
@@ -427,7 +448,7 @@ function renderBody(type: string, data: Dict) {
         {exams.map((e, i) => (
           <div key={i}>
             <Typography.Text strong>{str(e.name)}</Typography.Text>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{examLine(e)}</div>
+            <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>{examLine(e)}</div>
           </div>
         ))}
       </Space>
@@ -444,7 +465,7 @@ function renderBody(type: string, data: Dict) {
           return (
             <div key={i}>
               <Typography.Text strong>{str(a.name ?? b.name)}</Typography.Text>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{examLine(a)}</div>
+              <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>{examLine(a)}</div>
               {changedRows.length > 0 && (
                 <Table
                   size="small"
@@ -474,7 +495,7 @@ function renderBody(type: string, data: Dict) {
               <Typography.Text delete strong>
                 {str(b.name)}
               </Typography.Text>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{examLine(b)}</div>
+              <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>{examLine(b)}</div>
             </div>
           ))}
         </Space>
@@ -504,11 +525,11 @@ function renderBody(type: string, data: Dict) {
           return (
             <div key={i}>
               <Space size={4} wrap>
-                <Tag color="magenta">{MEMORY_TYPE_LABELS[String(m.type)] ?? String(m.type)}</Tag>
-                {isUpdate && <Tag color="blue">修正 #{String(m.target_id)}</Tag>}
+                <span className="b-pill purple">{MEMORY_TYPE_LABELS[String(m.type)] ?? String(m.type)}</span>
+                {isUpdate && <span className="b-pill blue">修正 #{String(m.target_id)}</span>}
                 <Typography.Text strong>{str(m.content)}</Typography.Text>
               </Space>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+              <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>
                 重要度 {'★'.repeat(stars)}
                 {'☆'.repeat(5 - stars)}（{Number(m.importance) || 3}/5）
               </div>
@@ -559,7 +580,7 @@ function renderBody(type: string, data: Dict) {
             <Typography.Text delete={type !== 'TOGGLE_TODO'} strong>
               {str(b.name ?? b.title)}
             </Typography.Text>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+            <div style={{ color: 'var(--b-ink-soft)', fontSize: 13 }}>
               {b.dayOfWeek ? courseLine(b) : `截止 ${str(b.ddl)}`}
             </div>
           </div>
