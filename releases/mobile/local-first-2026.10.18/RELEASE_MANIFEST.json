@@ -27,5 +27,19 @@
     "liveModelSemanticCases": 12,
     "liveModelSemanticStatus": "not_run: no dedicated endpoint/model/key",
     "linuxNginxSystemd": "not_run on target server"
+  },
+  "publication": {
+    "repository": "2822708/Timetable",
+    "branch": "feature/local-first-snapshots",
+    "initialCommit": "e220d0b9d47c963238cc87684b4e9fab7f5e9817",
+    "initialTree": "1ce93edc4fde15a843f8c574325e487fd7b3e70d",
+    "localReleaseCommit": "1fd735a9ef06317473395d41388e79ca6fa5cb12",
+    "initialTreeMatchesLocal": true,
+    "sourceCommitScope": "local build checkout; remote imported commit has identical files",
+    "postUploadAiContracts": {
+      "passed": 32,
+      "failed": 0
+    },
+    "postUploadLiveSemantic": "not_run"
   }
 }

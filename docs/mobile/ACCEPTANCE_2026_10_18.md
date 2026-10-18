@@ -64,7 +64,11 @@
 
 [运行包](../../releases/mobile/local-first-2026.10.18/README.md)，ZIP SHA256：`52849d33cd0d8d8f0c01e9d4549843dd5f84b835c5286ba774ab40f2dd6f9925`。本轮最终包另开浏览器访问17827及跨进程健康检查超时；同进程运行包HTTP验收通过，前述5180源码构建的浏览器操作证据仍有效。未将这次超时写成最终包浏览器通过。
 
-GitHub上传与远端树校验完成后补充。以上结果不表示生产站点已经部署。
+GitHub已发布至私有仓库 [2822708/Timetable](https://github.com/2822708/Timetable/tree/feature/local-first-snapshots)。首次发布提交 `e220d0b9d47c963238cc87684b4e9fab7f5e9817` 的树为 `1ce93edc4fde15a843f8c574325e487fd7b3e70d`，与本地发布提交 `1fd735a` 的Git树逐字节一致。两张截图和ZIP的远端blob SHA也分别与本地一致，已读回分支及SHA256SUMS核验。
+
+包内 `sourceCommit` 是本地构建提交 `266fa5a`。GitHub通过连接器导入相同文件树，远端提交ID不同；文件树与ZIP散列用于此次交付内容核对。上传后再次跑AI32/32通过，真实12语义项仍not_run，不叠加进120项回归数量。
+
+以上结果不表示生产站点已经部署。
 
 ## 重现与后续
 
