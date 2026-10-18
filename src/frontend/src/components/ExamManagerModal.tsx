@@ -7,11 +7,9 @@ import {
   Modal,
   Popconfirm,
   Space,
-  Table,
   TimePicker,
   Typography,
 } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { Exam, ExamPayload } from '../types'
 import { dayjs, WEEK_DAY_NAMES } from '../utils/schedule'
@@ -95,46 +93,6 @@ export default function ExamManagerModal({
     setEditing(null)
   }
 
-  const columns: ColumnsType<Exam> = [
-    { title: '考试名称', dataIndex: 'name', width: 180 },
-    {
-      title: '日期',
-      width: 130,
-      render: (_, e) => {
-        const d = dayjs(e.examDate)
-        return `${e.examDate}（${WEEK_DAY_NAMES[d.day() === 0 ? 6 : d.day() - 1]}）`
-      },
-    },
-    {
-      title: '时间',
-      width: 120,
-      render: (_, e) => `${e.startTime?.slice(0, 5)}-${e.endTime?.slice(0, 5)}`,
-    },
-    {
-      title: '地点',
-      dataIndex: 'location',
-      width: 150,
-      render: (v: string | null) => v || <span className="text-muted">—</span>,
-    },
-    {
-      title: '操作',
-      width: 90,
-      render: (_, e) => (
-        <Space size={0}>
-          <Button type="text" icon={<EditOutlined />} onClick={() => openEdit(e)} />
-          <Popconfirm
-            title="确定删除这条考试记录吗？"
-            okText="删除"
-            cancelText="取消"
-            onConfirm={() => onDelete(e)}
-          >
-            <Button type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ]
-
   const isEditing = editing !== null
 
   return (
@@ -145,7 +103,7 @@ export default function ExamManagerModal({
         title="考试管理"
         width={720}
         footer={
-          <Button type="primary" onClick={onCancel}>
+          <Button type="primary" className="b-btn-3d blue" style={{ background: 'var(--b-blue)' }} onClick={onCancel}>
             关闭
           </Button>
         }
@@ -154,19 +112,74 @@ export default function ExamManagerModal({
           <Typography.Text type="secondary">
             共 {sorted.length} 条考试记录（按日期/时间显示在课表上）
           </Typography.Text>
-          <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
+          <Button
+            type="primary"
+            className="b-btn-3d"
+            style={{ background: 'var(--b-green)' }}
+            icon={<PlusOutlined />}
+            onClick={openCreate}
+          >
             添加考试
           </Button>
         </Space>
-        <Table
-          size="small"
-          rowKey="id"
-          columns={columns}
-          dataSource={sorted}
-          pagination={false}
-          scroll={{ x: 680 }}
-          locale={{ emptyText: '还没有考试记录' }}
-        />
+        {sorted.length === 0 ? (
+          <Typography.Text type="secondary">还没有考试记录</Typography.Text>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {sorted.map((e) => {
+              const d = dayjs(e.examDate)
+              const daysLeft = d.startOf('day').diff(dayjs().startOf('day'), 'day')
+              const soon = daysLeft >= 0 && daysLeft <= 7
+              const countdown = daysLeft > 0 ? `${daysLeft} 天后` : daysLeft === 0 ? '今天' : `已过 ${-daysLeft} 天`
+              return (
+                <div
+                  key={e.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    background: 'var(--b-bg-soft)',
+                    borderRadius: 'var(--b-radius-sm)',
+                    padding: '10px 14px',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 900, fontSize: 14, color: 'var(--b-ink)' }}>{e.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--b-ink-soft)', marginTop: 2 }}>
+                      {e.examDate}（{WEEK_DAY_NAMES[d.day() === 0 ? 6 : d.day() - 1]}）· {e.location || '—'}
+                    </div>
+                  </div>
+                  <span className={`b-pill ${soon ? 'red' : 'blue'}`}>
+                    {e.startTime?.slice(0, 5)}–{e.endTime?.slice(0, 5)}
+                  </span>
+                  <div
+                    style={{
+                      flex: 'none',
+                      minWidth: 64,
+                      textAlign: 'right',
+                      fontWeight: 900,
+                      fontSize: 14,
+                      color: soon ? 'var(--b-red-ink)' : 'var(--b-ink-soft)',
+                    }}
+                  >
+                    {countdown}
+                  </div>
+                  <Space size={0}>
+                    <Button type="text" icon={<EditOutlined />} onClick={() => openEdit(e)} />
+                    <Popconfirm
+                      title="确定删除这条考试记录吗？"
+                      okText="删除"
+                      cancelText="取消"
+                      onConfirm={() => onDelete(e)}
+                    >
+                      <Button type="text" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  </Space>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </Modal>
 
       <Modal
@@ -177,14 +190,25 @@ export default function ExamManagerModal({
         destroyOnHidden
         footer={
           <Space>
-            <Button onClick={() => setEditing(null)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleOk}>
+            <Button className="b-btn-3d blue" style={{ background: 'var(--b-blue)' }} onClick={() => setEditing(null)}>取消</Button>
+            <Button type="primary" className="b-btn-3d" style={{ background: 'var(--b-green)' }} loading={saving} onClick={handleOk}>
               保存
             </Button>
           </Space>
         }
       >
-        <Form form={form} layout="vertical" requiredMark={false}>
+        {/* 表单容器：白底卡片 + 大圆角 + 柔影（明亮风）；内部控件保持 antd 原样 */}
+        <Form
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          style={{
+            background: 'var(--bg-card)',
+            borderRadius: 'var(--b-radius)',
+            boxShadow: 'var(--b-sh2)',
+            padding: '16px 18px 0',
+          }}
+        >
           <Form.Item
             name="name"
             label="考试名称"

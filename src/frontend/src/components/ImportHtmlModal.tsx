@@ -1,9 +1,15 @@
 import { useMemo, useRef, useState } from 'react'
-import { Alert, Button, Input, Modal, Result, Space, Steps, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Input, Modal, Result, Space, Steps, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { Course, CoursePayload, ParsedCourse, ParseHtmlResult } from '../types'
 import { formatWeeks, weekDayName } from '../utils/schedule'
 import { diagnoseCourses, importPayload, type ImportRow } from '../utils/importDiagnostics'
+
+/** 中性药丸（无对应色板变体时的兜底样式，与 AiActionCard 保持一致） */
+const NEUTRAL_PILL_STYLE = { background: 'var(--b-bg-soft)', color: 'var(--b-ink-faint)' }
+
+/** 步骤标题（明亮风：当前步绿色药丸、待办步中性药丸） */
+const STEP_TITLES = ['粘贴内容', '检查并选择', '完成']
 
 interface Props {
   open: boolean
@@ -88,16 +94,20 @@ export default function ImportHtmlModal({
     {
       title: '检查结果', width: 270,
       render: (_, r) => <Space direction="vertical" size={2}>
-        {r.errors.map((issue) => <Typography.Text type="danger" key={issue}>{issue}</Typography.Text>)}
-        {r.warnings.map((issue) => <Typography.Text type="warning" key={issue}>{issue}</Typography.Text>)}
-        {!r.errors.length && !r.warnings.length && <Tag color="green">可导入</Tag>}
+        {r.errors.map((issue) => <span className="b-pill red" key={issue}>{issue}</span>)}
+        {r.warnings.map((issue) => <span className="b-pill yellow" key={issue}>{issue}</span>)}
+        {!r.errors.length && !r.warnings.length && <span className="b-pill green">可导入</span>}
       </Space>,
     },
   ]
 
   return <Modal open={open} maskClosable={false} title={`导入课表 · ${scheduleName}`}
     onCancel={close} closable={!loading} keyboard={!loading} width={1080} footer={null} destroyOnHidden>
-    <Steps current={step} size="small" items={[{ title: '粘贴内容' }, { title: '检查并选择' }, { title: '完成' }]}
+    <Steps current={step} size="small"
+      items={STEP_TITLES.map((title, i) => ({
+        title: <span className={i === step ? 'b-pill green' : 'b-pill'}
+          style={i === step ? undefined : NEUTRAL_PILL_STYLE}>{title}</span>,
+      }))}
       style={{ marginBottom: 16 }} />
     {!aiEnabled && <Alert type="warning" showIcon message="AI 功能未启用，请先在设置中完成配置。" style={{ marginBottom: 16 }} />}
     {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
@@ -106,20 +116,31 @@ export default function ImportHtmlModal({
         {diagnostics.map((item) => <li key={item.row}>AI 返回第 {item.row} 行：{item.message}</li>)}
       </ul>} style={{ marginBottom: 12 }} />}
     {step === 0 && <>
-      <Typography.Paragraph type="secondary">
+      <Typography.Paragraph type="secondary" style={{
+        background: 'var(--b-bg-soft)',
+        borderRadius: 'var(--b-radius-sm)',
+        padding: '12px 14px',
+        marginBottom: 12,
+      }}>
         在教务系统打开课程表，将页面文字或 HTML 源码粘贴在下方。内容会发送给 AI 服务解析，
         请先移除姓名、学号和其它无需导入的个人信息。最多 60,000 字符。
       </Typography.Paragraph>
       <Input.TextArea rows={12} value={html} onChange={(e) => setHtml(e.target.value)}
         showCount maxLength={60000} disabled={loading} placeholder="粘贴教务系统课表页面的 HTML 或文字…" />
       <Space style={{ marginTop: 24, justifyContent: 'flex-end', width: '100%' }}>
-        <Button disabled={loading} onClick={close}>取消</Button>
-        <Button type="primary" loading={loading} disabled={!aiEnabled || html.trim().length < 10} onClick={doParse}>AI 解析</Button>
+        <Button className="b-btn-3d blue" style={{ background: 'var(--b-blue)' }} disabled={loading} onClick={close}>取消</Button>
+        <Button type="primary" className="b-btn-3d" style={{ background: 'var(--b-green)' }}
+          loading={loading} disabled={!aiEnabled || html.trim().length < 10} onClick={doParse}>AI 解析</Button>
       </Space>
     </>}
     {step === 1 && <>
-      <Typography.Paragraph>
-        目标：<strong>{scheduleName}</strong>（共 {totalWeeks} 周）。解析 {rows.length} 行，
+      <Typography.Paragraph style={{
+        background: 'var(--b-bg-soft)',
+        borderRadius: 'var(--b-radius-sm)',
+        padding: '12px 14px',
+        marginBottom: 12,
+      }}>
+        目标：<strong style={{ fontWeight: 900, color: 'var(--b-ink)' }}>{scheduleName}</strong>（共 {totalWeeks} 周）。解析 {rows.length} 行，
         {rows.length - validRows.length} 行无法导入，{validRows.filter((r) => r.warnings.length).length} 行需核对。
       </Typography.Paragraph>
       {note && <Alert type="info" showIcon message="解析说明" description={note} style={{ marginBottom: 12 }} />}
@@ -132,12 +153,13 @@ export default function ImportHtmlModal({
         rowSelection={{ selectedRowKeys: picked.map((r) => r.key), onChange: (keys) => setSelectedKeys(keys as number[]),
           getCheckboxProps: (r) => ({ disabled: loading || r.errors.length > 0 }) }} />
       <Space style={{ marginTop: 16, justifyContent: 'flex-end', width: '100%' }}>
-        <Button disabled={loading} onClick={close}>取消</Button>
-        <Button disabled={loading} onClick={() => setStep(0)}>上一步</Button>
-        <Button type="primary" loading={loading} disabled={!picked.length} onClick={doImport}>导入已选 {picked.length} 行</Button>
+        <Button className="b-btn-3d blue" style={{ background: 'var(--b-blue)' }} disabled={loading} onClick={close}>取消</Button>
+        <Button className="b-btn-3d blue" style={{ background: 'var(--b-blue)' }} disabled={loading} onClick={() => setStep(0)}>上一步</Button>
+        <Button type="primary" className="b-btn-3d" style={{ background: 'var(--b-green)' }}
+          loading={loading} disabled={!picked.length} onClick={doImport}>导入已选 {picked.length} 行</Button>
       </Space>
     </>}
     {step === 2 && <Result status="success" title="导入完成" subTitle={`已向「${scheduleName}」导入 ${importedCount} 门课程`}
-      extra={<Button type="primary" onClick={close}>返回课表</Button>} />}
+      extra={<Button type="primary" className="b-btn-3d" style={{ background: 'var(--b-green)' }} onClick={close}>返回课表</Button>} />}
   </Modal>
 }

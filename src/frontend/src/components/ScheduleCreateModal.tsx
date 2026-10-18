@@ -57,7 +57,18 @@ export default function ScheduleCreateModal({ open, onCancel, onCreate }: Props)
       width={520}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical" requiredMark={false}>
+      {/* 表单容器：白底卡片 + 大圆角 + 柔影（明亮风）；内部控件保持 antd 原样 */}
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        style={{
+          background: 'var(--bg-card)',
+          borderRadius: 'var(--b-radius)',
+          boxShadow: 'var(--b-sh2)',
+          padding: '16px 18px 0',
+        }}
+      >
         <Form.Item
           name="name"
           label="课表名称"
@@ -85,11 +96,19 @@ export default function ScheduleCreateModal({ open, onCancel, onCreate }: Props)
         >
           <DatePicker.RangePicker style={{ width: '100%' }} disabledDate={semesterDisabledDate} />
         </Form.Item>
-        <Space>
-          <Button type="primary" loading={saving} onClick={submit}>
+        <Space style={{ marginBottom: 16 }}>
+          <Button
+            type="primary"
+            className="b-btn-3d"
+            style={{ background: 'var(--b-green)' }}
+            loading={saving}
+            onClick={submit}
+          >
             创建
           </Button>
-          <Button onClick={onCancel}>取消</Button>
+          <Button className="b-btn-3d blue" style={{ background: 'var(--b-blue)' }} onClick={onCancel}>
+            取消
+          </Button>
         </Space>
       </Form>
     </Modal>
