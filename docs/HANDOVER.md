@@ -274,6 +274,20 @@ npm run build
 
 ## 5. 会话日志（倒序，最新在最上）
 
+### 2026-10-18 · WorkBuddy · 桌面封装链路修复（既有 C# 壳 + jar 托管前端）+ 撤销重复 Electron 壳
+
+**背景**：用户要求「跑在本地看看，封装到桌面」。排查发现项目 baseline 里**早已有完整的 Windows 桌面壳**（`src/desktop/`：.NET Framework 4.8 + WebView2，577 行 Program.cs + 157 行 DesktopSecurity.cs，DPAPI 账号、Job Object 回收、端口所有权校验、`build-desktop.ps1` 锁版本流水线 + 隔离冒烟 + 发布清单）。曾新建 Electron 壳，识别出重复造轮子后**已删除**，路线改回既有 C# 壳。
+
+**核心发现与修复（提交 `d0c5537` + `6dc9db9`）**：既有 `build-desktop.ps1` 流水线**漏了把前端 dist 同步进后端 static**——它跑 `npm run build` 产出 dist，但 `mvnw verify` 打出的 jar 里没有 `static/index.html`，壳打开 `http://127.0.0.1:17817/` 只会得到空白页。即：**桌面包此前是不可用状态**。修复三件套：
+
+- `SpaErrorViewResolver`（新）：GET 且非 `/api` 的 404 转发 `index.html`，`/info`、`/todos` 等前端路由直接可达；`/api` 的 404 保持 JSON 不误导前端错误处理
+- `scripts/sync-frontend-dist.mjs`（新）：dist → `resources/static`，先清空再拷（防删掉的前端 chunk 残留被缓存咬住）；`build-desktop.ps1` 在 npm build 与 mvnw verify 之间插入该步骤
+- static 预构建产物入库：clone 后直接 `mvnw package -Pstandalone` 即得完整 Web 服务
+
+**沙箱验收**：standalone jar 重启后 `/`、`/info`、`/assets/*.js` 均 200、`/api/*` 401 鉴权原样；后端 **171/171** 全绿（24 个测试类，surefire 汇总实证）。
+
+**用户本机构建**（版本不匹配会被脚本拒绝，详见 `src/desktop/README.md`）：需 Microsoft OpenJDK **21.0.7**（vendor 校验）+ Node 22.23.2 + npm 10.9.8 + .NET Framework 4.8 + WebView2 Runtime；开发包 `.\build-desktop.ps1 -AllowEvergreenRuntime` → `src\desktop\app-image\TangentTimetable\` 双击 `TangentTimetable.exe`。数据落 `%LOCALAPPDATA%\TangentTimetable`。**Shell 编译与冒烟只能在 Windows 验证**（WebView2/DPAPI/Win32），沙箱侧能验证的 jar 托管部分已全绿。
+
 ### 2026-10-18 · WorkBuddy · 信息处理中心落地（`/info`，两处边界适配已向用户说明）+ 端到端截图验收
 
 **背景**：用户发来《AI校园助手 · 信息处理页产品与UI设计方案》：新增「信息处理中心」二级页——左侧「信息收纳盒」（超大拖拽上传卡 + 快捷粘贴解析）、右侧「AI 主动查询中心」（四分类 + 一键获取最新动态 + 订阅）、底部「最近解析」预览栏，要求全链路联动首页今日必做/待阅/专业速览与三级提醒。
