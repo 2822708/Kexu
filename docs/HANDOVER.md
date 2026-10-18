@@ -266,6 +266,30 @@ npm run build
 
 ## 5. 会话日志（倒序，最新在最上）
 
+### 2026-10-18 · WorkBuddy · UI 明亮化改版（分支 feature/duolingo-style-ui）+ GitHub 推送凭据链完全定位
+
+**背景**：用户喜欢多邻国 UI，原话「风格类似、不用闯关形式（抄袭太明显）、光影效果要注意、可以加奖励机制、搭好框架直接开始做」。
+
+**概念稿先行**（`/workspace/duolingo-style-demo.html`，单文件可交互）：第一版做了闯关路径，被否（结构抄袭明显）；第二版改为常规信息架构（问候顶栏 + 渐变概览卡 + 课程/待办列表 + AI 入口），只保留视觉语言。用户确认后落地。
+
+**框架落地（分支 `feature/duolingo-style-ui`，7 个提交，均在本地未推）**：
+
+1. `styles/bright.css`：明亮设计系统。色板（绿 #58CC02 主色 + 蓝/黄/红/紫 + 浅底深字配对）、**四层光影 token**（--b-sh1 微浮起 / --b-sh2 卡片双层柔影 / --b-sh3 弹层 / 彩色面「上高光+下厚度」双 inset / --b-groove 凹陷槽）、3D 按钮（:active 下沉 3px）、.b-pill 药丸、.b-hero 渐变卡。**暗色模式全套降饱和适配**（`[data-theme='dark']` 作用域重定义）。
+2. `theme.tsx`：亮色 AntD token 换绿主色 + 白底 + 圆角 14 + Nunito 圆体；`index.css` 同步换 CSS 变量与 body 字体。
+3. `store/RewardsContext.tsx`：轻量奖励机制。完成待办 +15 / 任务 +20 / AI 对话 +5 / 打卡 +10，**每日上限 100 防刷**；streak 按「当天首次有收获 + 昨天也有」延续；6 级等级（新生→传奇）+ 7 个成就；localStorage 持久化（key `timetable.rewards.v1`），**只加分不扣分**（无生命值惩罚）。顶栏徽章（🔥/⭐ 弹跳反馈）+ 完成浮字（RewardFloat）。
+4. 页面接入：Dashboard 渐变概览卡（复用既有数据源）；TodosPage toggle 挂钩 `earn('todo')`。
+5. **4 个子代理并行换皮**（文件级隔离、禁 git、禁改 bright.css 等核心文件）：课表组 / 待办组 / 统计设置组 / AI 组共 16 文件，+1006 行。验收：tsc PASS、lint 0 error、build ✓、device-session 测试 8/8。代理遵守约束良好（grep 验证零硬编码色值、核心文件零改动）。
+
+**GitHub 推送凭据链完全定位（重要，已排除所有技术疑点）**：
+
+- 用户提供了两个 fine-grained PAT。**关键教训：fine-grained PAT 的仓库级 Administration 不隐含 Contents: Read and write**——token2 的 API 显示 `admin/push=true`（误导性），但 `POST /git/blobs` 与 git push（Basic auth）均 403。git 推送需要 Contents 写权限，与 Administration 是两套权限。
+- 仓库 `2552555/timetable-ai` **确实存在且为私有**（token1 未授权时 API 404 + git 403 "Write access not granted" 的组合可区分「不存在」与「无权限」）。
+- 沙箱网络对 github.com 有单 IP 故障：DNS 主 IP 20.205.243.166 不通，备用 IP（140.82.112.3 等）时通时断；**`api.github.com` 与 SSH 22 端口始终稳定**。git HTTPS 还需 `-c http.version=HTTP/1.1`（HTTP/2 多路复用不通）+ hosts 固定可用 IP（已写 `/etc/hosts` 与 `~/.user_hosts` 持久化）。
+- SSH 方案已备好：沙箱密钥 `/root/.ssh/id_ed25519_github.pub`（`POST /user/keys` 需账户级 "Git SSH keys" 权限，token 未授）。
+- **待用户一步操作**：编辑 token 勾选 Contents: Read and write（+ 可选 Git SSH keys: Read and write），或手动把上述公钥加到 github.com/settings/keys。完成后 `git push` 立即可执行（本地已积压 main 9 + 本分支 7 个提交）。
+
+**遗留**：① 推送待 token 权限；② 概念稿与落地的视觉对齐度待用户在 dev server 实测；③ DeepSeek Key 轮换仍待用户执行。
+
 ### 2026-10-18 · WorkBuddy · 收尾：GitHub 推送受阻确认 + 网盘同步产物刷新 + 同步通道防坑
 
 **背景**：用户指令「全部做完并推送」。代码/测试/文档已收口（171/171，4 个提交），本段做两件事：① 穷尽一切手段完成 GitHub 推送；② 把网盘同步产物（git bundle + 源码 zip + 三份文档）刷新到最终 HEAD。
