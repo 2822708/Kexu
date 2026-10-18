@@ -40,7 +40,7 @@ jobs:
         run: npm run lint
       - name: Local data, backup, AI and PWA regression
         working-directory: src/frontend
-        run: node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs scripts/test-pwa.mjs scripts/test-day-agenda.mjs scripts/test-device-session.mjs
+        run: node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs scripts/test-pwa.mjs scripts/test-day-agenda.mjs scripts/test-device-session.mjs scripts/test-timetable-layout.mjs
       - name: Build
         working-directory: src/frontend
         run: npm run build
