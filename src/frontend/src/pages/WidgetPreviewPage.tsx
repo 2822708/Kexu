@@ -153,118 +153,253 @@ export default function WidgetPreviewPage() {
   const todos = data?.todos ?? []
 
   return (
-    <div className="widget-page">
-      {loading && !data ? (
-        <div className="widget-card-loading">
-          <Spin />
-        </div>
-      ) : error && !data ? (
-        <div className="widget-card-error">加载失败：{error}</div>
-      ) : (
-        <>
-          <div className="widget-head">
-            <span className="widget-title">{data?.title || '课程表'}</span>
-            <span className="widget-meta">
-              {data?.week ? `${data.week}·` : ''}
-              {data?.today || ''}
-              {data?.updatedAt ? `·更新 ${data.updatedAt}` : ''}
-            </span>
+    <div className="widget-page b-widget">
+      <style>{`
+        /* 展示台：柔和地面 + 白色圆角舞台（--b-sh2 + 18px 圆角） */
+        .b-widget.widget-page {
+          background: var(--bg-main);
+          color: var(--b-ink);
+          font-family: var(--b-font);
+          padding: 18px;
+        }
+        .b-widget .widget-card-loading,
+        .b-widget .widget-card-error {
+          color: var(--b-ink-soft);
+          font-family: var(--b-font);
+        }
+        .b-widget .widget-card-error { color: var(--b-red-ink); font-weight: 800; }
+        .b-widget-stage {
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          background: var(--bg-card);
+          border-radius: var(--b-radius);
+          box-shadow: var(--b-sh2);
+          padding: 16px 20px;
+          overflow: hidden;
+        }
+        .b-widget .widget-head {
+          align-items: center;
+          border-bottom: 1px solid var(--b-line);
+          padding: 2px 0 10px;
+        }
+        .b-widget .widget-title {
+          color: var(--b-ink);
+          font-weight: 900;
+          font-size: 17px;
+          letter-spacing: 0.5px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .b-widget .widget-title::before {
+          content: '';
+          width: 10px;
+          height: 10px;
+          border-radius: 3px;
+          background: var(--b-green);
+          box-shadow: var(--b-sh1);
+          flex: none;
+        }
+        .b-widget .widget-meta { color: var(--b-ink-soft); }
+        .b-widget .widget-body { padding-top: 12px; gap: 16px; }
+        .b-widget .widget-col-divider { background: var(--b-line); }
+        .b-widget .widget-col-title {
+          color: var(--b-ink);
+          font-weight: 900;
+          font-size: 12px;
+          letter-spacing: 0.5px;
+          align-items: center;
+          gap: 8px;
+          border-bottom: none;
+          padding-bottom: 0;
+          margin-bottom: 8px;
+        }
+        .b-widget .widget-col-title > span:first-child {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .b-widget .widget-col-title > span:first-child::before {
+          content: '';
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: var(--b-green);
+          flex: none;
+        }
+        .b-widget .widget-col.todos .widget-col-title > span:first-child::before {
+          background: var(--b-blue);
+        }
+        .b-widget .widget-col-count {
+          color: var(--b-ink-faint);
+          font-size: 10.5px;
+          font-weight: 800;
+          background: var(--b-bg-soft);
+          border-radius: 99px;
+          padding: 2px 8px;
+        }
+        .b-widget .widget-course-list { gap: 8px; }
+        .b-widget .widget-todo-list { gap: 6px; }
+        .b-widget .widget-course-card {
+          border: 1px solid var(--b-line);
+          border-left: 3px solid;
+          border-radius: var(--b-radius-sm);
+          padding: 5px 8px;
+          box-shadow: var(--b-sh1);
+        }
+        .b-widget .widget-course-card-name { font-weight: 800; }
+        .b-widget .widget-course-card-status { font-size: 9px; font-weight: 800; opacity: 1; }
+        .b-widget .widget-course-card-status[data-status='进行中'] { color: var(--b-green-ink); }
+        .b-widget .widget-course-card-status[data-status='已结束'] { color: var(--b-ink-faint); }
+        .b-widget .widget-course-card-status[data-status^='还有'] { color: var(--b-purple-ink); }
+        .b-widget .widget-course-card-status[data-status='明天'] { color: var(--b-yellow-ink); }
+        .b-widget .widget-course-card-status[data-status='后天'] { color: var(--b-yellow-ink); }
+        .b-widget .widget-course-card-status[data-status='非最近'] { color: var(--b-ink-faint); }
+        .b-widget .widget-exam-card {
+          border: 1px solid var(--b-line);
+          border-left: 3px solid var(--b-red);
+          border-radius: var(--b-radius-sm);
+          background: var(--b-red-soft);
+          padding: 4px 8px;
+          box-shadow: var(--b-sh1);
+        }
+        .b-widget .widget-exam-card-tag {
+          color: var(--b-red-ink);
+          border: 1px solid var(--b-red);
+          border-radius: 99px;
+          padding: 0 6px;
+          font-weight: 900;
+          background: var(--bg-card);
+        }
+        .b-widget .widget-todo-row {
+          background: var(--b-bg-soft);
+          border-radius: var(--b-radius-sm);
+          padding: 5px 10px;
+        }
+        .b-widget .widget-todo-dot { color: var(--b-ink-faint); }
+        .b-widget .widget-todo-dot[data-overdue='true'] { color: var(--b-red); }
+        .b-widget .widget-todo-title { color: var(--b-ink); font-weight: 700; }
+        .b-widget .widget-todo-title[data-overdue='true'] { color: var(--b-red-ink); }
+        .b-widget .widget-todo-ddl { color: var(--b-ink-faint); }
+        .b-widget .widget-todo-remain { color: var(--b-green-ink); font-weight: 800; }
+        .b-widget .widget-todo-remain[data-overdue='true'] { color: var(--b-red-ink); }
+        .b-widget .widget-empty { color: var(--b-ink-faint); }
+      `}</style>
+      <div className="b-widget-stage">
+        {loading && !data ? (
+          <div className="widget-card-loading">
+            <Spin />
           </div>
+        ) : error && !data ? (
+          <div className="widget-card-error">加载失败：{error}</div>
+        ) : (
+          <>
+            <div className="widget-head">
+              <span className="widget-title">{data?.title || '课程表'}</span>
+              <span className="widget-meta">
+                {data?.week ? `${data.week}·` : ''}
+                {data?.today || ''}
+                {data?.updatedAt ? `·更新 ${data.updatedAt}` : ''}
+              </span>
+            </div>
 
-          <div className="widget-body">
-            <div className="widget-col timetable">
-              <div className="widget-col-title">
-                <span>课程和考试</span>
-                <span className="widget-col-count">今日剩余{data?.todayRemaining ?? 0}项</span>
-              </div>
-              <div className="widget-course-list">
-                {visibleItems.length ? (
-                  visibleItems.map((c, i) => {
-                    if (c.kind === 'exam') {
+            <div className="widget-body">
+              <div className="widget-col timetable">
+                <div className="widget-col-title">
+                  <span>课程和考试</span>
+                  <span className="widget-col-count">今日剩余{data?.todayRemaining ?? 0}项</span>
+                </div>
+                <div className="widget-course-list">
+                  {visibleItems.length ? (
+                    visibleItems.map((c, i) => {
+                      if (c.kind === 'exam') {
+                        return (
+                          <div className="widget-exam-card" key={`exam-${i}`}>
+                            <div className="widget-exam-card-tag">考</div>
+                            <div className="widget-exam-info">
+                              <div className="widget-exam-card-head-row">
+                                <div className="widget-course-card-name">{c.name}</div>
+                                <span className="widget-course-card-status" data-status={c.status}>
+                                  {c.status}
+                                </span>
+                              </div>
+                              <div className="widget-course-card-meta">
+                                {c.date}·第{c.week}周·{c.dow}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }
+                      const color = courseColor(c.name || '')
                       return (
-                        <div className="widget-exam-card" key={`exam-${i}`}>
-                          <div className="widget-exam-card-tag">考</div>
-                          <div className="widget-exam-info">
-                            <div className="widget-exam-card-head-row">
-                              <div className="widget-course-card-name">{c.name}</div>
-                              <span className="widget-course-card-status" data-status={c.status}>
-                                {c.status}
-                              </span>
-                            </div>
-                            <div className="widget-course-card-meta">
-                              {c.date}·第{c.week}周·{c.dow}
-                            </div>
+                        <div
+                          className="widget-course-card"
+                          key={`course-${i}`}
+                          style={{
+                            background: color.bg,
+                            borderLeftColor: color.border,
+                            color: color.text,
+                          }}
+                        >
+                          <div className="widget-course-card-head">
+                            <span className="widget-course-card-name">{c.name}</span>
+                            <span className="widget-course-card-status" data-status={c.status}>
+                              {c.status}
+                            </span>
+                          </div>
+                          <div className="widget-course-card-meta">
+                            {c.date}·{c.dow}·第{c.week}周{c.location ? `·${c.location}` : ''}
+                          </div>
+                          <div className="widget-course-card-meta">
+                            {c.period ? `${c.period}·` : ''}
+                            {c.time}
+                            {c.teacher ? `·${c.teacher}` : ''}
                           </div>
                         </div>
                       )
-                    }
-                    const color = courseColor(c.name || '')
-                    return (
-                      <div
-                        className="widget-course-card"
-                        key={`course-${i}`}
-                        style={{
-                          background: '#2d2d2d',
-                          borderLeftColor: color.border,
-                          color: '#f0ebe4',
-                        }}
-                      >
-                        <div className="widget-course-card-head">
-                          <span className="widget-course-card-name">{c.name}</span>
-                          <span className="widget-course-card-status" data-status={c.status}>
-                            {c.status}
-                          </span>
-                        </div>
-                        <div className="widget-course-card-meta">
-                          {c.date}·{c.dow}·第{c.week}周{c.location ? `·${c.location}` : ''}
-                        </div>
-                        <div className="widget-course-card-meta">
-                          {c.period ? `${c.period}·` : ''}
-                          {c.time}
-                          {c.teacher ? `·${c.teacher}` : ''}
-                        </div>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="widget-empty">今天没有课</div>
-                )}
+                    })
+                  ) : (
+                    <div className="widget-empty">今天没有课</div>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="widget-col-divider" />
+              <div className="widget-col-divider" />
 
-            <div className="widget-col todos">
-              <div className="widget-col-title">
-                <span>待办</span>
-                <span className="widget-col-count">{data?.todoSummary || '暂无'}</span>
-              </div>
-              <div className="widget-todo-list">
-                {todos.length ? (
-                  todos.map((t, i) => (
-                    <div className="widget-todo-row" key={i}>
-                      <span className="widget-todo-dot" data-overdue={!!t.overdue}>
-                        {t.overdue ? '●' : '○'}
-                      </span>
-                      <span className="widget-todo-title" data-overdue={!!t.overdue}>
-                        {t.title}
-                      </span>
-                      <span className="widget-todo-meta">
-                        <span className="widget-todo-ddl">{t.ddlText}</span>
-                        <span className="widget-todo-remain" data-overdue={!!t.overdue}>
-                          {t.ddlRemain || '-'}
+              <div className="widget-col todos">
+                <div className="widget-col-title">
+                  <span>待办</span>
+                  <span className="widget-col-count">{data?.todoSummary || '暂无'}</span>
+                </div>
+                <div className="widget-todo-list">
+                  {todos.length ? (
+                    todos.map((t, i) => (
+                      <div className="widget-todo-row" key={i}>
+                        <span className="widget-todo-dot" data-overdue={!!t.overdue}>
+                          {t.overdue ? '●' : '○'}
                         </span>
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="widget-empty">暂无待办</div>
-                )}
+                        <span className="widget-todo-title" data-overdue={!!t.overdue}>
+                          {t.title}
+                        </span>
+                        <span className="widget-todo-meta">
+                          <span className="widget-todo-ddl">{t.ddlText}</span>
+                          <span className="widget-todo-remain" data-overdue={!!t.overdue}>
+                            {t.ddlRemain || '-'}
+                          </span>
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="widget-empty">暂无待办</div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
