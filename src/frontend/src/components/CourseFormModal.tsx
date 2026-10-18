@@ -121,13 +121,24 @@ export default function CourseFormModal({
             </Popconfirm>
           )}
           <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" loading={saving} onClick={handleOk}>
+          <Button type="primary" className="b-btn-3d" loading={saving} onClick={handleOk}>
             保存
           </Button>
         </Space>
       }
     >
-      <Form form={form} layout="vertical" requiredMark={false}>
+      {/* 表单容器：白底卡片 + 大圆角 + 柔影（明亮风）；内部控件保持 antd 原样 */}
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        style={{
+          background: 'var(--bg-card)',
+          borderRadius: 'var(--b-radius)',
+          boxShadow: 'var(--b-sh2)',
+          padding: '16px 18px 0',
+        }}
+      >
         <Form.Item
           name="name"
           label="课程名称"

@@ -16,6 +16,24 @@ import type { Dayjs } from 'dayjs'
 import type { Schedule } from '../types'
 import { dayjs, totalWeeks } from '../utils/schedule'
 
+/** 课表条目：浅底圆角卡片（明亮风） */
+const scheduleItemStyle = {
+  background: 'var(--b-bg-soft)',
+  borderRadius: 'var(--b-radius-sm)',
+  padding: '10px 14px',
+  marginBottom: 8,
+  borderBottom: 'none',
+}
+
+/** 表单容器：白底卡片 + 大圆角 + 柔影（明亮风）；内部控件保持 antd 原样 */
+const formPanelStyle = {
+  marginTop: 12,
+  background: 'var(--bg-card)',
+  borderRadius: 'var(--b-radius)',
+  boxShadow: 'var(--b-sh2)',
+  padding: '14px 18px 0',
+}
+
 interface Props {
   open: boolean
   schedules: Schedule[]
@@ -116,6 +134,7 @@ export default function ScheduleManagerModal({
         locale={{ emptyText: '还没有课表，先新建一个' }}
         renderItem={(item) => (
           <List.Item
+            style={scheduleItemStyle}
             actions={[
               <Button
                 key="edit"
@@ -135,7 +154,28 @@ export default function ScheduleManagerModal({
             ]}
           >
             <List.Item.Meta
-              title={item.name}
+              title={
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontWeight: 900,
+                    color: 'var(--b-ink)',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 4,
+                      height: 15,
+                      borderRadius: 99,
+                      background: 'var(--b-green)',
+                      flex: 'none',
+                    }}
+                  />
+                  {item.name}
+                </span>
+              }
               description={`${item.periodStartDate} ~ ${item.periodEndDate} · 共 ${totalWeeks(
                 item.periodStartDate,
                 item.periodEndDate,
@@ -146,8 +186,10 @@ export default function ScheduleManagerModal({
       />
 
       {formVisible ? (
-        <Form form={form} layout="vertical" requiredMark={false} style={{ marginTop: 12 }}>
-          <Typography.Text strong>{editing ? '编辑课表' : '新建课表'}</Typography.Text>
+        <Form form={form} layout="vertical" requiredMark={false} style={formPanelStyle}>
+          <Typography.Text strong style={{ fontWeight: 900, color: 'var(--b-ink)', fontSize: 15 }}>
+            {editing ? '编辑课表' : '新建课表'}
+          </Typography.Text>
           <Form.Item
             name="name"
             label="课表名称"
@@ -177,7 +219,7 @@ export default function ScheduleManagerModal({
             <DatePicker.RangePicker style={{ width: '100%' }} disabledDate={semesterDisabledDate} />
           </Form.Item>
           <Space>
-            <Button type="primary" loading={saving} onClick={submit}>
+            <Button type="primary" className="b-btn-3d" loading={saving} onClick={submit}>
               保存
             </Button>
             <Button

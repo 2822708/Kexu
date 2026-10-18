@@ -20,6 +20,12 @@ import { useApp } from '../store/AppContext'
 import type { Course, CoursePayload, Exam, ExamPayload, Schedule } from '../types'
 import { currentWeekOf, totalWeeks } from '../utils/schedule'
 
+/** 空状态卡片：白底 + 大圆角 + 柔影（明亮风） */
+const emptyCardStyle = {
+  borderRadius: 'var(--b-radius)',
+  boxShadow: 'var(--b-sh2)',
+}
+
 export default function TimetablePage() {
   const {
     activeSchedule,
@@ -71,6 +77,9 @@ export default function TimetablePage() {
       .then((s) => setAiEnabled(s.enabled))
       .catch(() => setAiEnabled(false))
   }, [])
+
+  /** 学期进度百分比（Hero 进度条用） */
+  const semesterProgress = Math.min(100, Math.round((week / Math.max(total, 1)) * 100))
 
   const openCreate = useCallback(
     (dayOfWeek?: number, startPeriod?: number) => {
@@ -173,10 +182,10 @@ export default function TimetablePage() {
 
   if (schedules.length === 0) {
     return (
-      <Card>
+      <Card style={emptyCardStyle}>
         <Empty description="还没有课表，先创建一个学期课表吧">
           <Space>
-            <Button type="primary" onClick={() => setCreateOpen(true)}>
+            <Button type="primary" className="b-btn-3d" onClick={() => setCreateOpen(true)}>
               新建课表
             </Button>
           </Space>
@@ -221,7 +230,15 @@ export default function TimetablePage() {
                 disabled={week <= 1}
                 onClick={() => setWeek((w) => Math.max(1, w - 1))}
               />
-              <Typography.Text strong style={{ minWidth: 110, textAlign: 'center' }}>
+              <Typography.Text
+                strong
+                style={{
+                  minWidth: 110,
+                  textAlign: 'center',
+                  fontWeight: 900,
+                  color: 'var(--b-ink)',
+                }}
+              >
                 第 {week} 周 / 共 {total} 周
               </Typography.Text>
               <Button
@@ -242,7 +259,12 @@ export default function TimetablePage() {
         </Space>
 
         <Space wrap>
-          <Button icon={<PlusOutlined />} type="primary" onClick={() => openCreate()}>
+          <Button
+            icon={<PlusOutlined />}
+            type="primary"
+            className="b-btn-3d"
+            onClick={() => openCreate()}
+          >
             添加课程
           </Button>
           <Button icon={<TrophyOutlined />} onClick={() => setExamModalOpen(true)}>
@@ -255,6 +277,38 @@ export default function TimetablePage() {
             课表管理
           </Button>
         </Space>
+      </div>
+
+      {/* 明亮风 · 课表概览 Hero（渐变卡 + 数字格 + 学期进度） */}
+      <div className="b-hero">
+        <div className="b-hero-title">课表概览</div>
+        <div className="b-hero-nums">
+          <div className="b-hero-cell">
+            <div className="v">第 {week} 周</div>
+            <div className="k">共 {total} 周</div>
+          </div>
+          <div className="b-hero-cell">
+            <div className="v">{courses.length} 门</div>
+            <div className="k">课程总数</div>
+          </div>
+          <div className="b-hero-cell">
+            <div className="v">{exams.length} 场</div>
+            <div className="k">考试安排</div>
+          </div>
+        </div>
+        <div className="b-hero-prog-label">
+          <span>学期进度</span>
+          <span>{semesterProgress}%</span>
+        </div>
+        <div className="b-prog-track">
+          <div className="b-prog-fill" style={{ width: `${semesterProgress}%` }} />
+        </div>
+        <div className="b-hero-next">
+          <span className="b-hero-pulse" />
+          {activeSchedule
+            ? `${activeSchedule.name} · ${activeSchedule.periodStartDate} ~ ${activeSchedule.periodEndDate}`
+            : '尚未选择课表'}
+        </div>
       </div>
 
       {viewMode === 'week' ? (

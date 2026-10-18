@@ -1,9 +1,52 @@
 import { useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import { Empty, Tooltip } from 'antd'
 import { WarningFilled } from '@ant-design/icons'
 import type { Course, Exam, PeriodConfig } from '../types'
-import { courseColor } from '../utils/color'
 import { WEEK_DAY_NAMES, dateOfWeekDay, dayjs, formatWeeks } from '../utils/schedule'
+
+/**
+ * 课程名 → 明亮色板槽位（浅底 + 深字 + 同色系实色条）。
+ * 沿用旧 courseColor 的哈希算法，保证同一课程名始终落到同一颜色；
+ * 取值全部走 --b-* 变量，暗色模式由设计系统自动切换。
+ */
+const BRIGHT_SLOTS = [
+  { bg: 'var(--b-blue-soft)', bar: 'var(--b-blue)', ink: 'var(--b-blue-ink)' },
+  { bg: 'var(--b-green-soft)', bar: 'var(--b-green)', ink: 'var(--b-green-ink)' },
+  { bg: 'var(--b-yellow-soft)', bar: 'var(--b-yellow)', ink: 'var(--b-yellow-ink)' },
+  { bg: 'var(--b-purple-soft)', bar: 'var(--b-purple)', ink: 'var(--b-purple-ink)' },
+  { bg: 'var(--b-red-soft)', bar: 'var(--b-red)', ink: 'var(--b-red-ink)' },
+]
+
+function brightCourseColor(name: string) {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 100000
+  return BRIGHT_SLOTS[hash % BRIGHT_SLOTS.length]
+}
+
+/** 表头单元格：浅底 + 顶部圆角 + 粗体（明亮风） */
+const headStyle: CSSProperties = {
+  background: 'var(--b-bg-soft)',
+  color: 'var(--b-ink)',
+  fontWeight: 800,
+  borderRadius: 'var(--b-radius-sm) var(--b-radius-sm) 0 0',
+}
+/** 今天的列表头：柔和绿高亮 */
+const headTodayStyle: CSSProperties = {
+  ...headStyle,
+  background: 'var(--b-green-soft)',
+  color: 'var(--b-green-ink)',
+}
+/** 时间轴列：浅底 + 弱化文字 */
+const periodStyle: CSSProperties = {
+  background: 'var(--b-bg-soft)',
+  color: 'var(--b-ink-soft)',
+}
+/** 色块卡片质感：圆角 + 微浮起阴影 */
+const blockStyle: CSSProperties = {
+  borderRadius: 'var(--b-radius-sm)',
+  boxShadow: 'var(--b-sh1)',
+}
 
 interface Props {
   courses: Course[]
@@ -189,6 +232,7 @@ export default function TimetableGrid({
       <div
         key={`head-${dayOfWeek}`}
         className={`tt-cell tt-head${isToday ? ' tt-head-today' : ''}`}
+        style={isToday ? headTodayStyle : headStyle}
       >
         <span>{name}</span>
         {date && <span className="tt-head-sub">{date.format('MM-DD')}</span>}
@@ -202,8 +246,14 @@ export default function TimetableGrid({
     const div = isDivider ? ' tt-divider' : ''
 
     const cells = [
-      <div key={`p-${period.periodNumber}`} className={`tt-cell tt-period${div}`}>
-        <span className="tt-period-num">{period.periodNumber}</span>
+      <div
+        key={`p-${period.periodNumber}`}
+        className={`tt-cell tt-period${div}`}
+        style={periodStyle}
+      >
+        <span className="tt-period-num" style={{ color: 'var(--b-ink)', fontWeight: 900 }}>
+          {period.periodNumber}
+        </span>
         <span>{period.startTime?.slice(0, 5)}</span>
         <span>{period.endTime?.slice(0, 5)}</span>
       </div>,
@@ -241,16 +291,43 @@ export default function TimetableGrid({
               >
                 <div
                   className="course-block exam-block"
-                  style={{ height: '100%' }}
+                  style={{
+                    ...blockStyle,
+                    background: 'var(--b-red-soft)',
+                    borderLeftColor: 'var(--b-red)',
+                    color: 'var(--b-red-ink)',
+                    height: '100%',
+                  }}
                   onClick={() => onExamClick?.(exam)}
                 >
-                  <div className="course-block-exam-tag">考</div>
-                  <div className="course-block-name">{exam.name}</div>
-                  <div className="course-block-exam-time">
+                  <div
+                    className="course-block-exam-tag"
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '2px solid var(--b-red)',
+                      color: 'var(--b-red-ink)',
+                      borderRadius: 99,
+                      fontWeight: 900,
+                      padding: '0 7px',
+                    }}
+                  >
+                    考
+                  </div>
+                  <div
+                    className="course-block-name"
+                    style={{ color: 'var(--b-red-ink)', fontWeight: 800 }}
+                  >
+                    {exam.name}
+                  </div>
+                  <div className="course-block-exam-time" style={{ color: 'var(--b-red-ink)' }}>
                     <span>{exam.startTime?.slice(0, 5)}</span>
                     <span>{exam.endTime?.slice(0, 5)}</span>
                   </div>
-                  {exam.location && <div className="course-block-meta">{exam.location}</div>}
+                  {exam.location && (
+                    <div className="course-block-meta" style={{ color: 'var(--b-red-ink)' }}>
+                      {exam.location}
+                    </div>
+                  )}
                 </div>
               </Tooltip>
             </div>,
@@ -260,7 +337,7 @@ export default function TimetableGrid({
 
         // 课程块
         const course = item.course!
-        const color = courseColor(course.name)
+        const color = brightCourseColor(course.name)
         cells.push(
           <div key={`c-${key}`} className={`tt-cell${spanDiv}`} style={{ gridRow: `span ${span}` }}>
             <Tooltip
@@ -274,7 +351,7 @@ export default function TimetableGrid({
                   </div>
                   <div>周次：{formatWeeks(course.weeks)}</div>
                   {hasConflict && (
-                    <div style={{ marginTop: 6, borderTop: '1px solid #595959', paddingTop: 6 }}>
+                    <div style={{ marginTop: 6, borderTop: '1px solid var(--b-line)', paddingTop: 6 }}>
                       <div>⚠ 此时段有 {conflicts.length} 项冲突（未显示）：</div>
                       {conflicts.map((c) => (
                         <div key={c.id}>
@@ -295,19 +372,25 @@ export default function TimetableGrid({
               <div
                 className="course-block"
                 style={{
+                  ...blockStyle,
                   background: color.bg,
-                  borderLeftColor: hasConflict ? '#ff4d4f' : color.border,
-                  color: color.text,
+                  borderLeftColor: hasConflict ? 'var(--b-red)' : color.bar,
+                  color: color.ink,
                   height: '100%',
                 }}
                 onClick={() => onCourseClick(course)}
               >
                 {hasConflict && (
-                  <span className="course-conflict-badge">
+                  <span
+                    className="course-conflict-badge"
+                    style={{ color: 'var(--b-red-ink)', fontWeight: 900 }}
+                  >
                     <WarningFilled /> {conflicts.length}
                   </span>
                 )}
-                <div className="course-block-name">{course.name}</div>
+                <div className="course-block-name" style={{ fontWeight: 800 }}>
+                  {course.name}
+                </div>
                 {course.location && <div className="course-block-meta">{course.location}</div>}
                 {course.teacher && <div className="course-block-meta">{course.teacher}</div>}
               </div>
@@ -328,8 +411,25 @@ export default function TimetableGrid({
   })
 
   return (
-    <div className="timetable-grid">
-      <div className="tt-cell tt-head">节次</div>
+    <div
+      className="timetable-grid"
+      style={
+        {
+          border: '1px solid var(--b-line)',
+          borderRadius: 'var(--b-radius)',
+          boxShadow: 'var(--b-sh2)',
+          // 内容过高时允许滚动而非裁掉底部节次（min-content = 表头 + 各节次最小行高之和）
+          minHeight: 'min-content',
+          // 网格线 / 时段分隔线 / 空格悬停色在本作用域内改走明亮变量
+          '--border-light': 'var(--b-line)',
+          '--border-dark': 'var(--b-line)',
+          '--bg-main': 'var(--b-bg-soft)',
+        } as CSSProperties
+      }
+    >
+      <div className="tt-cell tt-head" style={headStyle}>
+        节次
+      </div>
       {headers}
       {rows}
     </div>

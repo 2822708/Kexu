@@ -1,9 +1,42 @@
 import { useMemo, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { Button, Card, Empty, Input, Popconfirm, Space, Tag, Typography } from 'antd'
 import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
 import type { Course } from '../types'
-import { courseColor } from '../utils/color'
 import { formatWeeks, weekDayName } from '../utils/schedule'
+
+/**
+ * 课程名 → 明亮色板槽位（与 TimetableGrid 同算法，保证同一课程颜色稳定）。
+ * 取值全部走 --b-* 变量，暗色模式由设计系统自动切换。
+ */
+const BRIGHT_SLOTS = [
+  { bg: 'var(--b-blue-soft)', bar: 'var(--b-blue)', ink: 'var(--b-blue-ink)' },
+  { bg: 'var(--b-green-soft)', bar: 'var(--b-green)', ink: 'var(--b-green-ink)' },
+  { bg: 'var(--b-yellow-soft)', bar: 'var(--b-yellow)', ink: 'var(--b-yellow-ink)' },
+  { bg: 'var(--b-purple-soft)', bar: 'var(--b-purple)', ink: 'var(--b-purple-ink)' },
+  { bg: 'var(--b-red-soft)', bar: 'var(--b-red)', ink: 'var(--b-red-ink)' },
+]
+
+function brightCourseColor(name: string) {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 100000
+  return BRIGHT_SLOTS[hash % BRIGHT_SLOTS.length]
+}
+
+/** 列表容器卡片：白底 + 大圆角 + 柔影（明亮风） */
+const listCardStyle = {
+  borderRadius: 'var(--b-radius)',
+  boxShadow: 'var(--b-sh2)',
+  '--border-dark': 'var(--b-line)',
+} as CSSProperties
+
+/** 课程卡片：白底 + 大圆角 + 柔影（明亮风） */
+const courseCardStyle: CSSProperties = {
+  border: '1px solid var(--b-line)',
+  borderRadius: 'var(--b-radius)',
+  boxShadow: 'var(--b-sh2)',
+  background: 'var(--bg-card)',
+}
 
 interface Props {
   courses: Course[]
@@ -35,7 +68,7 @@ export default function CourseListView({ courses, onEdit, onDelete }: Props) {
   }, [courses, keyword])
 
   return (
-    <Card size="small">
+    <Card size="small" style={listCardStyle}>
       <Space style={{ marginBottom: 12, justifyContent: 'space-between', width: '100%' }} wrap>
         <Input
           prefix={<SearchOutlined />}
@@ -56,14 +89,17 @@ export default function CourseListView({ courses, onEdit, onDelete }: Props) {
       ) : (
         <div className="course-card-grid">
           {data.map((c) => {
-            const color = courseColor(c.name)
+            const color = brightCourseColor(c.name)
             const odd = c.weeks.length > 1 && c.weeks.every((w) => w % 2 === 1)
             const even = c.weeks.length > 1 && c.weeks.every((w) => w % 2 === 0)
             return (
-              <div key={c.id} className="course-card">
+              <div key={c.id} className="course-card" style={courseCardStyle}>
                 <div className="course-card-head">
-                  <span className="course-card-bar" style={{ background: color.border }} />
-                  <Typography.Text strong className="course-card-name">
+                  <span
+                    className="course-card-bar"
+                    style={{ background: color.bar, borderRadius: 99 }}
+                  />
+                  <Typography.Text strong className="course-card-name" style={{ fontWeight: 800 }}>
                     {c.name}
                   </Typography.Text>
                 </div>
@@ -76,8 +112,8 @@ export default function CourseListView({ courses, onEdit, onDelete }: Props) {
                 <div className="course-card-line">
                   <span className="course-card-label">周次</span>
                   <span style={{ wordBreak: 'break-word' }}>{formatWeeks(c.weeks)}</span>
-                  {odd && <Tag color="orange">单周</Tag>}
-                  {even && <Tag color="cyan">双周</Tag>}
+                  {odd && <span className="b-pill yellow">单周</span>}
+                  {even && <span className="b-pill blue">双周</span>}
                   <Typography.Text type="secondary" style={{ fontSize: 11 }}>
                     {c.weeks.length}周
                   </Typography.Text>
