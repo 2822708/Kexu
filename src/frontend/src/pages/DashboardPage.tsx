@@ -606,6 +606,49 @@ export default function DashboardPage() {
         </Space>
       </div>
 
+      {/* 明亮风格 · 今日概览卡（渐变 + 光影 + 完成度进度） */}
+      <div className="b-hero" style={{ marginTop: 14 }}>
+        <div className="b-hero-title">{greeting}，今天也要顺利度过</div>
+        <div className="b-hero-nums">
+          <div className="b-hero-cell">
+            <div className="v">{courses.length} 节</div>
+            <div className="k">今日课程</div>
+          </div>
+          <div className="b-hero-cell">
+            <div className="v">{pendingCount} 项</div>
+            <div className="k">待完成任务</div>
+          </div>
+          <div className="b-hero-cell">
+            <div className="v">{nextCourse ? `第 ${nextCourse.startPeriod} 节` : '无课'}</div>
+            <div className="k">下节课</div>
+          </div>
+        </div>
+        {todayTasks.length > 0 && (
+          <>
+            <div className="b-hero-prog-label">
+              <span>今日任务完成度</span>
+              <span>
+                {doneToday} / {todayTasks.length}
+              </span>
+            </div>
+            <div className="b-prog-track">
+              <div
+                className="b-prog-fill"
+                style={{ width: `${Math.round((doneToday / todayTasks.length) * 100)}%` }}
+              />
+            </div>
+          </>
+        )}
+        <div className="b-hero-next">
+          <span className="b-hero-pulse" />
+          {nextCourse
+            ? `下节 ${nextCourse.name} · 第 ${nextCourse.startPeriod}-${nextCourse.endPeriod} 节${
+                nextCourse.location ? ` · ${nextCourse.location}` : ''
+              }`
+            : '今天的课都结束了，休息一下'}
+        </div>
+      </div>
+
       {/* 三级提醒：提前 3 天 / 1 天 / 1 小时。页面关掉就不提醒了，UI 上明说。 */}
       {reminders.length > 0 && (
         <Alert

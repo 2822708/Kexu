@@ -32,6 +32,7 @@ import RecurringTodoPanel from '../components/RecurringTodoPanel'
 import type { Dayjs } from 'dayjs'
 import { todoApi } from '../api'
 import { useApp } from '../store/AppContext'
+import { useRewards } from '../store/RewardsContext'
 import type { Todo } from '../types'
 import { dayjs, formatCountdown } from '../utils/schedule'
 
@@ -40,6 +41,7 @@ type Filter = 'active' | 'completed' | 'all'
 export default function TodosPage() {
   const navigate = useNavigate()
   const { todos, recurringTodos, refreshTodos, refreshRecurring } = useApp()
+  const { earn } = useRewards()
   const [filter, setFilter] = useState<Filter>('active')
   const [tick, setTick] = useState(0)
   const [modal, setModal] = useState<{ open: boolean; todo: Todo | null }>({
@@ -113,6 +115,8 @@ export default function TodosPage() {
     try {
       await todoApi.toggle(todo.id)
       await Promise.all([refreshTodos(), refreshRecurring()])
+      // 奖励机制：仅「完成」加分，取消勾选不扣分
+      if (!todo.completed) earn('todo')
     } catch (e) {
       message.error(e instanceof Error ? e.message : '操作失败')
     }
