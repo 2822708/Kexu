@@ -6,7 +6,9 @@ import App from './App'
 import { AppProvider } from './store/AppContext'
 import { FontProvider } from './store/FontContext'
 import { ThemeProvider } from './theme'
+import { RewardsProvider } from './store/RewardsContext'
 import './index.css'
+import './styles/bright.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -15,7 +17,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <AntApp>
           <BrowserRouter>
             <AppProvider>
-              <App />
+              <RewardsProvider>
+                <App />
+              </RewardsProvider>
             </AppProvider>
           </BrowserRouter>
         </AntApp>

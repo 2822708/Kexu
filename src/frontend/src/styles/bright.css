@@ -1,0 +1,332 @@
+/* ==================== 明亮设计系统（Bright UI Layer） ====================
+ * 视觉语言：高饱和明亮色 + 大圆角 + 粗体 + 多层柔光阴影
+ * （Duolingo 式明亮风格，未使用其商标资产）
+ *
+ * 光影体系（四层，各司其职）：
+ *   --b-sh1  微浮起：小按钮/图标按压态        0 1px 2px rgba(28,28,28,.05)
+ *   --b-sh2  卡片：双层柔影，近实远虚          0 1px 2px + 0 6px 20px
+ *   --b-sh3  弹层/浮字：更深更散              0 2px 4px + 0 14px 36px
+ *   彩色面： 顶部高光 + 底部厚度（双 inset 模拟实体塑料片）
+ *   凹陷槽： inset 内阴影（进度条外槽等）
+ * ================================================================ */
+
+:root[data-theme='light'] {
+  /* 色板 */
+  --b-green: #58cc02; --b-green-deep: #46a302; --b-green-press: #3c8f01;
+  --b-green-soft: #eafcd9; --b-green-ink: #3e8a02;
+  --b-blue: #1cb0f6; --b-blue-deep: #1899d6;
+  --b-blue-soft: #dff3fe; --b-blue-ink: #1273a8;
+  --b-red: #ff4b4b; --b-red-deep: #ea2b2b;
+  --b-red-soft: #ffe9e9; --b-red-ink: #c62222;
+  --b-yellow: #ffc800; --b-yellow-deep: #e0a500;
+  --b-yellow-soft: #fff4cc; --b-yellow-ink: #9a7200;
+  --b-purple: #ce82ff; --b-purple-deep: #a568cc;
+  --b-purple-soft: #f5e6ff; --b-purple-ink: #7e3fb0;
+
+  --b-ink: #3c3c3c; --b-ink-soft: #777777; --b-ink-faint: #afafaf;
+  --b-line: #e9e9e9; --b-bg-soft: #f7f7f7;
+
+  /* 光影 */
+  --b-sh1: 0 1px 2px rgba(28, 28, 28, 0.05);
+  --b-sh2: 0 1px 2px rgba(28, 28, 28, 0.05), 0 6px 20px rgba(28, 28, 28, 0.07);
+  --b-sh3: 0 2px 4px rgba(28, 28, 28, 0.06), 0 14px 36px rgba(28, 28, 28, 0.1);
+  --b-hi-top: inset 0 2px 0 rgba(255, 255, 255, 0.38);
+  --b-hi-top-strong: inset 0 3px 0 rgba(255, 255, 255, 0.45);
+  --b-thick-bottom: inset 0 -3px 0 rgba(0, 0, 0, 0.09);
+  --b-groove: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  --b-glow-green: 0 14px 34px rgba(88, 204, 2, 0.28);
+  --b-glow-purple: 0 14px 34px rgba(160, 90, 220, 0.3);
+
+  --b-radius: 18px;
+  --b-radius-sm: 14px;
+  --b-font: 'Nunito', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system,
+    BlinkMacSystemFont, sans-serif;
+}
+
+/* 暗色模式：明亮层降饱和、阴影加深，保留结构与光影语言 */
+:root[data-theme='dark'] {
+  --b-green: #4caf0a; --b-green-deep: #3c8f01; --b-green-press: #2e6b01;
+  --b-green-soft: #22331a; --b-green-ink: #9be36b;
+  --b-blue: #1899d6; --b-blue-deep: #1273a8;
+  --b-blue-soft: #16283a; --b-blue-ink: #7ecbf5;
+  --b-red: #ea2b2b; --b-red-deep: #c62222;
+  --b-red-soft: #3a1a1a; --b-red-ink: #ff9a9a;
+  --b-yellow: #e0a500; --b-yellow-deep: #b78400;
+  --b-yellow-soft: #38301a; --b-yellow-ink: #ffd966;
+  --b-purple: #a568cc; --b-purple-deep: #7e3fb0;
+  --b-purple-soft: #2c2036; --b-purple-ink: #dfb0ff;
+
+  --b-ink: #f0ebe4; --b-ink-soft: #a8a8a8; --b-ink-faint: #777777;
+  --b-line: #3a3a3a; --b-bg-soft: #242424;
+
+  --b-sh1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --b-sh2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  --b-sh3: 0 2px 4px rgba(0, 0, 0, 0.35), 0 14px 36px rgba(0, 0, 0, 0.45);
+  --b-hi-top: inset 0 2px 0 rgba(255, 255, 255, 0.1);
+  --b-hi-top-strong: inset 0 3px 0 rgba(255, 255, 255, 0.14);
+  --b-thick-bottom: inset 0 -3px 0 rgba(0, 0, 0, 0.25);
+  --b-groove: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+  --b-glow-green: 0 14px 34px rgba(0, 0, 0, 0.4);
+  --b-glow-purple: 0 14px 34px rgba(0, 0, 0, 0.4);
+}
+
+/* ==================== 渐变概览卡（Hero） ==================== */
+.b-hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(165deg, #6fd92b 0%, var(--b-green) 55%, #4caf0a 100%);
+  border-radius: 24px;
+  padding: 22px 24px;
+  color: #fff;
+  font-family: var(--b-font);
+  font-weight: 800;
+  box-shadow: var(--b-hi-top), var(--b-thick-bottom), var(--b-glow-green);
+}
+.b-hero::before {
+  /* 卡内装饰光斑（柔和，不抢内容） */
+  content: '';
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 68%);
+  top: -80px;
+  right: -50px;
+  pointer-events: none;
+}
+.b-hero-title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  opacity: 0.92;
+}
+.b-hero-nums {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.b-hero-cell {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.17);
+  border-radius: var(--b-radius-sm);
+  padding: 10px 14px;
+  box-shadow: var(--b-hi-top), inset 0 -2px 0 rgba(0, 0, 0, 0.06);
+}
+.b-hero-cell .v {
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+.b-hero-cell .k {
+  font-size: 11.5px;
+  font-weight: 800;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+.b-hero-prog-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  font-weight: 900;
+  margin: 16px 0 7px;
+  opacity: 0.95;
+}
+.b-hero-next {
+  margin-top: 13px;
+  font-size: 13.5px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.b-hero-pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff;
+  flex: none;
+  box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+  animation: b-ring 1.6s infinite;
+}
+@keyframes b-ring {
+  70% {
+    box-shadow: 0 0 0 9px rgba(255, 255, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+/* ==================== 进度条（凹陷槽 + 液体填充） ==================== */
+.b-prog-track {
+  height: 14px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.14);
+  box-shadow: var(--b-groove);
+  overflow: hidden;
+}
+.b-prog-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 99px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.05) 55%), #fff;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* 亮底上的绿色填充版 */
+.b-prog-track.on-light {
+  background: var(--b-line);
+}
+.b-prog-fill.on-light {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 60%),
+    var(--b-green);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* ==================== 3D 按钮 ==================== */
+.b-btn-3d {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  font-family: var(--b-font);
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: #fff;
+  padding: 11px 22px;
+  border-radius: var(--b-radius-sm);
+  cursor: pointer;
+  background: var(--b-green);
+  box-shadow: var(--b-thick-bottom), var(--b-sh1);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.b-btn-3d:active {
+  transform: translateY(3px);
+  box-shadow: var(--b-sh1);
+}
+.b-btn-3d.blue {
+  background: var(--b-blue);
+}
+.b-btn-3d.purple {
+  background: var(--b-purple);
+}
+
+/* ==================== 顶栏徽章（奖励机制） ==================== */
+.b-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 99px;
+  background: var(--bg-card);
+  border: 2px solid var(--b-line);
+  box-shadow: var(--b-sh1);
+  font-family: var(--b-font);
+  font-weight: 900;
+  font-size: 14px;
+  color: var(--b-ink);
+  user-select: none;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.b-badge:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+.b-badge .ico {
+  font-size: 16px;
+  line-height: 1;
+}
+.b-badge .v {
+  font-size: 15px;
+}
+.b-badge .lv {
+  font-size: 11px;
+  color: var(--b-ink-faint);
+  font-weight: 800;
+}
+.b-badge.streak .v {
+  color: var(--b-yellow-ink);
+}
+.b-badge.xp .v {
+  color: var(--b-green-ink);
+}
+.b-badge.bump {
+  animation: b-bump 0.35s ease;
+}
+@keyframes b-bump {
+  40% {
+    transform: scale(1.12) rotate(-4deg);
+  }
+}
+
+/* ==================== 奖励浮字 ==================== */
+.b-reward-float {
+  position: fixed;
+  top: 76px;
+  left: 50%;
+  transform: translate(-50%, 16px);
+  z-index: 1050;
+  pointer-events: none;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border-radius: 99px;
+  padding: 10px 22px;
+  box-shadow: var(--b-sh3);
+  font-family: var(--b-font);
+  font-weight: 900;
+  border: 2px solid var(--b-yellow);
+  transition: opacity 0.25s, transform 0.25s cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+.b-reward-float.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.b-reward-float .amt {
+  color: var(--b-yellow-ink);
+  font-size: 19px;
+  font-weight: 900;
+}
+.b-reward-float .lbl {
+  color: var(--b-ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* ==================== 小药丸标签 ==================== */
+.b-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--b-font);
+  font-weight: 900;
+  font-size: 12.5px;
+  padding: 4px 12px;
+  border-radius: 99px;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+}
+.b-pill.green {
+  background: var(--b-green-soft);
+  color: var(--b-green-ink);
+}
+.b-pill.blue {
+  background: var(--b-blue-soft);
+  color: var(--b-blue-ink);
+}
+.b-pill.yellow {
+  background: var(--b-yellow-soft);
+  color: var(--b-yellow-ink);
+}
+.b-pill.purple {
+  background: var(--b-purple-soft);
+  color: var(--b-purple-ink);
+}
+.b-pill.red {
+  background: var(--b-red-soft);
+  color: var(--b-red-ink);
+}

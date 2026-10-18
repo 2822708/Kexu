@@ -1,25 +1,26 @@
 /* ==================== TangentBlog Design System ==================== */
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
 
-/* ---------- Light Mode ---------- */
+/* ---------- Light Mode（明亮风格） ---------- */
 :root[data-theme='light'] {
-  --bg-main: #f5f0eb;
-  --bg-sidebar: #fafaf7;
-  --bg-topbar: #2d2d2d;
+  --bg-main: #f7f7f7;
+  --bg-sidebar: #ffffff;
+  --bg-topbar: #ffffff;
   --bg-card: #ffffff;
-  --bg-footer: #f0ebe4;
+  --bg-footer: #ffffff;
   --bg-code: #2d2d2d;
-  --accent: #f8c3cd;
-  --accent-hover: #f0b8c4;
-  --accent-green: #a8e6cf;
-  --text-primary: #2d2d2d;
-  --text-secondary: #888888;
-  --text-muted: #666666;
-  --text-on-dark: #ffffff;
-  --text-on-accent: #2d2d2d;
-  --border-dark: #2d2d2d;
-  --border-light: #dddddd;
-  --divider: #d0d0d0;
+  --accent: #58cc02;
+  --accent-hover: #46a302;
+  --accent-green: #58cc02;
+  --text-primary: #3c3c3c;
+  --text-secondary: #777777;
+  --text-muted: #999999;
+  --text-on-dark: #3c3c3c;
+  --text-on-accent: #ffffff;
+  --border-dark: #e9e9e9;
+  --border-light: #efefef;
+  --divider: #e9e9e9;
 }
 
 /* ---------- Dark Mode ---------- */
@@ -50,10 +51,11 @@
 body {
   margin: 0;
   font-family:
-    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+    'Nunito', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system,
+    BlinkMacSystemFont, sans-serif !important;
   background: var(--bg-main) !important;
   color: var(--text-primary) !important;
-  font-size: calc(13px * var(--app-font-scale, 1));
+  font-size: calc(14px * var(--app-font-scale, 1));
   line-height: 1.5;
 }
 #root {
@@ -83,14 +85,14 @@ body {
 }
 
 .app-topbar {
-  height: 48px;
+  height: 52px;
   background: var(--bg-topbar);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
   flex-shrink: 0;
-  border-bottom: 1px solid #000;
+  border-bottom: 2px solid var(--divider);
 }
 .app-topbar-title {
   color: var(--text-on-dark);
@@ -108,14 +110,14 @@ body {
 }
 
 .icon-btn-round {
-  width: 32px;
-  height: 32px;
-  border-radius: 16px;
+  width: 34px;
+  height: 34px;
+  border-radius: 17px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border: 1px solid #888;
+  border: 2px solid var(--border-dark);
   background: var(--bg-card);
   color: var(--text-primary);
   font-size: 16px;
