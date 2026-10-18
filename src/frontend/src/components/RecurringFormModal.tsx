@@ -197,18 +197,79 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
   }
 
   return (
-    <Modal
-      open={open}
-      maskClosable={false}
-      title={rule ? '编辑循环任务' : '新建循环任务'}
-      onCancel={onCancel}
-      onOk={handleOk}
-      confirmLoading={saving}
-      okText="保存"
-      cancelText="取消"
-      width={680}
-      destroyOnHidden
-    >
+    <>
+      <style>{`
+        .b-recurring-modal .ant-modal-content {
+          border-radius: var(--b-radius);
+          box-shadow: var(--b-sh3);
+          overflow: hidden;
+        }
+        .b-recurring-modal .ant-modal-header {
+          border-bottom: 2px solid var(--b-line);
+          margin-bottom: 4px;
+        }
+        .b-recurring-modal .ant-modal-title {
+          font-family: var(--b-font);
+          font-weight: 900;
+          font-size: 17px;
+        }
+        .b-recurring-modal .ant-modal-footer {
+          border-top: 2px solid var(--b-line);
+          margin-top: 4px;
+          padding-top: 14px;
+        }
+        .b-recurring-modal .ant-form-item-label > label {
+          font-weight: 800;
+        }
+        .b-recurring-modal .ant-alert {
+          border: none !important;
+          border-radius: var(--b-radius-sm) !important;
+        }
+        .b-recurring-modal .ant-alert-info {
+          background: var(--b-blue-soft) !important;
+        }
+        .b-recurring-modal .ant-alert-info .ant-alert-icon {
+          color: var(--b-blue-ink) !important;
+        }
+        .b-recurring-modal .ant-alert-error {
+          background: var(--b-red-soft) !important;
+        }
+        .b-recurring-modal .ant-alert-error .ant-alert-icon {
+          color: var(--b-red-ink) !important;
+        }
+        .b-recurring-modal .ant-radio-button-wrapper {
+          font-weight: 800;
+        }
+        .b-recurring-modal .ant-radio-button-wrapper-checked {
+          box-shadow: var(--b-hi-top), var(--b-thick-bottom);
+          font-weight: 900;
+        }
+        .b-recurring-modal textarea.script-editor {
+          background: var(--b-bg-soft);
+          border: 2px solid var(--b-line);
+          border-radius: var(--b-radius-sm);
+          box-shadow: var(--b-groove);
+        }
+        .b-recurring-modal code {
+          background: var(--b-bg-soft);
+          border-radius: 6px;
+          padding: 1px 6px;
+          font-size: 12px;
+        }
+      `}</style>
+      <Modal
+        open={open}
+        maskClosable={false}
+        title={rule ? '编辑循环任务' : '新建循环任务'}
+        onCancel={onCancel}
+        onOk={handleOk}
+        confirmLoading={saving}
+        okText="保存"
+        cancelText="取消"
+        width={680}
+        className="b-recurring-modal"
+        destroyOnHidden
+      >
       <Form form={form} layout="vertical" requiredMark={false} onValuesChange={refreshPreview}>
         <Form.Item
           name="title"
@@ -299,6 +360,7 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
           >
             <Input.TextArea
               rows={14}
+              className="script-editor"
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
                 fontSize: 13,
@@ -347,6 +409,7 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
           <Switch />
         </Form.Item>
       </Form>
-    </Modal>
+      </Modal>
+    </>
   )
 }
