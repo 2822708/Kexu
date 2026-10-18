@@ -17,6 +17,8 @@ import { useApp } from '../store/AppContext'
 import { useTheme } from '../theme'
 import { formatWeekInfo } from '../utils/schedule'
 import QuickImportWidget from './QuickImportWidget'
+import RewardsBadge from './RewardsBadge'
+import RewardFloat from './RewardFloat'
 
 const NAV_ITEMS = [
   { key: '/', icon: <HomeOutlined />, label: '首页' },
@@ -77,10 +79,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
         <div className="app-topbar-actions">
           {weekInfo && (
-            <Tag style={{ background: 'transparent', color: '#f0ebe4', border: '1px solid #888' }}>
+            <Tag
+              style={{
+                background: 'transparent',
+                color: 'var(--text-secondary)',
+                border: '2px solid var(--border-dark)',
+                borderRadius: 99,
+                fontWeight: 800,
+              }}
+            >
               {weekInfo}
             </Tag>
           )}
+          <RewardsBadge />
           <Tooltip title="立即同步">
             <div
               className="icon-btn-round"
@@ -182,6 +193,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <span className="app-footer-text">˶ˊᜊˋ˶</span>
       </footer>
       <QuickImportWidget />
+      <RewardFloat />
     </div>
   )
 }
