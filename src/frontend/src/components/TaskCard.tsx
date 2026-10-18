@@ -1,7 +1,7 @@
-import { Space, Tag, Typography } from 'antd'
+import { Space, Typography } from 'antd'
 import type { Dayjs } from 'dayjs'
 import { dayjs, formatCountdown } from '../utils/schedule'
-import { taskPriorityColor, taskPriorityLabel, taskTypeLabel } from '../utils/task'
+import { taskPriorityLabel, taskTypeLabel } from '../utils/task'
 import type { Task, TaskStatus } from '../types'
 
 interface TaskCardProps {
@@ -15,6 +15,26 @@ interface TaskCardProps {
 
 const OPEN_STATUSES: TaskStatus[] = ['PENDING', 'IN_PROGRESS']
 
+/** 中性药丸样式（无彩色语义的标签：类型 / 已取消） */
+const NEUTRAL_PILL = { background: 'var(--b-bg-soft)', color: 'var(--b-ink-soft)' }
+
+/** 调用方传入的 antd Tag 色名 → 明亮药丸变体（仅影响视觉，不改 props 语义） */
+function hintPillVariant(color: string | undefined, overdue: boolean): string {
+  switch (color) {
+    case 'red':
+    case 'volcano':
+      return 'red'
+    case 'orange':
+      return 'yellow'
+    case 'blue':
+      return 'blue'
+    case 'default':
+      return 'neutral'
+    default:
+      return overdue ? 'red' : 'blue'
+  }
+}
+
 /**
  * 任务卡片（AI Campus Agent V1.0 Step 5）。
  * Dashboard 今日任务/48h 截止区与后续任务管理页共用：
@@ -26,31 +46,42 @@ export default function TaskCard({ task, now, hint, hintColor }: TaskCardProps) 
   const overdue =
     !settled && task.deadline != null && dayjs(task.deadline).isBefore(current)
 
+  // 优先级 1 高 / 2 中 / 3 低 → 明亮药丸色系（原 antd Tag 红/橙/默认）
+  const priorityVariant = task.priority === 1 ? 'red' : task.priority === 3 ? 'blue' : 'yellow'
+  const hintVariant = hintPillVariant(hintColor, overdue)
+
   return (
     <div
       style={{
-        padding: '10px 12px',
-        borderRadius: 8,
-        border: '1px solid var(--border-light)',
+        padding: '12px 14px',
+        borderRadius: 'var(--b-radius-sm)',
+        border: '1px solid var(--b-line)',
         background: 'var(--bg-card)',
+        boxShadow: 'var(--b-sh1)',
         opacity: settled ? 0.55 : 1,
       }}
     >
       <Space size={6} wrap style={{ marginBottom: 4 }}>
-        <Tag color={taskPriorityColor(task.priority)} style={{ marginInlineEnd: 0 }}>
-          {taskPriorityLabel(task.priority)}优先级
-        </Tag>
-        <Tag style={{ marginInlineEnd: 0 }}>{taskTypeLabel(task.type)}</Tag>
+        <span className={`b-pill ${priorityVariant}`}>{taskPriorityLabel(task.priority)}优先级</span>
+        <span className="b-pill" style={NEUTRAL_PILL}>
+          {taskTypeLabel(task.type)}
+        </span>
         {hint && (
-          <Tag color={hintColor ?? (overdue ? 'red' : 'blue')} style={{ marginInlineEnd: 0 }}>
+          <span
+            className={hintVariant === 'neutral' ? 'b-pill' : `b-pill ${hintVariant}`}
+            style={hintVariant === 'neutral' ? NEUTRAL_PILL : undefined}
+          >
             {hint}
-          </Tag>
+          </span>
         )}
-        {settled && (
-          <Tag style={{ marginInlineEnd: 0 }}>
-            {task.status === 'DONE' ? '已完成' : '已取消'}
-          </Tag>
-        )}
+        {settled &&
+          (task.status === 'DONE' ? (
+            <span className="b-pill green">已完成</span>
+          ) : (
+            <span className="b-pill" style={NEUTRAL_PILL}>
+              已取消
+            </span>
+          ))}
       </Space>
       <div>
         <Typography.Text strong delete={settled}>

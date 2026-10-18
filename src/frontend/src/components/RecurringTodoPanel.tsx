@@ -7,7 +7,6 @@ import {
   Space,
   Switch,
   Table,
-  Tag,
   Tooltip,
   Typography,
   message,
@@ -86,11 +85,15 @@ export default function RecurringTodoPanel() {
           <Typography.Text strong={rule.enabled} type={rule.enabled ? undefined : 'secondary'}>
             {title}
           </Typography.Text>
-          {!rule.enabled && <Tag>已停用</Tag>}
-          {rule.frequency === 'CUSTOM' && <Tag color="geekblue">自定义</Tag>}
+          {!rule.enabled && (
+            <span className="b-pill" style={{ background: 'var(--b-bg-soft)', color: 'var(--b-ink-soft)' }}>
+              已停用
+            </span>
+          )}
+          {rule.frequency === 'CUSTOM' && <span className="b-pill blue">自定义</span>}
           {rule.chainAfterComplete && (
             <Tooltip title="完成当期后立即生成下一期">
-              <Tag color="purple">连续</Tag>
+              <span className="b-pill purple">连续</span>
             </Tooltip>
           )}
         </Space>
@@ -161,7 +164,34 @@ export default function RecurringTodoPanel() {
 
   return (
     <>
+      <style>{`
+        .recurring-panel.ant-card {
+          border: 1px solid var(--b-line) !important;
+          border-radius: var(--b-radius) !important;
+          box-shadow: var(--b-sh1);
+        }
+        .recurring-panel .ant-card-body { background: var(--b-bg-soft); }
+        .recurring-panel .ant-table { border: none !important; border-radius: var(--b-radius-sm) !important; }
+        .recurring-panel .ant-table-container table,
+        .recurring-panel table.ant-table-fixed {
+          border-collapse: separate !important;
+          border-spacing: 0 8px !important;
+        }
+        .recurring-panel .ant-table-thead > tr > th { border-bottom: none !important; }
+        .recurring-panel .ant-table-tbody > tr.ant-table-row > td {
+          background: var(--bg-card);
+          border-bottom: none !important;
+          box-shadow: var(--b-sh2);
+        }
+        .recurring-panel .ant-table-tbody > tr.ant-table-row > td:first-child {
+          border-radius: var(--b-radius-sm) 0 0 var(--b-radius-sm);
+        }
+        .recurring-panel .ant-table-tbody > tr.ant-table-row > td:last-child {
+          border-radius: 0 var(--b-radius-sm) var(--b-radius-sm) 0;
+        }
+      `}</style>
       <Card
+        className="recurring-panel"
         size="small"
         title={`循环任务（${recurringTodos.length}）`}
         extra={

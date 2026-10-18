@@ -16,7 +16,6 @@ import {
   Space,
   Statistic,
   Tabs,
-  Tag,
   Tooltip,
   Typography,
   message,
@@ -135,17 +134,25 @@ export default function TodosPage() {
   const todoTab = (
     <>
       <div className="page-header">
-        <Space size={24} wrap>
-          <Statistic title="待完成" value={stats.active} />
+        <Space className="todos-stats" size={24} wrap>
+          <Statistic
+            title="待完成"
+            value={stats.active}
+            valueStyle={{ color: 'var(--b-green-ink)', fontWeight: 900 }}
+          />
           <Statistic
             title="24 小时内到期"
             value={stats.soon}
-            valueStyle={{ color: stats.soon > 0 ? '#d46b08' : undefined }}
+            valueStyle={
+              stats.soon > 0 ? { color: 'var(--b-yellow-ink)', fontWeight: 900 } : undefined
+            }
           />
           <Statistic
             title="已逾期"
             value={stats.overdue}
-            valueStyle={{ color: stats.overdue > 0 ? '#cf1322' : undefined }}
+            valueStyle={
+              stats.overdue > 0 ? { color: 'var(--b-red-ink)', fontWeight: 900 } : undefined
+            }
           />
         </Space>
         <Space wrap>
@@ -158,17 +165,23 @@ export default function TodosPage() {
               { value: 'all', label: '全部' },
             ]}
           />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal(null)}>
+          <button type="button" className="b-btn-3d" onClick={() => openModal(null)}>
+            <PlusOutlined />
             新建待办
-          </Button>
+          </button>
         </Space>
       </div>
 
       <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
         倒计时仅在页面内显示；当前版本不会发送系统通知，关闭页面后也不会弹窗提醒。
       </Typography.Paragraph>
-      <Card style={{ marginTop: 16 }} styles={{ body: { padding: '4px 12px' } }}>
+      <Card
+        className="todos-list-card"
+        style={{ marginTop: 16 }}
+        styles={{ body: { padding: 0 } }}
+      >
         <List
+          className="todos-list"
           dataSource={visible}
           locale={{ emptyText: <Empty description="暂无待办" /> }}
           renderItem={(todo) => {
@@ -177,6 +190,7 @@ export default function TodosPage() {
             const urgent = !todo.completed && !overdue && ddl.diff(now, 'hour') < 24
             return (
               <List.Item
+                className={todo.completed ? 'todo-done' : undefined}
                 actions={[
                   <Button
                     key="edit"
@@ -219,24 +233,26 @@ export default function TodosPage() {
                               : '来自循环任务（规则已删除）'
                           }
                         >
-                          <Tag icon={<RetweetOutlined />} color="blue">
+                          <span className="b-pill blue">
+                            <RetweetOutlined />
                             循环
-                          </Tag>
+                          </span>
                         </Tooltip>
                       )}
                       {todo.examId !== null && (
                         <Tooltip title="来自考试：ddl=考试开始时间，考试结束后自动完成">
-                          <Tag icon={<ScheduleOutlined />} color="red">
+                          <span className="b-pill red">
+                            <ScheduleOutlined />
                             考试
-                          </Tag>
+                          </span>
                         </Tooltip>
                       )}
                       {todo.completed ? (
-                        <Tag color="green">已完成</Tag>
+                        <span className="b-pill green">已完成</span>
                       ) : (
-                        <Tag color={overdue ? 'red' : urgent ? 'orange' : 'blue'}>
+                        <span className={`b-pill ${overdue ? 'red' : urgent ? 'yellow' : 'blue'}`}>
                           {overdue ? '已逾期' : formatCountdown(todo.ddl, now)}
-                        </Tag>
+                        </span>
                       )}
                     </Space>
                   }
@@ -252,6 +268,31 @@ export default function TodosPage() {
 
   return (
     <>
+      <style>{`
+        .todos-stats .ant-statistic-content { font-weight: 900 !important; }
+        .todos-list-card.ant-card {
+          border: none !important;
+          border-radius: var(--b-radius) !important;
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+        .todos-list .ant-list-item {
+          padding: 12px 14px !important;
+          margin-bottom: 10px;
+          border-bottom: none !important;
+          background: var(--bg-card);
+          border-radius: var(--b-radius);
+          box-shadow: var(--b-sh2);
+        }
+        .todos-list .ant-list-item:last-child { margin-bottom: 0; }
+        .todos-list .ant-list-item-meta-title { font-weight: 800; }
+        .todos-list .ant-list-item.todo-done {
+          background: linear-gradient(180deg, var(--b-bg-soft), var(--b-green-soft));
+        }
+        @media (max-width: 640px) {
+          .todos-list .ant-list-item { padding: 10px 12px !important; }
+        }
+      `}</style>
       <Alert
         type="info"
         showIcon
