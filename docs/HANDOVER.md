@@ -290,6 +290,25 @@ npm run build
 
 ## 5. 会话日志（倒序，最新在最上）
 
+### 2026-10-19 · WorkBuddy · GitHub 推送打通（SSH 公钥注册生效），36 个提交全部上远端
+
+**凭据链终态（本轮实测）**：用户把 SSH 公钥加到了 `github.com/settings/keys`，`ssh -T git@github.com`
+返回 `Hi 2552555!`——**只读凭据的时代结束**。
+
+**踩坑（值得记住）**：`ssh -T` 认证成功，但 `git push` 仍然 `Permission denied (publickey)`。
+原因是 git 的 ssh 只默认加载 `id_ed25519` / `id_rsa`，**不认非默认命名的密钥**
+（本项目是 `id_ed25519_github`）。解决：`git config core.sshCommand "ssh -i /root/.ssh/id_ed25519_github"`，
+已写入仓库配置，`/workspace/push-to-github.sh` 的 SSH 分支也会兜底设置。
+
+**推送结果**：
+- `feature/duolingo-style-ui` → 新分支推送成功，**36 个提交**（HEAD `c110ac9`），含 UI 明亮化全量、
+  信息处理中心、桌面封装修复、PWA 化、多 LLM provider 基建
+- `main` 本地无独有提交（此前那 9 个已由 PR #1 合入远端），已 `branch -f main origin/main` 对齐到 `129e721`
+- `origin` 已切到 SSH URL；HTTPS 通道的只读凭据（IDE 助手 token = metadata:read）不再用于推送
+- 远端现存分支：`main` / `feature/duolingo-style-ui` / `fix/memory-order-and-version-docs`
+
+**遗留**：feature 尚未合并回 main（产品决策，见 PR 链接）。标签 v1.0 本地前移、远端停在旧值，未强推。
+
 ### 2026-10-19 · WorkBuddy · 多 LLM provider + 场景分级路由 + 故障降级（6.1 #2/#3/#6），182/182 绿
 
 沿用「先把页面做完」之后的基建推进。用户一句「继续」，取 HANDOVER 6.1 里剩余且能独立交付的一条链：
@@ -737,7 +756,7 @@ Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings`
 |---|---|---|
 | — | **人工走查（浏览器 / 桌面端）** | V1.0 功能已全部收口，唯一未验证项是 UI 交互与桌面端打包；**需用户在本机执行**：`npm run dev` 走一遍首页/聊天/设置，再做桌面冒烟（沙箱无法做人工走查） |
 | — | **用 REA 核对线上部署版** | `compare_application_versions` 可对比 `timetable.zozovip.work` 与本地 build。工具已验证可用（见第 5 节 / `/workspace/REA-逆向验证报告.md`），待用户决定是否接入 MCP 常驻 |
-| — | **推送本地全部提交到 GitHub**（截至本文撰写为 9 个：`3a0623f` P0-1、`601aaf9` 通知箱/分时 UI、`f4840b6` 引导页/模块自定义、`e8dbca4` P0-2、`e55b477` 身份修复、`5b02473`/`ce5aaea`/`39cfd34` HANDOVER 文档、收尾提交；实时数量 `git rev-list --count origin/main..main`）。remote `origin` 已配好，缺的是一个 `ghp_` / `github_pat_` 开头的 **PAT**（用户 10-18 提供的 `sk-` 是 DeepSeek Key，推不了 GitHub）。拿到后 `git push origin main` 即可，CI 会自动跑 |
+| — | ~~**推送本地全部提交到 GitHub**~~ | ✅ **已完成**（2026-10-19）。SSH 公钥注册生效，`feature/duolingo-style-ui` 36 个提交全部上远端（HEAD `c110ac9`），`main` 已对齐 `129e721`。**遗留**：feature 合并回 main 的 PR 未建；标签 v1.0 未强推。注意 git 的 ssh 不认非默认命名密钥，`core.sshCommand` 已配置 |
 | — | **轮换 DeepSeek API Key** | 该 Key 已在本轮对话中明文出现。验收已完成，建议用户在 DeepSeek 控制台作废旧 Key 换新，避免泄露风险 |
 
 ### 6.6 已完成的旧待办（留档）
