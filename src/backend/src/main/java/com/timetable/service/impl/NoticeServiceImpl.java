@@ -83,7 +83,7 @@ public class NoticeServiceImpl implements NoticeService {
         if (template == null || template.body().isBlank()) {
             throw new BusinessException(503, "通知提炼能力暂未配置，请稍后重试");
         }
-        LlmClient client = llmClients.active();
+        LlmClient client = llmClients.forScene(LlmUsage.SCENE_INBOX);
         if (!client.isConfigured()) {
             throw new BusinessException(503, "AI 尚未配置，暂时不能提炼通知");
         }

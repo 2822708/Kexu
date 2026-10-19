@@ -174,7 +174,7 @@ public class DailyPlanServiceImpl implements DailyPlanService {
             throw new BusinessException(500, "每日计划模板缺失，无法生成计划");
         }
         // 未配置 / 全 provider 不可用时由注册表统一抛 503（与聊天、抽取一致的降级文案）
-        LlmClient client = llmClients.active();
+        LlmClient client = llmClients.forScene(LlmUsage.SCENE_PLAN);
 
         Long effectiveScheduleId = scheduleId;
         Schedule schedule = null;

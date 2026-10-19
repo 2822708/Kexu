@@ -39,6 +39,33 @@ app:
     # 未来新增 provider（如 OpenAI/通义）只需实现 LlmClient 并在此切换，业务代码零改动。
     # 未配置或不可用时会自动回退到任一已配置的 provider，全部不可用则返回 503。
     active-provider: ${APP_LLM_ACTIVE_PROVIDER:deepseek}
+    # ------------------------------------------------------------------
+    # 多 provider + 分级路由 + 故障降级（成本治理 6.1）
+    # 默认三项都是空的，行为与 V1.0 完全一致（只有 DeepSeek）。想要能力就显式配。
+    # ------------------------------------------------------------------
+    # providers：除 DeepSeek 外再挂任意数量的 OpenAI 兼容服务（智谱 GLM / 通义 /
+    # 豆包 / Moonshot / 自建网关）。键名即 providerId。**api-key 留空 = 未配置**，
+    # 不参与激活也不参与降级，避免「配了地址没配 Key」的半吊子配置拖累主链路。
+    # providers:
+    #   glm:
+    #     base-url: https://open.bigmodel.cn/api/paas/v4
+    #     model: glm-4-flash
+    #     api-key: ${GLM_API_KEY:}
+    #     timeout-seconds: 120
+    #     idle-timeout-seconds: 30
+    #     max-tokens: 8192
+    #     temperature: 0.2
+    # routes：按场景指定 provider，把轻活切到便宜的 flash 级模型、重活留在主力模型。
+    # 未列出的场景走 active-provider。key 取 CHAT / PLAN / EXTRACT / OCR / INBOX /
+    # QUERY / REFINE / PARSE_HTML（大小写不敏感）。
+    # routes:
+    #   EXTRACT: glm
+    #   OCR: glm
+    # fallback：主 provider 调用失败时的备用链，按顺序各试一次。
+    # 流式只在「一个字都还没吐出去」时才切换，避免前端收到两份正文。
+    # fallback:
+    #   - glm
+    fallback-enabled: ${APP_LLM_FALLBACK_ENABLED:true}
     # 单价配置（成本治理 P0-1）。统计页的金额是**估算**，按这里的单价算。
     # 模型价格一定会变，所以做成配置而非硬编码；用环境变量覆盖便于不改代码调价：
     #   LLM_PRICE_INPUT / LLM_PRICE_OUTPUT / LLM_PRICE_INPUT_DEEPSEEK_FLASH

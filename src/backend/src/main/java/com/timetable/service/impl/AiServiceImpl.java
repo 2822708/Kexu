@@ -744,7 +744,7 @@ public class AiServiceImpl implements AiService {
         List<Task> allTasks = taskService.list(apiKey);
 
         // 未配置任何可用 provider 时立刻失败，避免白跑一轮数据库写入
-        LlmClient client = llmClients.active();
+        LlmClient client = llmClients.forScene(LlmUsage.SCENE_CHAT);
 
         // 指纹必须与即将写进 Prompt / _before 的数据取自同一时刻，且必须在调用模型之前算好。
         // 若等到落库时再查库现算，模型思考期间的数据变化就会进入基线，使过期提案通过复查。
@@ -2037,7 +2037,7 @@ public class AiServiceImpl implements AiService {
 
         String content = html.length() > HTML_MAX_LENGTH ? html.substring(0, HTML_MAX_LENGTH) : html;
 
-        LlmClient client = llmClients.active();
+        LlmClient client = llmClients.forScene(LlmUsage.SCENE_PARSE_HTML);
         List<LlmClient.Message> payload = new ArrayList<>();
         payload.add(new LlmClient.Message("system", AiPromptBuilder.buildParseHtmlSystemPrompt(schedule, periods)));
         payload.add(new LlmClient.Message("user", content));
@@ -2115,7 +2115,7 @@ public class AiServiceImpl implements AiService {
         if (template == null || template.body().isBlank()) {
             throw new BusinessException(503, "任务抽取能力暂未配置，请稍后重试");
         }
-        LlmClient client = llmClients.active();
+        LlmClient client = llmClients.forScene(LlmUsage.SCENE_EXTRACT);
         if (!client.isConfigured()) {
             throw new BusinessException(503, "AI 尚未配置，暂时不能抽取任务");
         }
@@ -2278,7 +2278,7 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public String parseImageText(String imageDataUrl) {
-        LlmClient client = llmClients.active();
+        LlmClient client = llmClients.forScene(LlmUsage.SCENE_OCR);
         if (!client.isConfigured()) {
             throw new BusinessException(503, "AI 尚未配置，暂时不能识别截图");
         }
@@ -2363,7 +2363,7 @@ public class AiServiceImpl implements AiService {
             result.setNote("查询规划能力暂未配置，请稍后重试");
             return result;
         }
-        LlmClient client = llmClients.active();
+        LlmClient client = llmClients.forScene(LlmUsage.SCENE_QUERY);
         if (!client.isConfigured()) {
             throw new BusinessException(503, "AI 尚未配置，暂时不能生成查询计划");
         }
