@@ -12,6 +12,7 @@ export interface RestorePreview {
   snapshot: LogicalSnapshot
   expectedRevision: number
   receiverDatasetId: string
+  receiverGeneration: string
   counts: ReturnType<typeof snapshotCounts>
 }
 
@@ -43,6 +44,7 @@ export async function previewRestore(input: unknown): Promise<RestorePreview> {
     snapshot,
     expectedRevision: current.revision,
     receiverDatasetId: current.datasetId,
+    receiverGeneration: current.dataGeneration,
     counts: snapshotCounts(snapshot),
   }
 }
@@ -51,6 +53,7 @@ export async function restoreConfirmed(preview: RestorePreview): Promise<void> {
   const current = await readLocalState()
   if (
     current.datasetId !== preview.receiverDatasetId ||
+    current.dataGeneration !== preview.receiverGeneration ||
     current.revision !== preview.expectedRevision
   )
     throw new Error('预览后本地数据已改变，请重新预览并确认恢复')

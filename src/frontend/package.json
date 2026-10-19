@@ -27,7 +27,8 @@
     "test:local-ai": "node --test scripts/test-local-ai.mjs",
     "mock:ai": "node scripts/mock-openai.mjs",
     "eval:ai": "node scripts/eval-local-ai.mjs",
-    "test:local": "node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs",
+    "test:local": "node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs scripts/test-daily-core.mjs scripts/test-daily-review.mjs",
+    "test:daily": "node --test scripts/test-daily-core.mjs scripts/test-daily-review.mjs",
     "test:timetable-layout": "node --test scripts/test-timetable-layout.mjs"
   },
   "dependencies": {

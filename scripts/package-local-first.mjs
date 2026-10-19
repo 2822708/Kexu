@@ -79,6 +79,7 @@ export async function createLocalFirstPackage({
       "tangent-timetable-local-v1",
       "tangent-private-backup-v1",
       "tangent-encrypted-snapshot",
+      "core-with-daily-v2",
     ].map((marker) => [marker, false]),
   );
   for (const file of webFiles) {
@@ -193,9 +194,9 @@ export async function createLocalFirstPackage({
     createdAt: new Date().toISOString(),
     origin: "https://timetable.zozovip.work",
     dataOwnership: "device-indexeddb",
-    localSchemaVersions: [1],
-    snapshotVersions: [1],
-    snapshotScope: "core-without-ai-history-v1",
+    localSchemaVersions: [2],
+    snapshotVersions: [1, 2],
+    snapshotScope: "core-with-daily-v2",
     sourceCommit,
     sourceDirty,
     files: entries,

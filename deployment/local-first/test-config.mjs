@@ -15,6 +15,8 @@ import { checkPublicSite } from "./healthcheck.mjs";
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(directory, "..", "..");
 const read = (name) => readFile(path.join(directory, name), "utf8");
+const currentLocalBuild =
+  "/* tangent-timetable-local-v1 tangent-private-backup-v1 tangent-encrypted-snapshot core-with-daily-v2 */";
 function balancedConfig(value) {
   let level = 0,
     quote = null,
@@ -166,7 +168,7 @@ async function fixture() {
   await writeFile(path.join(web, "sw.js"), "// fixture offline resources");
   await writeFile(
     path.join(web, "assets", "index.js"),
-    "/* tangent-timetable-local-v1 tangent-private-backup-v1 tangent-encrypted-snapshot */",
+    currentLocalBuild,
   );
   await writeFile(
     path.join(web, "assets", "pdf.worker.mjs"),
@@ -218,6 +220,12 @@ test("pure-Node packager produces a checksummed standalone directory and detects
       (await verifyReleasePackage(f.output)).version,
       "2026.10.18-test.1",
     );
+    const manifest = JSON.parse(
+      await readFile(path.join(f.output, "release-manifest.json"), "utf8"),
+    );
+    assert.deepEqual(manifest.localSchemaVersions, [2]);
+    assert.deepEqual(manifest.snapshotVersions, [1, 2]);
+    assert.equal(manifest.snapshotScope, "core-with-daily-v2");
     await assert.rejects(
       createLocalFirstPackage({
         projectRoot: f.root,
@@ -235,7 +243,7 @@ test("pure-Node packager produces a checksummed standalone directory and detects
     await f.close();
   }
 });
-test("packager refuses obsolete online builds and source files that could contain private material", async () => {
+test("packager refuses obsolete online/schema1 builds and source files that could contain private material", async () => {
   const f = await fixture();
   try {
     await writeFile(
@@ -254,6 +262,15 @@ test("packager refuses obsolete online builds and source files that could contai
       path.join(f.web, "assets", "index.js"),
       "/* tangent-timetable-local-v1 tangent-private-backup-v1 tangent-encrypted-snapshot */",
     );
+    await assert.rejects(
+      createLocalFirstPackage({
+        projectRoot: f.root,
+        output: f.output,
+        version: "v1",
+      }),
+      /local-first/,
+    );
+    await writeFile(path.join(f.web, "assets", "index.js"), currentLocalBuild);
     await writeFile(path.join(f.web, "account.key"), "fixture-not-real");
     await assert.rejects(
       createLocalFirstPackage({

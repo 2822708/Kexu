@@ -1,6 +1,6 @@
 # 课序 · 本地主数据 PWA
 
-2026-10-19课序UI开发验收版。分支 `feature/local-first-snapshots`。原生 Android 继续暂停。[新界面落实与验收](../design/UI_IMPLEMENTATION_2026_10_19.md)。
+2026-10-19课序日任务开发验收版。本地日计划、完成反馈与回顾已接入IndexedDB；见[日任务实现记录](../design/DAILY_TASKS_IMPLEMENTATION.md)。原生 Android 继续暂停。[前次UI验收](../design/UI_IMPLEMENTATION_2026_10_19.md)保留为历史记录。
 
 课表、课程、考试、待办、作息、循环与专注记录写入设备 IndexedDB，核心功能不依赖 Java 或云端登录。云服务仅接收加密快照、保存必要元数据与提供应用文件；AI 是用户主动配置的可选直连服务。
 

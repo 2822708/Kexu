@@ -62,6 +62,8 @@ function setup(overrides = {}) {
     ...load('local/snapshots/codec'),
     ...load('local/snapshots/crypto'),
     ...load('local/snapshots/restore'),
+    ...load('local/daily/commands'),
+    ...load('local/daily/review'),
     ...load('backup/coordinator'),
     storage: load('backup/storage'),
     indexedDB,
@@ -532,13 +534,323 @@ test('restore never reuses receiver numeric IDs, so an unsaved old form cannot e
   const source = setup()
   await source.localTodoApi.create({ title: 'imported todo', ddl: '2040-01-01T09:00' })
   const snapshot = source.createLogicalSnapshot(await source.readLocalState())
-  const receiver = setup(), oldTodo = await receiver.localTodoApi.create({ title: 'old unsaved form target', ddl: '2040-02-01T09:00' })
+  const receiver = setup(),
+    oldTodo = await receiver.localTodoApi.create({
+      title: 'old unsaved form target',
+      ddl: '2040-02-01T09:00',
+    })
   const before = await receiver.readLocalState()
   await receiver.restoreConfirmed(await receiver.previewRestore(snapshot))
   const restored = await receiver.readLocalState()
   assert.ok(restored.todos[0].id >= before.nextId)
   assert.notEqual(restored.todos[0].id, oldTodo.id)
   assert.equal(restored.todos[0].publicId, snapshot.data.todos[0].id)
-  await assert.rejects(receiver.localTodoApi.update(oldTodo.id, { title: 'stale form must not overwrite imported todo', ddl: '2040-03-01T09:00' }), /不存在/)
+  await assert.rejects(
+    receiver.localTodoApi.update(oldTodo.id, {
+      title: 'stale form must not overwrite imported todo',
+      ddl: '2040-03-01T09:00',
+    }),
+    /不存在/,
+  )
   assert.deepEqual(normal(await receiver.readLocalState()), normal(restored))
+})
+
+async function populatedDaily(x) {
+  await populated(x)
+  const state = await x.readLocalState(),
+    date = x.nowLocalDateTime().slice(0, 10)
+  const context = () => ({
+    expectedGeneration: state.dataGeneration,
+    operationId: webcrypto.randomUUID(),
+  })
+  const created = await x.dailyApi.createTask({
+    ...context(),
+    date,
+    title: '临时完成一件事',
+    isPriority: true,
+  })
+  await x.dailyApi.planTodo({
+    ...context(),
+    date,
+    todoPublicId: state.todos.find((todo) => todo.examId == null).publicId,
+  })
+  const completed = await x.dailyApi.setCompleted({
+    ...context(),
+    entryPublicId: created.entryPublicId,
+    expectedVersion: 0,
+    completed: true,
+  })
+  const facts = x.projectDailyReview(await x.readLocalState(), date)
+  await x.dailyApi.saveReview({
+    ...context(),
+    date,
+    expectedVersion: 0,
+    content: { feeling: '踏实', text: '完成一件具体的事', nextStep: '再走一小步' },
+    facts,
+  })
+  await x.dailyApi.saveReviewDraft({
+    ...context(),
+    date,
+    expectedVersion: 1,
+    content: { feeling: '平静', text: '尚未提交的新想法', nextStep: '明天先读两页' },
+  })
+  return { state: await x.readLocalState(), date, created, completed, context }
+}
+
+function asLegacySnapshot(snapshot) {
+  const legacy = normal(snapshot)
+  legacy.version = 1
+  legacy.schemaVersion = 1
+  legacy.scope = 'core-without-ai-history-v1'
+  delete legacy.data.dayEntries
+  delete legacy.data.dailyEvents
+  delete legacy.data.dailyReviews
+  for (const todo of legacy.data.todos) delete todo.dailyVersion
+  return legacy
+}
+
+test('v1 plain and encrypted snapshots restore into schema2 without fabricating daily activity or changing recovery keys', async () => {
+  const source = setup(),
+    daily = await populatedDaily(source)
+  const legacy = asLegacySnapshot(source.createLogicalSnapshot(daily.state)),
+    key = source.generateBackupKey()
+  const envelope = await source.encryptSnapshot(legacy, key)
+  assert.equal(envelope.version, 1)
+  assert.equal(envelope.algorithm, 'AES-GCM-256')
+  const snapshot = await source.decryptSnapshot(envelope, key)
+  assert.equal(snapshot.version, 1)
+  const receiver = setup(),
+    before = await receiver.initializeLocalStore()
+  const preview = await receiver.previewRestore(
+    receiver.parseLogicalSnapshot(JSON.stringify(snapshot)),
+  )
+  assert.equal(preview.snapshot.version, 1)
+  assert.equal(preview.counts.dayEntries, 0)
+  assert.equal(preview.counts.dailyEvents, 0)
+  assert.equal(preview.counts.dailyReviews, 0)
+  await receiver.restoreConfirmed(preview)
+  const restored = await receiver.readLocalState()
+  assert.equal(restored.schemaVersion, 2)
+  assert.notEqual(restored.dataGeneration, before.dataGeneration)
+  assert.deepEqual(normal(restored.dayEntries), [])
+  assert.deepEqual(normal(restored.dailyEvents), [])
+  assert.deepEqual(normal(restored.dailyReviews), [])
+  assert.deepEqual(
+    restored.todos.map((todo) => todo.completed),
+    daily.state.todos.map((todo) => todo.completed),
+  )
+  assert.equal(receiver.createLogicalSnapshot(restored).version, 2)
+})
+
+test('snapshot2 round trip preserves daily UUID references, saved review and independent draft; display preference stays local', async () => {
+  const source = setup(),
+    daily = await populatedDaily(source)
+  await source.mutateLocalState((state) => {
+    state.dailyReviews[0].promptedYesterday = true
+    state.dailyReviews[0].saved.secretUiField = 'DO-NOT-EXPORT-UI-METADATA'
+  })
+  const snapshot = source.createLogicalSnapshot(await source.readLocalState())
+  assert.equal(snapshot.version, 2)
+  assert.equal(snapshot.schemaVersion, 2)
+  assert.equal(snapshot.scope, 'core-with-daily-v2')
+  assert.equal(
+    snapshot.data.dayEntries.find((entry) => entry.kind === 'todo').todoPublicId,
+    snapshot.data.todos.find((todo) => todo.examId == null).id,
+  )
+  assert.equal(JSON.stringify(snapshot).includes('promptedYesterday'), false)
+  assert.equal(JSON.stringify(snapshot).includes('DO-NOT-EXPORT-UI-METADATA'), false)
+  assert.equal(JSON.stringify(snapshot).includes('dataGeneration'), false)
+  assert.equal(snapshot.data.dailyReviews[0].saved.text, '完成一件具体的事')
+  assert.equal(snapshot.data.dailyReviews[0].draft.text, '尚未提交的新想法')
+  const receiver = setup(),
+    before = await receiver.initializeLocalStore()
+  const key = source.generateBackupKey(),
+    envelope = await source.encryptSnapshot(snapshot, key)
+  const decoded = await receiver.decryptSnapshot(envelope, key)
+  await receiver.restoreConfirmed(await receiver.previewRestore(decoded))
+  const restored = await receiver.readLocalState()
+  assert.equal(restored.datasetId, before.datasetId)
+  assert.notEqual(restored.dataGeneration, before.dataGeneration)
+  assert.notEqual(restored.dataGeneration, daily.state.dataGeneration)
+  assert.equal(restored.dailyReviews[0].promptedYesterday, false)
+  const date = restored.dailyReviews[0].date
+  assert.equal(
+    receiver.projectDailyReview(restored, date).fingerprint,
+    source.projectDailyReview(daily.state, date).fingerprint,
+    'snapshot key reconstruction must not make unchanged facts stale',
+  )
+  assert.deepEqual(normal(receiver.createLogicalSnapshot(restored).data), normal(snapshot.data))
+})
+
+test('snapshot2 rejects missing collections, duplicate daily records, malformed UUIDs, invalid events and nested secret fields', async () => {
+  const x = setup(),
+    daily = await populatedDaily(x),
+    snapshot = x.createLogicalSnapshot(daily.state)
+  const cases = [
+    [(value) => delete value.data.dailyEvents, /集合缺失/],
+    [
+      (value) => {
+        value.schemaVersion = 1
+      },
+      /核心逻辑快照/,
+    ],
+    [
+      (value) => {
+        value.data.dayEntries.find((entry) => entry.kind === 'todo').todoPublicId = 'not-a-uuid'
+      },
+      /引用/,
+    ],
+    [
+      (value) => {
+        const entry = value.data.dayEntries.find((entry) => entry.kind === 'todo')
+        value.data.dayEntries.push({ ...entry, id: webcrypto.randomUUID() })
+      },
+      /重复选入/,
+    ],
+    [
+      (value) => {
+        value.data.dayEntries.find((entry) => entry.kind === 'todo').completed = true
+      },
+      /引用/,
+    ],
+    [
+      (value) => {
+        value.data.dailyEvents[0].previousEventId = webcrypto.randomUUID()
+      },
+      /悬空/,
+    ],
+    [
+      (value) => {
+        value.data.dailyEvents[0].previousEventId = value.data.dailyEvents[1].id
+      },
+      /不同目标/,
+    ],
+    [
+      (value) => {
+        value.data.dailyEvents[0].kind = 'invent-score'
+      },
+      /事件类型/,
+    ],
+    [
+      (value) => {
+        value.data.dailyReviews[0].saved.secret = 'forbidden'
+      },
+      /不支持的字段/,
+    ],
+    [
+      (value) => {
+        value.data.dailyReviews[0].saved.facts.completed = -1
+      },
+      /事实计数/,
+    ],
+    [
+      (value) => {
+        value.data.dailyReviews[0].date = '2026-02-30'
+      },
+      /回顾日期/,
+    ],
+    [
+      (value) => {
+        value.data.dayEntries[0].id = value.data.todos[0].id
+      },
+      /重复 UUID/,
+    ],
+  ]
+  for (const [change, expected] of cases) {
+    const invalid = normal(snapshot)
+    change(invalid)
+    await assert.rejects(x.previewRestore(invalid), expected)
+  }
+  assert.deepEqual(normal(await x.readLocalState()), normal(daily.state))
+})
+
+test('archive UUIDs remain recoverable after source todo deletion and retain their truthful daily facts', async () => {
+  const source = setup(),
+    daily = await populatedDaily(source)
+  const todo = daily.state.todos.find((item) => item.examId == null)
+  await source.localTodoApi.remove(todo.id)
+  const snapshot = source.createLogicalSnapshot(await source.readLocalState())
+  assert.ok(
+    snapshot.data.dayEntries.some(
+      (entry) => entry.kind === 'todo' && entry.todoPublicId === todo.publicId,
+    ),
+  )
+  const receiver = setup()
+  await receiver.restoreConfirmed(await receiver.previewRestore(snapshot))
+  const workspace = await receiver.dailyApi.readWorkspace(daily.date)
+  const archived = workspace.entries.find((entry) => entry.todoPublicId === todo.publicId)
+  assert.equal(archived.missingSource, true)
+  assert.equal(archived.title, todo.title)
+})
+
+test('restoring the same dataset invalidates previously captured daily complete, undo and review commands', async () => {
+  const x = setup(),
+    daily = await populatedDaily(x),
+    snapshot = x.createLogicalSnapshot(daily.state)
+  const oldContext = daily.context()
+  await x.restoreConfirmed(await x.previewRestore(snapshot))
+  const restored = await x.readLocalState()
+  assert.equal(restored.datasetId, daily.state.datasetId)
+  assert.notEqual(restored.dataGeneration, daily.state.dataGeneration)
+  await assert.rejects(
+    x.dailyApi.setCompleted({
+      ...oldContext,
+      entryPublicId: daily.created.entryPublicId,
+      completed: false,
+      expectedVersion: 1,
+      undoOf: daily.completed.completionEventId,
+    }),
+    /已恢复或替换/,
+  )
+  await assert.rejects(
+    x.dailyApi.setCompleted({
+      ...daily.context(),
+      entryPublicId: daily.created.entryPublicId,
+      completed: true,
+      expectedVersion: 1,
+    }),
+    /已恢复或替换/,
+  )
+  await assert.rejects(
+    x.dailyApi.saveReviewDraft({
+      ...daily.context(),
+      date: daily.date,
+      expectedVersion: 2,
+      content: { feeling: '', text: '旧页面不应保存', nextStep: '' },
+    }),
+    /已恢复或替换/,
+  )
+  assert.deepEqual(normal(await x.readLocalState()), normal(restored))
+})
+
+test('daily history near the 7 MB limit remains intact, and oversized snapshots stop without silently dropping events', async () => {
+  const x = setup(),
+    daily = await populatedDaily(x),
+    snapshot = x.createLogicalSnapshot(daily.state)
+  const sample = {
+    ...snapshot.data.dailyEvents[0],
+    titleSnapshot: '实'.repeat(500),
+    previousEventId: null,
+  }
+  const rowBytes = Buffer.byteLength(JSON.stringify(sample)) + 1
+  const baseBytes = Buffer.byteLength(JSON.stringify(snapshot))
+  const count = Math.floor((x.SNAPSHOT_MAX_BYTES - baseBytes - 16_384) / rowBytes)
+  const makeEvent = () => ({
+    ...sample,
+    id: webcrypto.randomUUID(),
+    operationId: webcrypto.randomUUID(),
+  })
+  snapshot.data.dailyEvents = Array.from({ length: count }, makeEvent)
+  assert.ok(Buffer.byteLength(JSON.stringify(snapshot)) > 6 * 1024 * 1024)
+  const valid = x.validateLogicalSnapshot(snapshot)
+  const state = x.materializeSnapshot(valid, x.createEmptyLocalState())
+  assert.equal(x.createLogicalSnapshot(state).data.dailyEvents.length, count)
+  snapshot.data.dailyEvents.push(
+    ...Array.from({ length: Math.ceil(32_768 / rowBytes) + 20 }, makeEvent),
+  )
+  const oversizedCount = snapshot.data.dailyEvents.length
+  assert.ok(Buffer.byteLength(JSON.stringify(snapshot)) > x.SNAPSHOT_MAX_BYTES)
+  assert.throws(() => x.validateLogicalSnapshot(snapshot), /7 MB/)
+  assert.equal(snapshot.data.dailyEvents.length, oversizedCount)
+  assert.deepEqual(normal(await x.readLocalState()), normal(daily.state))
 })

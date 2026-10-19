@@ -8,11 +8,12 @@ import type {
   Schedule,
   Todo,
 } from '../types'
+import type { DailyEvent, DailyReview, DayEntry } from './daily/types'
 
 export type LocalSchedule = Schedule & { publicId: string }
 export type LocalCourse = Course & { publicId: string }
 export type LocalExam = Exam & { publicId: string }
-export type LocalTodo = Todo & { publicId: string; chainGenerated?: boolean }
+export type LocalTodo = Todo & { publicId: string; chainGenerated?: boolean; dailyVersion?: number }
 export type LocalRecurringTodo = RecurringTodo & { publicId: string }
 export type LocalPeriodConfig = PeriodConfig & { publicId: string }
 export type LocalConversation = AiConversation & { publicId: string }
@@ -31,7 +32,8 @@ export interface LocalRecurringOccurrence {
   todoId: number | null
 }
 export interface LocalState {
-  schemaVersion: 1
+  schemaVersion: 2
+  dataGeneration: string
   datasetId: string
   revision: number
   nextId: number
@@ -47,6 +49,9 @@ export interface LocalState {
   recurringOccurrences: LocalRecurringOccurrence[]
   conversations: LocalConversation[]
   messages: LocalMessage[]
+  dayEntries: DayEntry[]
+  dailyEvents: DailyEvent[]
+  dailyReviews: DailyReview[]
 }
 
 export function newPublicId(): string {
@@ -83,7 +88,8 @@ const defaultTimes = [
 export function createEmptyLocalState(): LocalState {
   const now = new Date().toISOString()
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    dataGeneration: newPublicId(),
     datasetId: newPublicId(),
     revision: 0,
     nextId: 1,
@@ -98,6 +104,9 @@ export function createEmptyLocalState(): LocalState {
     focusCompletions: [],
     conversations: [],
     messages: [],
+    dayEntries: [],
+    dailyEvents: [],
+    dailyReviews: [],
     periods: defaultTimes.map(([startTime, endTime], i) => ({
       publicId: newPublicId(),
       periodNumber: i + 1,
