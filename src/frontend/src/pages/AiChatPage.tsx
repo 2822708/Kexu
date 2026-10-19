@@ -1,4 +1,3 @@
-import { LOCAL_MODE } from '../local/mode'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Alert,
@@ -14,7 +13,12 @@ import {
   Typography,
   message,
 } from 'antd'
-import { DeleteOutlined, EditOutlined, MenuOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  MenuOutlined,
+  PlusOutlined,
+} from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AiActionCard from '../components/AiActionCard'
 import AiChatComposer from '../components/AiChatComposer'
@@ -22,11 +26,6 @@ import { aiApi } from '../api'
 import { useApp } from '../store/AppContext'
 import type { AiConversation, AiMessage } from '../types'
 import { formatWeekInfo } from '../utils/schedule'
-import { subscribeAiSettings } from '../local/ai/settings'
-import { localAiStream } from '../local/ai'
-import { readLocalState, subscribeLocalChanges } from '../local/db'
-import { currentImportConversation, localChatView } from '../local/ai/uiState'
-import '../settings-ai.css'
 
 const EXAMPLES = [
   '下周一3-4节加一节形势政策，地点待定',
@@ -40,12 +39,6 @@ interface StreamState {
   phase: 'thinking' | 'text' | 'planning'
   text: string
   userText: string
-}
-
-function conversationIdentity(conversation: AiConversation | undefined): string | null {
-  return conversation && 'publicId' in conversation && typeof conversation.publicId === 'string'
-    ? conversation.publicId
-    : null
 }
 
 export default function AiChatPage() {
@@ -90,32 +83,23 @@ export default function AiChatPage() {
   const messageRequestRef = useRef(0)
   const conversationRequestRef = useRef(0)
   const chatScrollRef = useRef<HTMLDivElement>(null)
-  const conversationCountRef = useRef(30)
-  const selectedPublicIdRef = useRef<string | null>(null)
-  const importIntentRef = useRef<{ conversationId: number; kind: 'IMPORT_EVENTS' } | null>(null)
 
   const stream = currentId !== null ? streams[currentId] : undefined
   const sending = stream !== undefined || creatingConversation
 
-  const changeConversation = useCallback(
-    (id: number | null, abort = true, publicId: string | null = null) => {
-      if (id !== currentIdRef.current) {
-        if (importIntentRef.current) setInput('')
-        importIntentRef.current = null
-        if (abort) activeAbortRef.current?.abort()
-        messageRequestRef.current++
-        messagesRef.current = []
-        setMessages([])
-        setMessageCursor(null)
-        setLoadingOlder(false)
-        setLoadingMessages(id !== null)
-        currentIdRef.current = id
-        selectedPublicIdRef.current = publicId
-        setCurrentId(id)
-      }
-    },
-    [],
-  )
+  const changeConversation = useCallback((id: number | null, abort = true) => {
+    if (id !== currentIdRef.current) {
+      if (abort) activeAbortRef.current?.abort()
+      messageRequestRef.current++
+      messagesRef.current = []
+      setMessages([])
+      setMessageCursor(null)
+      setLoadingOlder(false)
+      setLoadingMessages(id !== null)
+      currentIdRef.current = id
+      setCurrentId(id)
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -132,10 +116,7 @@ export default function AiChatPage() {
   // 禁止发送消息 / 执行或取消提案，避免串到其它课表的数据。
   const currentConv = conversations.find((c) => c.id === currentId) ?? null
   const workspaceMismatch =
-    currentConv !== null &&
-    (LOCAL_MODE
-      ? currentConv.scheduleId !== activeScheduleId
-      : currentConv.scheduleId != null && currentConv.scheduleId !== activeScheduleId)
+    currentConv?.scheduleId != null && currentConv.scheduleId !== activeScheduleId
   const convScheduleName =
     currentConv?.scheduleId != null
       ? (schedules.find((s) => s.id === currentConv?.scheduleId)?.name ??
@@ -159,39 +140,10 @@ export default function AiChatPage() {
   }, [])
 
   useEffect(() => {
-    let active = true
-    let version = 0
-    const refresh = () => {
-      const request = ++version
-      void aiApi
-        .status()
-        .then((status) => {
-          if (active && request === version) setEnabled(status.enabled)
-        })
-        .catch(() => {
-          if (active && request === version) setEnabled(false)
-        })
-    }
-    const changed = () => {
-      activeAbortRef.current?.abort()
-      setEnabled(null)
-      refresh()
-    }
-    const visible = () => {
-      if (document.visibilityState === 'visible') refresh()
-    }
-    refresh()
-    const unsubscribeSettings = LOCAL_MODE ? subscribeAiSettings(changed) : () => {}
-    if (LOCAL_MODE) {
-      window.addEventListener('focus', refresh)
-      document.addEventListener('visibilitychange', visible)
-    }
-    return () => {
-      active = false
-      unsubscribeSettings()
-      window.removeEventListener('focus', refresh)
-      document.removeEventListener('visibilitychange', visible)
-    }
+    aiApi
+      .status()
+      .then((s) => setEnabled(s.enabled))
+      .catch(() => setEnabled(false))
   }, [])
 
   const loadConversations = useCallback(async () => {
@@ -200,9 +152,8 @@ export default function AiChatPage() {
     if (version === conversationRequestRef.current) {
       setConversations(page.items)
       setConversationCursor(page.nextCursor)
-      conversationCountRef.current = Math.max(30, page.items.length)
     }
-    return version === conversationRequestRef.current ? page.items : []
+    return page.items
   }, [])
 
   const loadMoreConversations = async () => {
@@ -214,16 +165,12 @@ export default function AiChatPage() {
       if (version !== conversationRequestRef.current) return
       setConversations((old) => {
         const seen = new Set(old.map((item) => item.id))
-        const next = [...old, ...page.items.filter((item) => !seen.has(item.id))]
-        conversationCountRef.current = next.length
-        return next
+        return [...old, ...page.items.filter((item) => !seen.has(item.id))]
       })
       setConversationCursor(page.nextCursor)
     } catch (e) {
       message.error(e instanceof Error ? e.message : '加载对话失败')
-    } finally {
-      setLoadingConversations(false)
-    }
+    } finally { setLoadingConversations(false) }
   }
 
   const refreshMessages = useCallback(async (id: number, preserveOlder = false) => {
@@ -244,68 +191,6 @@ export default function AiChatPage() {
     setMessageCursor(page.nextCursor)
   }, [])
 
-  useEffect(() => {
-    if (!LOCAL_MODE) return
-    let disposed = false
-    let version = 0
-    let initial = true
-    const refresh = async () => {
-      const request = ++version
-      try {
-        const state = await readLocalState()
-        if (disposed || request !== version) return
-        const id = currentIdRef.current
-        const view = localChatView(
-          state,
-          id,
-          selectedPublicIdRef.current,
-          conversationCountRef.current,
-        )
-        setConversations(view.items)
-        setConversationCursor(view.nextCursor)
-        conversationCountRef.current = Math.max(30, view.items.length)
-        conversationRequestRef.current++
-        if (initial && id === null && view.items.length > 0) {
-          initial = false
-          changeConversation(view.items[0].id, true, conversationIdentity(view.items[0]))
-          return
-        }
-        initial = false
-        if (view.selectionMissing) {
-          activeAbortRef.current?.abort()
-          setStreams({})
-          setInput('')
-          setListMode('normal')
-          setEdits({})
-          setDeleteSelected([])
-          changeConversation(null)
-          message.info('本地对话已被删除或恢复替换，已关闭旧会话；请新建对话继续。')
-          return
-        }
-        selectedPublicIdRef.current = view.selectedPublicId
-        if (id !== null && !activeAbortRef.current) await refreshMessages(id, true)
-      } catch {
-        /* Local storage errors are surfaced by the app provider; retain the visible draft. */
-      }
-    }
-    const unsubscribe = subscribeLocalChanges(() => {
-      void refresh()
-    })
-    const visible = () => {
-      if (document.visibilityState === 'visible') void refresh()
-    }
-    window.addEventListener('focus', refresh)
-    document.addEventListener('visibilitychange', visible)
-    void refresh()
-    return () => {
-      disposed = true
-      version++
-      unsubscribe()
-      window.removeEventListener('focus', refresh)
-      document.removeEventListener('visibilitychange', visible)
-    }
-  }, [changeConversation, refreshMessages])
-
   const loadOlderMessages = async () => {
     if (currentId === null || !messageCursor || loadingOlder || sending) return
     const id = currentId
@@ -316,10 +201,7 @@ export default function AiChatPage() {
       const page = await aiApi.pageMessages(id, messageCursor)
       if (currentIdRef.current !== id || version !== messageRequestRef.current) return
       const existing = new Set(messagesRef.current.map((item) => item.messageId))
-      const next = [
-        ...page.items.filter((item) => !existing.has(item.messageId)),
-        ...messagesRef.current,
-      ]
+      const next = [...page.items.filter((item) => !existing.has(item.messageId)), ...messagesRef.current]
       messagesRef.current = next
       setMessages(next)
       setMessageCursor(page.nextCursor)
@@ -329,78 +211,35 @@ export default function AiChatPage() {
         }
       })
     } catch (e) {
-      if (currentIdRef.current === id)
-        message.error(e instanceof Error ? e.message : '加载历史失败')
-    } finally {
-      if (currentIdRef.current === id) setLoadingOlder(false)
-    }
+      if (currentIdRef.current === id) message.error(e instanceof Error ? e.message : '加载历史失败')
+    } finally { if (currentIdRef.current === id) setLoadingOlder(false) }
   }
 
   useEffect(() => {
     loadConversations()
       .then((list) => {
-        if (list.length > 0 && currentIdRef.current === null)
-          changeConversation(list[0].id, true, conversationIdentity(list[0]))
+        if (list.length > 0 && currentIdRef.current === null) changeConversation(list[0].id)
       })
       .catch((e: Error) => message.error(e.message))
   }, [loadConversations, changeConversation])
 
   useEffect(() => {
     const state = location.state as {
-      quickImport?: {
-        conversationId: number
-        scheduleId: number | null
-        conversationPublicId?: string
-        prompt: string
-        intent?: 'IMPORT_EVENTS'
-      }
+      quickImport?: { conversationId: number; scheduleId: number | null; prompt: string }
     } | null
     const draft = state?.quickImport
     if (!draft) return
+    navigate(location.pathname, { replace: true, state: null })
     if (draft.scheduleId !== activeScheduleId) {
-      navigate(location.pathname, { replace: true, state: null })
       message.warning('导入材料绑定的课表已变化，请切回对应课表后重试。')
       return
     }
     if (!Number.isSafeInteger(draft.conversationId) || !draft.prompt?.trim()) {
-      navigate(location.pathname, { replace: true, state: null })
       message.error('导入内容无效，请重新导入。')
       return
     }
-    let active = true
-    const apply = async () => {
-      const localState = LOCAL_MODE ? await readLocalState() : null
-      if (localState && !currentImportConversation(localState, draft)) {
-        if (active) {
-          navigate(location.pathname, { replace: true, state: null })
-          message.warning('导入草稿的本地会话已被删除或恢复替换，请重新转交材料。')
-        }
-        return
-      }
-      if (!active) return
-      changeConversation(
-        draft.conversationId,
-        true,
-        conversationIdentity(
-          localState?.conversations.find((row) => row.id === draft.conversationId),
-        ),
-      )
-      setInput(draft.prompt)
-      importIntentRef.current =
-        draft.intent === 'IMPORT_EVENTS'
-          ? { conversationId: draft.conversationId, kind: 'IMPORT_EVENTS' }
-          : null
-      navigate(location.pathname, { replace: true, state: null })
-    }
-    void apply().catch(() => {
-      if (active) {
-        navigate(location.pathname, { replace: true, state: null })
-        message.error('无法打开本地导入草稿，材料未发送')
-      }
-    })
-    return () => {
-      active = false
-    }
+    changeConversation(draft.conversationId)
+    setInput(draft.prompt)
   }, [location.state, location.pathname, navigate, activeScheduleId, changeConversation])
 
   useEffect(() => {
@@ -410,12 +249,8 @@ export default function AiChatPage() {
     }
     setLoadingMessages(true)
     refreshMessages(currentId)
-      .catch((e: Error) => {
-        if (currentIdRef.current === currentId) message.error(e.message)
-      })
-      .finally(() => {
-        if (currentIdRef.current === currentId) setLoadingMessages(false)
-      })
+      .catch((e: Error) => { if (currentIdRef.current === currentId) message.error(e.message) })
+      .finally(() => { if (currentIdRef.current === currentId) setLoadingMessages(false) })
   }, [currentId, refreshMessages])
 
   // 课表/待办变化时重新拉取消息，让失效提案立即显示
@@ -424,7 +259,8 @@ export default function AiChatPage() {
   useEffect(() => {
     if (previousDataVersionRef.current === dataVersion || currentId === null || sending) return
     previousDataVersionRef.current = dataVersion
-    refreshMessages(currentId, true).catch(() => undefined)
+    refreshMessages(currentId, true)
+      .catch(() => undefined)
   }, [dataVersion, currentId, sending, refreshMessages])
 
   // 只在「有新消息流式输出」或「切换对话加载完成」时自动滚到底部；
@@ -443,7 +279,7 @@ export default function AiChatPage() {
     try {
       const conv = await aiApi.createConversation(activeScheduleId)
       await loadConversations()
-      changeConversation(conv.id, true, conversationIdentity(conv))
+      changeConversation(conv.id)
       setConvPanelOpen(false)
     } catch (e) {
       message.error(e instanceof Error ? e.message : '创建对话失败')
@@ -456,8 +292,7 @@ export default function AiChatPage() {
       await aiApi.deleteConversation(id)
       clearStream(id)
       const list = await loadConversations()
-      if (currentIdRef.current === id)
-        changeConversation(list.length > 0 ? list[0].id : null, true, conversationIdentity(list[0]))
+      if (currentIdRef.current === id) changeConversation(list.length > 0 ? list[0].id : null)
     } catch (e) {
       message.error(e instanceof Error ? e.message : '删除失败')
     }
@@ -530,7 +365,7 @@ export default function AiChatPage() {
         const conv = await aiApi.createConversation(activeScheduleId)
         if (controller.signal.aborted) return
         convId = conv.id
-        changeConversation(conv.id, false, conversationIdentity(conv))
+        changeConversation(conv.id, false)
         setConvPanelOpen(false)
         await loadConversations()
       }
@@ -541,8 +376,7 @@ export default function AiChatPage() {
       return
     } finally {
       setCreatingConversation(false)
-      if (controller.signal.aborted && activeAbortRef.current === controller)
-        activeAbortRef.current = null
+      if (controller.signal.aborted && activeAbortRef.current === controller) activeAbortRef.current = null
     }
 
     if (controller.signal.aborted) return
@@ -553,27 +387,16 @@ export default function AiChatPage() {
     }))
 
     try {
-      const sendStream = LOCAL_MODE ? localAiStream : aiApi.sendMessageStream
-      await sendStream(
-        cid,
-        content,
-        activeScheduleId,
-        {
-          onThinking: () => patchStream(cid, { phase: 'thinking' }),
-          onText: (delta) =>
-            setStreams((prev) => {
-              const cur = prev[cid]
-              if (!cur) return prev
-              return { ...prev, [cid]: { ...cur, phase: 'text', text: cur.text + delta } }
-            }),
-          onPlanning: () => patchStream(cid, { phase: 'planning' }),
-        },
-        controller.signal,
-        LOCAL_MODE && importIntentRef.current?.conversationId === cid
-          ? importIntentRef.current.kind
-          : undefined,
-      )
-      if (importIntentRef.current?.conversationId === cid) importIntentRef.current = null
+      await aiApi.sendMessageStream(cid, content, activeScheduleId, {
+        onThinking: () => patchStream(cid, { phase: 'thinking' }),
+        onText: (delta) =>
+          setStreams((prev) => {
+            const cur = prev[cid]
+            if (!cur) return prev
+            return { ...prev, [cid]: { ...cur, phase: 'text', text: cur.text + delta } }
+          }),
+        onPlanning: () => patchStream(cid, { phase: 'planning' }),
+      }, controller.signal)
       clearStream(cid)
       await refreshMessages(cid)
       await loadConversations()
@@ -585,8 +408,7 @@ export default function AiChatPage() {
       } catch {
         // 忽略
       }
-      if (!controller.signal.aborted && currentIdRef.current === cid)
-        setInput((draft) => draft || content)
+      if (!controller.signal.aborted && currentIdRef.current === cid) setInput((draft) => draft || content)
     } finally {
       if (activeAbortRef.current === controller) activeAbortRef.current = null
     }
@@ -644,14 +466,9 @@ export default function AiChatPage() {
   const weekInfo = activeSchedule
     ? formatWeekInfo(activeSchedule.periodStartDate, activeSchedule.periodEndDate)
     : null
-  const pendingCount = messages.reduce(
-    (count, item) =>
-      count + (item.actions ?? []).filter((action) => action.status === 'PENDING').length,
-    0,
-  )
 
   return (
-    <div className="ai-chat-page" style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+    <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
       {convPanelOpen && <div className="conv-backdrop" onClick={() => setConvPanelOpen(false)} />}
       <Card
         className={`conv-panel${convPanelOpen ? ' open' : ''}`}
@@ -675,7 +492,6 @@ export default function AiChatPage() {
                 type="text"
                 icon={<EditOutlined />}
                 title="批量编辑"
-                aria-label="批量编辑对话标题"
                 onClick={startBatchEdit}
               />
               <Button
@@ -684,7 +500,6 @@ export default function AiChatPage() {
                 danger
                 icon={<DeleteOutlined />}
                 title="批量删除"
-                aria-label="批量删除对话"
                 onClick={startBatchDelete}
               />
               <Button
@@ -692,7 +507,6 @@ export default function AiChatPage() {
                 type="text"
                 icon={<PlusOutlined />}
                 title="新建对话"
-                aria-label="新建对话"
                 onClick={newConversation}
               />
             </Space>
@@ -732,28 +546,15 @@ export default function AiChatPage() {
             const active = listMode === 'normal' && conv.id === currentId
             return (
               <List.Item
-                className={active ? 'conversation-item is-active' : 'conversation-item'}
-                role={listMode === 'edit' ? undefined : 'button'}
-                tabIndex={listMode === 'edit' ? undefined : 0}
-                aria-current={active ? 'true' : undefined}
-                aria-label={listMode === 'edit' ? undefined : `打开对话：${conv.title || '新对话'}`}
-                onKeyDown={(event) => {
-                  if (listMode === 'edit' || !['Enter', ' '].includes(event.key)) return
-                  event.preventDefault()
-                  if (listMode === 'normal') {
-                    changeConversation(conv.id, true, conversationIdentity(conv))
-                    setConvPanelOpen(false)
-                  } else toggleDeleteSelect(conv.id)
-                }}
                 style={{
                   cursor: listMode === 'normal' ? 'pointer' : 'default',
-                  background: active || selected ? 'var(--assistant-selected-bg)' : undefined,
+                  background: active || selected ? 'var(--accent)' : undefined,
                   borderRadius: 4,
                   paddingInline: 8,
                 }}
                 onClick={() => {
                   if (listMode === 'normal') {
-                    changeConversation(conv.id, true, conversationIdentity(conv))
+                    changeConversation(conv.id)
                     setConvPanelOpen(false)
                   } else if (listMode === 'delete') toggleDeleteSelect(conv.id)
                 }}
@@ -792,22 +593,18 @@ export default function AiChatPage() {
             )
           }}
         />
-        {conversationCursor && (
-          <Button block type="text" loading={loadingConversations} onClick={loadMoreConversations}>
-            加载更多对话
-          </Button>
-        )}
+        {conversationCursor && <Button block type="text" loading={loadingConversations}
+          onClick={loadMoreConversations}>加载更多对话</Button>}
       </Card>
 
       <Card
-        className="ai-chat-main"
         size="small"
         style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}
         styles={{
           body: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: 16 },
         }}
         title={
-          <Space wrap className="assistant-header-title">
+          <Space wrap={false}>
             <Button
               className="conv-toggle-btn"
               size="small"
@@ -816,10 +613,10 @@ export default function AiChatPage() {
             >
               对话
             </Button>
-            <span>助手</span>
+            <span>AI 助手</span>
             {convScheduleName ? (
               <Tag color={workspaceMismatch ? 'red' : 'blue'}>
-                {workspaceMismatch ? '课表不一致 · ' : ''}
+                {workspaceMismatch ? '⚠ ' : ''}
                 {convScheduleName}
               </Tag>
             ) : activeSchedule ? (
@@ -827,52 +624,18 @@ export default function AiChatPage() {
             ) : (
               <Tag color="orange">未选择课表</Tag>
             )}
+            {activeSchedule && !workspaceMismatch && weekInfo && <Tag>{weekInfo}</Tag>}
           </Space>
         }
-        extra={
-          <Button
-            className="assistant-new-conversation"
-            icon={<PlusOutlined />}
-            onClick={newConversation}
-          >
-            新对话
-          </Button>
-        }
       >
-        <div className="assistant-context" aria-label="当前助手上下文">
-          <div>
-            <Typography.Text strong>{activeSchedule?.name ?? '未选择课表'}</Typography.Text>
-            <Typography.Text type="secondary">
-              {weekInfo ?? '选择课表后可按当前安排提问'}
-            </Typography.Text>
-          </div>
-          <Tag color={pendingCount ? 'gold' : 'default'}>
-            {pendingCount ? `已加载消息中 ${pendingCount} 项待确认` : '修改前逐项确认'}
-          </Tag>
-        </div>
         {enabled === false && (
           <Alert
             type="warning"
             showIcon
-            message="连接 AI 后即可开始对话"
-            description={
-              LOCAL_MODE
-                ? '请在设置中连接你选择的 AI 服务。消息、选定课表与本机待办的必要上下文仅在主动发送时直达该服务，课表、考试和待办可离线使用。'
-                : '请联系服务管理员启用 AI。课表、考试和待办仍可正常使用。'
-            }
-            action={
-              LOCAL_MODE ? (
-                <Button onClick={() => navigate('/settings#ai')}>配置 AI 连接</Button>
-              ) : undefined
-            }
+            message="AI 功能未启用"
+            description="后端未配置 DEEPSEEK_API_KEY 环境变量，请设置后重启服务。"
             style={{ marginBottom: 12, flexShrink: 0 }}
           />
-        )}
-
-        {LOCAL_MODE && enabled === true && (
-          <Typography.Paragraph type="secondary" className="assistant-privacy-note">
-            会话保存在本机；点击发送时才会把消息、当前课表与待办的必要上下文发给你设置的AI服务。每张修改卡仍需单独确认。
-          </Typography.Paragraph>
         )}
 
         {workspaceMismatch && (
@@ -894,51 +657,36 @@ export default function AiChatPage() {
 
         <div className="chat-layout">
           <div className="chat-messages" ref={chatScrollRef}>
-            {messageCursor && !loadingMessages && (
-              <div style={{ textAlign: 'center', paddingBottom: 12 }}>
-                <Button
-                  size="small"
-                  loading={loadingOlder}
-                  disabled={sending}
-                  onClick={loadOlderMessages}
-                >
-                  加载更早的消息
-                </Button>
-              </div>
-            )}
+            {messageCursor && !loadingMessages && <div style={{ textAlign: 'center', paddingBottom: 12 }}>
+              <Button size="small" loading={loadingOlder} disabled={sending} onClick={loadOlderMessages}>
+                加载更早的消息
+              </Button>
+            </div>}
             {loadingMessages ? (
               <div style={{ textAlign: 'center', padding: 40 }}>
                 <Spin />
               </div>
             ) : messages.length === 0 && !stream ? (
               <Empty
-                className="assistant-empty"
                 description={
                   <div>
-                    <Typography.Title level={3}>把安排说清楚，确认后再保存</Typography.Title>
-                    <Typography.Paragraph type="secondary">
-                      描述课程调整、考试或待办，也可以添加课表文件与截图。
-                    </Typography.Paragraph>
-                    <div className="assistant-examples">
+                    <span>用一句话管理课表和待办，支持一次做多件事</span>
+                    <Space wrap style={{ justifyContent: 'center' }}>
                       {EXAMPLES.map((ex, i) => (
-                        <Button
-                          key={i}
-                          className="assistant-example"
-                          disabled={workspaceMismatch || sending}
-                          onClick={() => setInput(ex)}
-                        >
+                        <Typography.Text key={i} className="example-chip" type="secondary">
                           {ex}
-                        </Button>
+                        </Typography.Text>
                       ))}
-                    </div>
+                    </Space>
                     <Typography.Text
                       type="secondary"
                       style={{ display: 'block', fontSize: 11, marginTop: 4 }}
                     >
-                      点击示例只会填入输入框；请按实际安排修改后发送。
+                      以上仅为示例，不一定适用于当前课表，请按自己的情况描述。
                     </Typography.Text>
                   </div>
                 }
+                style={{ paddingTop: 60 }}
               />
             ) : (
               messages.map((msg) => (
@@ -959,18 +707,9 @@ export default function AiChatPage() {
                         key={action.actionId}
                         action={action}
                         executing={executingId === action.actionId}
-                        scheduleName={
-                          schedules.find(
-                            (s) => s.id === (action.scheduleId ?? currentConv?.scheduleId),
-                          )?.name
-                        }
-                        disabled={
-                          workspaceMismatch ||
-                          sending ||
-                          executingId !== null ||
-                          (action.scope === 'COURSE' &&
-                            (action.scheduleId ?? currentConv?.scheduleId) !== activeScheduleId)
-                        }
+                        scheduleName={schedules.find((s) => s.id === (action.scheduleId ?? currentConv?.scheduleId))?.name}
+                        disabled={workspaceMismatch || sending || executingId !== null ||
+                          (action.scope === 'COURSE' && (action.scheduleId ?? currentConv?.scheduleId) !== activeScheduleId)}
                         onExecute={() => execute(action.actionId)}
                         onReject={() => reject(action.actionId)}
                       />

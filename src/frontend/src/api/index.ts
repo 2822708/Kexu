@@ -1,14 +1,3 @@
-import { LOCAL_MODE } from '../local/mode'
-import {
-  localScheduleApi,
-  localCourseApi,
-  localTodoApi,
-  localExamApi,
-  localPeriodApi,
-  localFocusApi,
-  localRecurringApi,
-} from '../local/domain'
-import { localAiApi } from '../local/ai'
 import { request } from './client'
 import { streamMessage } from './stream'
 import type {
@@ -48,7 +37,7 @@ export const authApi = {
     }),
 }
 
-const remoteScheduleApi = {
+export const scheduleApi = {
   list: () => request<Schedule[]>('/schedules'),
   create: (body: Omit<Schedule, 'id'>) => request<Schedule>('/schedules', { method: 'POST', body }),
   update: (id: number, body: Omit<Schedule, 'id'>) =>
@@ -56,7 +45,7 @@ const remoteScheduleApi = {
   remove: (id: number) => request<null>(`/schedules/${id}`, { method: 'DELETE' }),
 }
 
-const remoteCourseApi = {
+export const courseApi = {
   listBySchedule: (scheduleId: number) => request<Course[]>(`/schedules/${scheduleId}/courses`),
   create: (scheduleId: number, body: CoursePayload) =>
     request<Course>(`/schedules/${scheduleId}/courses`, { method: 'POST', body }),
@@ -70,7 +59,7 @@ const remoteCourseApi = {
   remove: (id: number) => request<null>(`/courses/${id}`, { method: 'DELETE' }),
 }
 
-const remoteTodoApi = {
+export const todoApi = {
   list: () => request<Todo[]>('/todos'),
   create: (body: { title: string; ddl: string }) =>
     request<Todo>('/todos', { method: 'POST', body }),
@@ -80,16 +69,7 @@ const remoteTodoApi = {
   toggle: (id: number) => request<Todo>(`/todos/${id}/toggle`, { method: 'PUT' }),
 }
 
-const remoteFocusApi = {
-  completedCourseIds: (scheduleId: number, date: string) =>
-    request<number[]>(`/focus/course-completions?scheduleId=${scheduleId}&date=${date}`),
-  setCourseCompleted: (
-    courseId: number,
-    body: { scheduleId: number; date: string; completed: boolean },
-  ) => request<null>(`/focus/course-completions/${courseId}`, { method: 'PUT', body }),
-}
-
-const remoteRecurringApi = {
+export const recurringApi = {
   list: () => request<RecurringTodo[]>('/recurring-todos'),
   create: (body: RecurringTodoPayload) =>
     request<RecurringTodo>('/recurring-todos', { method: 'POST', body }),
@@ -108,7 +88,7 @@ const remoteRecurringApi = {
     }),
 }
 
-const remoteExamApi = {
+export const examApi = {
   listBySchedule: (scheduleId: number) => request<Exam[]>(`/schedules/${scheduleId}/exams`),
   create: (scheduleId: number, body: ExamPayload) =>
     request<Exam>(`/schedules/${scheduleId}/exams`, { method: 'POST', body }),
@@ -116,13 +96,13 @@ const remoteExamApi = {
   remove: (id: number) => request<null>(`/exams/${id}`, { method: 'DELETE' }),
 }
 
-const remotePeriodApi = {
+export const periodApi = {
   list: () => request<PeriodConfig[]>('/period-config'),
   update: (configs: PeriodConfig[]) =>
     request<PeriodConfig[]>('/period-config', { method: 'PUT', body: { configs } }),
 }
 
-const remoteAiApi = {
+export const aiApi = {
   status: () => request<{ enabled: boolean }>('/ai/status'),
   /** 读取 AI 配置（只返回掩码后的 Key） */
   getConfig: () => request<AiConfig>('/ai/config'),
@@ -172,12 +152,3 @@ const remoteAiApi = {
       body: { imageDataUrl },
     }),
 }
-
-export const scheduleApi = LOCAL_MODE ? localScheduleApi : remoteScheduleApi
-export const courseApi = LOCAL_MODE ? localCourseApi : remoteCourseApi
-export const todoApi = LOCAL_MODE ? localTodoApi : remoteTodoApi
-export const examApi = LOCAL_MODE ? localExamApi : remoteExamApi
-export const periodApi = LOCAL_MODE ? localPeriodApi : remotePeriodApi
-export const focusApi = LOCAL_MODE ? localFocusApi : remoteFocusApi
-export const recurringApi = LOCAL_MODE ? localRecurringApi : remoteRecurringApi
-export const aiApi = LOCAL_MODE ? localAiApi : remoteAiApi

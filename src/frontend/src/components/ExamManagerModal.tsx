@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
-  Card,
   DatePicker,
   Form,
   Input,
-  Empty,
   Modal,
   Popconfirm,
   Space,
@@ -17,7 +15,6 @@ import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { Exam, ExamPayload } from '../types'
 import { dayjs, WEEK_DAY_NAMES } from '../utils/schedule'
-import { useMediaQuery } from '../hooks/useMediaQuery'
 
 interface Props {
   open: boolean
@@ -25,7 +22,7 @@ interface Props {
   saving: boolean
   onCancel: () => void
   onCreate: (payload: ExamPayload) => Promise<void>
-  onUpdate: (id: number, payload: ExamPayload, expectedExam?: Exam) => Promise<void>
+  onUpdate: (id: number, payload: ExamPayload) => Promise<void>
   onDelete: (exam: Exam) => Promise<void>
 }
 
@@ -46,15 +43,11 @@ export default function ExamManagerModal({
   onUpdate,
   onDelete,
 }: Props) {
-  const mobile = useMediaQuery('(max-width: 767px)')
   const [editing, setEditing] = useState<Exam | null | 'new'>(null)
   const [form] = Form.useForm<FormValues>()
 
   const sorted = useMemo(
-    () =>
-      [...exams].sort((a, b) =>
-        `${a.examDate}T${a.startTime}`.localeCompare(`${b.examDate}T${b.startTime}`),
-      ),
+    () => [...exams].sort((a, b) => a.examDate.localeCompare(b.examDate)),
     [exams],
   )
 
@@ -95,15 +88,11 @@ export default function ExamManagerModal({
   })
 
   const handleOk = async () => {
-    try {
-      const values = await form.validateFields()
-      const payload = toPayload(values)
-      if (editing === 'new') await onCreate(payload)
-      else if (editing) await onUpdate(editing.id, payload, editing)
-      setEditing(null)
-    } catch {
-      // Validation or server write failed; preserve the editor and its draft.
-    }
+    const values = await form.validateFields()
+    const payload = toPayload(values)
+    if (editing === 'new') await onCreate(payload)
+    else if (editing) await onUpdate(editing.id, payload)
+    setEditing(null)
   }
 
   const columns: ColumnsType<Exam> = [
@@ -161,7 +150,7 @@ export default function ExamManagerModal({
           </Button>
         }
       >
-        <Space wrap style={{ marginBottom: 12, justifyContent: 'space-between', width: '100%' }}>
+        <Space style={{ marginBottom: 12, justifyContent: 'space-between', width: '100%' }}>
           <Typography.Text type="secondary">
             共 {sorted.length} 条考试记录（按日期/时间显示在课表上）
           </Typography.Text>
@@ -169,48 +158,15 @@ export default function ExamManagerModal({
             添加考试
           </Button>
         </Space>
-        {mobile ? (
-          <div className="mobile-record-list">
-            {!sorted.length && <Empty description="还没有考试记录" />}
-            {sorted.map((exam) => (
-              <Card key={exam.id} size="small">
-                <Typography.Text strong>{exam.name}</Typography.Text>
-                <p>
-                  {exam.examDate} · {WEEK_DAY_NAMES[dayjs(exam.examDate).isoWeekday() - 1]}
-                </p>
-                <p>
-                  {exam.startTime.slice(0, 5)}–{exam.endTime.slice(0, 5)} ·{' '}
-                  {exam.location || '地点待定'}
-                </p>
-                <Space wrap>
-                  <Button icon={<EditOutlined />} onClick={() => openEdit(exam)}>
-                    编辑
-                  </Button>
-                  <Popconfirm
-                    title="确定删除这条考试记录吗？"
-                    okText="删除"
-                    cancelText="取消"
-                    onConfirm={() => onDelete(exam)}
-                  >
-                    <Button danger icon={<DeleteOutlined />}>
-                      删除
-                    </Button>
-                  </Popconfirm>
-                </Space>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Table
-            size="small"
-            rowKey="id"
-            columns={columns}
-            dataSource={sorted}
-            pagination={false}
-            scroll={{ x: 680 }}
-            locale={{ emptyText: '还没有考试记录' }}
-          />
-        )}
+        <Table
+          size="small"
+          rowKey="id"
+          columns={columns}
+          dataSource={sorted}
+          pagination={false}
+          scroll={{ x: 680 }}
+          locale={{ emptyText: '还没有考试记录' }}
+        />
       </Modal>
 
       <Modal
@@ -236,7 +192,7 @@ export default function ExamManagerModal({
           >
             <Input placeholder="如 期末考试 / CET-6 / 业余无线电A类考试" />
           </Form.Item>
-          <Space className="exam-time-fields" size={12} wrap style={{ display: 'flex' }}>
+          <Space size={12} wrap style={{ display: 'flex' }}>
             <Form.Item
               name="examDate"
               label="考试日期"

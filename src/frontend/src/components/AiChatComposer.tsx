@@ -1,25 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, DragEvent } from 'react'
 import { Button, Input, Popconfirm, Tooltip, message } from 'antd'
-import {
-  AudioOutlined,
-  CloseOutlined,
-  LoadingOutlined,
-  PaperClipOutlined,
-  SendOutlined,
-  StopOutlined,
-} from '@ant-design/icons'
+import { AudioOutlined, CloseOutlined, LoadingOutlined, SendOutlined, StopOutlined } from '@ant-design/icons'
 import { aiApi } from '../api'
 import { useSpeechConsent, useSpeechInput } from '../hooks/useSpeechInput'
 import { extractImportFileText, isSupportedImage, MAX_IMAGE_BYTES } from '../utils/importFiles'
-import {
-  appendChatText,
-  chatMaterialText,
-  MAX_CHAT_CHARS,
-  MAX_CHAT_IMAGES,
-  readChatImage,
-} from '../utils/chatImport'
-import { useMediaQuery } from '../hooks/useMediaQuery'
+import { appendChatText, chatMaterialText, MAX_CHAT_CHARS, MAX_CHAT_IMAGES, readChatImage } from '../utils/chatImport'
 
 interface AiChatComposerProps {
   value: string
@@ -40,17 +26,8 @@ interface PendingImage {
 type Busy = 'files' | 'images' | null
 
 export default function AiChatComposer({
-  value,
-  onChange,
-  onSend,
-  onStop,
-  sending,
-  disabled,
-  sendDisabled,
-  scopeKey,
+  value, onChange, onSend, onStop, sending, disabled, sendDisabled, scopeKey,
 }: AiChatComposerProps) {
-  const mobile = useMediaQuery('(max-width: 767px)')
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [images, setImages] = useState<PendingImage[]>([])
   const [busy, setBusy] = useState<Busy>(null)
   const [dragging, setDragging] = useState(false)
@@ -89,13 +66,7 @@ export default function AiChatComposer({
     },
     onTranscript: (text) => {
       const session = voiceRef.current
-      if (
-        !session ||
-        !mountedRef.current ||
-        session.scope !== scopeRef.current ||
-        disabledRef.current
-      )
-        return
+      if (!session || !mountedRef.current || session.scope !== scopeRef.current || disabledRef.current) return
       try {
         updateDraft(text ? appendChatText(session.base, text) : session.base)
       } catch (error) {
@@ -137,21 +108,11 @@ export default function AiChatComposer({
     composingRef.current = false
   }, [scopeKey, disabled])
 
-  const isCurrent = (scope: string, operation: number) =>
-    mountedRef.current &&
-    scopeRef.current === scope &&
-    operationRef.current === operation &&
-    !disabledRef.current
+  const isCurrent = (scope: string, operation: number) => mountedRef.current
+    && scopeRef.current === scope && operationRef.current === operation && !disabledRef.current
 
   const importFiles = async (files: File[]) => {
-    if (
-      !files.length ||
-      disabledRef.current ||
-      busyRef.current ||
-      sendLockRef.current ||
-      speech.recording
-    )
-      return
+    if (!files.length || disabledRef.current || busyRef.current || sendLockRef.current || speech.recording) return
     const scope = scopeRef.current
     const operation = ++operationRef.current
     busyRef.current = 'files'
@@ -174,15 +135,12 @@ export default function AiChatComposer({
       }
       if (!isCurrent(scope, operation)) return
       // Read the latest value after extraction, preserving text typed while it ran.
-      const nextDraft = material.length
-        ? appendChatText(valueRef.current, material.join('\n\n'))
-        : valueRef.current
+      const nextDraft = material.length ? appendChatText(valueRef.current, material.join('\n\n')) : valueRef.current
       if (material.length) updateDraft(nextDraft)
       imagesRef.current = [...imagesRef.current, ...addedImages]
       setImages(imagesRef.current)
     } catch (error) {
-      if (isCurrent(scope, operation))
-        message.error(error instanceof Error ? error.message : '文件读取失败，原草稿已保留')
+      if (isCurrent(scope, operation)) message.error(error instanceof Error ? error.message : '文件读取失败，原草稿已保留')
     } finally {
       if (isCurrent(scope, operation)) {
         busyRef.current = null
@@ -192,16 +150,8 @@ export default function AiChatComposer({
   }
 
   const send = async () => {
-    if (
-      disabledRef.current ||
-      sendDisabledRef.current ||
-      sendingRef.current ||
-      sendLockRef.current ||
-      busyRef.current ||
-      speech.recording ||
-      composingRef.current
-    )
-      return
+    if (disabledRef.current || sendDisabledRef.current || sendingRef.current || sendLockRef.current
+      || busyRef.current || speech.recording || composingRef.current) return
     const draft = valueRef.current.trim()
     const pending = imagesRef.current
     if (!draft && !pending.length) return
@@ -236,8 +186,7 @@ export default function AiChatComposer({
       setBusy(null)
       await onSend(content)
     } catch (error) {
-      if (isCurrent(scope, operation))
-        message.error(error instanceof Error ? error.message : '发送准备失败，草稿已保留')
+      if (isCurrent(scope, operation)) message.error(error instanceof Error ? error.message : '发送准备失败，草稿已保留')
     } finally {
       if (isCurrent(scope, operation)) {
         sendLockRef.current = false
@@ -248,8 +197,8 @@ export default function AiChatComposer({
   }
 
   const canImport = !disabled && !busy && !speech.recording && !sendLockRef.current
-  const handlesDrag = (event: DragEvent) =>
-    Array.from(event.dataTransfer.types).some((type) => type === 'Files' || type === 'text/plain')
+  const handlesDrag = (event: DragEvent) => Array.from(event.dataTransfer.types)
+    .some((type) => type === 'Files' || type === 'text/plain')
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     if (!handlesDrag(event)) return
@@ -264,11 +213,8 @@ export default function AiChatComposer({
     }
     const text = event.dataTransfer.getData('text/plain')
     if (text) {
-      try {
-        updateDraft(appendChatText(valueRef.current, text))
-      } catch (error) {
-        message.warning(error instanceof Error ? error.message : '拖入内容过长')
-      }
+      try { updateDraft(appendChatText(valueRef.current, text)) }
+      catch (error) { message.warning(error instanceof Error ? error.message : '拖入内容过长') }
     }
   }
 
@@ -287,11 +233,8 @@ export default function AiChatComposer({
   }
 
   const micDisabled = !speech.recording && (disabled || !!busy || sending || !speech.supported)
-  const micTitle = speech.recording
-    ? '停止语音输入'
-    : !speech.supported
-      ? '当前浏览器不支持语音识别，可直接输入或拖入文件'
-      : '语音输入'
+  const micTitle = speech.recording ? '停止语音输入' : !speech.supported
+    ? '当前浏览器不支持语音识别，可直接输入或拖入文件' : '语音输入'
   const mic = (
     <Tooltip title={micTitle}>
       <Button
@@ -314,27 +257,6 @@ export default function AiChatComposer({
 
   return (
     <div className="chat-input-bar ai-chat-composer">
-      <input
-        ref={fileInputRef}
-        type="file"
-        hidden
-        multiple
-        accept=".txt,.md,.csv,.html,.htm,.json,.pdf,.docx,image/png,image/jpeg,image/webp"
-        aria-label="选择聊天附件"
-        onChange={(event) => {
-          const files = Array.from(event.target.files ?? [])
-          event.target.value = ''
-          void importFiles(files)
-        }}
-      />
-      <Button
-        className="ai-chat-attachment"
-        aria-label="添加文件或截图"
-        title="添加文件或截图"
-        icon={<PaperClipOutlined />}
-        disabled={!canImport || sending}
-        onClick={() => fileInputRef.current?.click()}
-      />
       <div
         className={`ai-chat-composer-field${dragging ? ' is-dragging' : ''}${disabled ? ' is-disabled' : ''}`}
         onDragEnter={(event) => {
@@ -358,9 +280,7 @@ export default function AiChatComposer({
           <div className="ai-chat-composer-images">
             {images.map((image) => (
               <span className="ai-chat-composer-image" key={image.id}>
-                <Tooltip
-                  title={`${image.file.name} · 点击发送后会将图片交给已配置的 AI 服务识别文字`}
-                >
+                <Tooltip title={`${image.file.name} · 点击发送后会将图片交给已配置的 AI 服务识别文字`}>
                   <span className="ai-chat-composer-image-name">{image.file.name}</span>
                 </Tooltip>
                 <Button
@@ -388,51 +308,26 @@ export default function AiChatComposer({
             }
             updateDraft(event.target.value)
           }}
-          placeholder={
-            mobile
-              ? '描述你的安排，可附文件或截图'
-              : '描述你的安排，或拖入文件、截图；Enter 发送，Shift+Enter 换行'
-          }
+          placeholder="输入指令，或拖入文字、文件、截图；Enter 发送"
           autoSize={{ minRows: 1, maxRows: 4 }}
           disabled={disabled}
           readOnly={speech.recording || busy === 'images'}
           aria-label="AI 消息输入"
           onPaste={onPaste}
-          onCompositionStart={() => {
-            composingRef.current = true
-          }}
-          onCompositionEnd={() => {
-            composingRef.current = false
-          }}
+          onCompositionStart={() => { composingRef.current = true }}
+          onCompositionEnd={() => { composingRef.current = false }}
           onPressEnter={(event) => {
-            if (mobile) return
-            if (
-              event.shiftKey ||
-              event.nativeEvent.isComposing ||
-              event.nativeEvent.keyCode === 229 ||
-              composingRef.current
-            )
-              return
+            if (event.shiftKey || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || composingRef.current) return
             event.preventDefault()
             void send()
           }}
         />
-        {busy === 'files' && (
-          <span className="ai-chat-composer-status" role="status">
-            <LoadingOutlined spin /> 读取文件…
-          </span>
-        )}
+        {busy === 'files' && <span className="ai-chat-composer-status" role="status"><LoadingOutlined spin /> 读取文件…</span>}
         <Popconfirm
           title="启用语音输入"
-          description={
-            <span className="ai-chat-composer-consent">
-              浏览器可能将音频发送给在线识别服务。是否同意并开始录音？
-            </span>
-          }
+          description={<span className="ai-chat-composer-consent">浏览器可能将音频发送给在线识别服务。是否同意并开始录音？</span>}
           open={consentOpen && !speechConsent}
-          onOpenChange={(open) => {
-            if (!open) setConsentOpen(false)
-          }}
+          onOpenChange={(open) => { if (!open) setConsentOpen(false) }}
           onConfirm={() => {
             setSpeechConsent(true)
             setConsentOpen(false)
@@ -447,27 +342,14 @@ export default function AiChatComposer({
         </Popconfirm>
       </div>
       {sending ? (
-        <Button className="assistant-send-button" danger icon={<StopOutlined />} onClick={onStop}>
-          停止
-        </Button>
+        <Button danger icon={<StopOutlined />} onClick={onStop}>停止</Button>
       ) : (
-        <Tooltip
-          title={
-            images.length ? '发送后将图片交给已配置的 AI 服务识别，再生成待确认提案' : undefined
-          }
-        >
+        <Tooltip title={images.length ? '发送后将图片交给已配置的 AI 服务识别，再生成待确认提案' : undefined}>
           <Button
-            className="assistant-send-button"
             type="primary"
             icon={<SendOutlined />}
             loading={busy === 'images'}
-            disabled={
-              disabled ||
-              sendDisabled ||
-              busy === 'files' ||
-              speech.recording ||
-              (!value.trim() && !images.length)
-            }
+            disabled={disabled || sendDisabled || busy === 'files' || speech.recording || (!value.trim() && !images.length)}
             onClick={() => void send()}
           >
             {busy === 'images' ? '识图中' : '发送'}
