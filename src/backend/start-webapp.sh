@@ -1,5 +1,5 @@
 #!/bin/bash
-# 启动大切课程表后端。
+# 启动后端。
 #
 # 为什么要包一层：发布脚本靠日志关键字判断「服务已就绪」（serving http / listening on
 # / Local: http 之类），而 Spring Boot 打的是 "Tomcat started on port(s): 3000"，

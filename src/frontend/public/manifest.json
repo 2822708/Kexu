@@ -1,6 +1,6 @@
 {
-  "name": "大切课程表 · AI 校园助手",
-  "short_name": "大切课程表",
+  "name": "AI 校园助手",
+  "short_name": "校园助手",
   "description": "课表、待办、通知解析与 AI 校园助手——装到设备上，像原生应用一样打开。",
   "lang": "zh-CN",
   "dir": "ltr",
@@ -10,7 +10,10 @@
   "orientation": "any",
   "theme_color": "#58CC02",
   "background_color": "#F7F9FC",
-  "categories": ["education", "productivity"],
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",

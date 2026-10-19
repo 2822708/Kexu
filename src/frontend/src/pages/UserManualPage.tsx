@@ -158,7 +158,7 @@ export default function UserManualPage() {
           title={
             <Space>
               <BookOutlined />
-              <span>大切课程表 · 使用手册</span>
+              <span>使用手册</span>
             </Space>
           }
           extra={<span className="b-pill blue">给非技术朋友的白话教程</span>}

@@ -58,7 +58,7 @@ export default function DeviceConnectionPage() {
             className="login-card-header"
             style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
           >
-            <span>大切课程表</span>
+            <span>AI 校园助手</span>
             <Button
               type="text"
               size="small"

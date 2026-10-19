@@ -1,4 +1,4 @@
-// 大切课程表 —— Windows 桌面外壳（.NET Framework 4.8 + WebView2）
+// AI 校园助手 —— Windows 桌面外壳（.NET Framework 4.8 + WebView2）
 //
 // 职责：
 //   1. 单实例：已有实例在跑就直接提示退出
@@ -89,7 +89,7 @@ namespace TangentTimetable
             {
                 if (!createdNew)
                 {
-                    MessageBox.Show("大切课程表已经在运行了。", "大切课程表",
+                    MessageBox.Show("已经有一个实例在运行了。", "AI 校园助手",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
@@ -117,7 +117,7 @@ namespace TangentTimetable
         internal MainForm(string isolatedDataDir, bool smokeTest)
         {
             this.smokeTest = smokeTest;
-            this.Text = "大切课程表";
+            this.Text = "AI 校园助手";
             if (smokeTest) { this.ShowInTaskbar = false; this.Opacity = 0; }
 
             // 窗口内容只有一个 Dock 填充的 WebView2，不需要 WinForms 自动缩放布局；
@@ -406,7 +406,7 @@ namespace TangentTimetable
                 File.WriteAllText(Path.Combine(dataDir, "desktop-smoke-result.txt"), "FAIL: " + ex.Message);
                 Environment.ExitCode = 1;
             }
-            else MessageBox.Show(ex.Message, "大切课程表 - 启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else MessageBox.Show(ex.Message, "AI 校园助手 - 启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             Close();
         }
 
@@ -441,7 +441,7 @@ namespace TangentTimetable
                 + "账号恢复凭据如下，请保存在你的密码管理器中。本机服务只供当前电脑访问：\r\n\r\n"
                 + accountKey
                 + "\r\n\r\n该 Key 已通过 Windows DPAPI 保护后保存在本机用户数据目录。",
-                "大切课程表 - 首次运行", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                "AI 校园助手 - 首次运行", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

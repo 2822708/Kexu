@@ -4,7 +4,7 @@
 
 > 更新日期：2026-09-26
 
-「大切课程表」在移动端通过 **WebView** 承载，iPad 与 Android 采用同一套方式。区别只在
+本应用在移动端通过 **WebView** 承载，iPad 与 Android 采用同一套方式。区别只在
 加载哪个页面，共有两种承载形态：
 
 | 形态 | 加载地址 | 说明 |
@@ -65,7 +65,7 @@ X-API-Key: <APIKEY>
   "code": 200,
   "message": "success",
   "data": {
-    "title": "大切课程表",
+    "title": "AI 校园助手",
     "week": "第3周",
     "today": "2026-09-26 周六",
     "updatedAt": "12:30",

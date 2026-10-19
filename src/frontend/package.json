@@ -2,7 +2,7 @@
   "name": "timetable-frontend",
   "private": true,
   "version": "1.0.0",
-  "description": "大切课程表 · 课程表与待办 Web 前端",
+  "description": "课程表与待办 Web 前端",
   "license": "MIT",
   "repository": {
     "type": "git",

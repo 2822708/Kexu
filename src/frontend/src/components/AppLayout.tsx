@@ -77,7 +77,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <MenuOutlined />
           </div>
           <div className="app-topbar-title" onClick={() => navigate('/')}>
-            大切课程表
+            AI 校园助手
           </div>
         </div>
         <div className="app-topbar-actions">
@@ -192,7 +192,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Footer */}
       <footer className="app-footer">
-        <span className="app-footer-text">© 2026 大切课程表 | 正切的课程表</span>
+        {/* 暂时不带品牌名：命名还没定，先不写死。 */}
+        <span className="app-footer-text">© 2026 AI 校园助手</span>
         <span className="app-footer-text">˶ˊᜊˋ˶</span>
       </footer>
       <QuickImportWidget />

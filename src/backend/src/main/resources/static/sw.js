@@ -1,5 +1,5 @@
 /*
- * 大切课程表 · PWA Service Worker
+ * PWA Service Worker
  *
  * 缓存策略（刻意保持简单，三类请求泾渭分明）：
  *   1. 同源 GET 静态资源（js/css/图标/字体）—— stale-while-revalidate：
@@ -12,6 +12,9 @@
  * 版本号(CACHE)升级时旧缓存自动清除；改这里务必同步 bump，否则用户
  * 会拿到旧壳配新 html 的撕裂状态。
  */
+// 注意：这个键名带老品牌名，但**故意不改**——它是缓存标识，不是展示文案。
+// 清理逻辑是「删掉所有不等于当前 CACHE 的缓存」，一改名就等于换了一个新空间，
+// 已装用户机器上那份旧缓存再也没人删得掉，会一直占着容量。
 var CACHE = 'tangent-timetable-v1'
 var SHELL = ['/', '/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png']
 

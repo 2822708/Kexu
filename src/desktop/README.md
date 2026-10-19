@@ -1,4 +1,4 @@
-# 大切课程表 · Windows 桌面版（WebView2 壳）
+# AI 校园助手 · Windows 桌面版（WebView2 壳）
 
 把 Web 应用封装为**双击即用的 Windows 桌面程序**。组成：
 
