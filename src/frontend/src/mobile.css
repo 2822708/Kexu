@@ -35,23 +35,39 @@
 
 @media (max-width: 767px) {
   :root {
-    --mobile-nav-height: calc(60px + env(safe-area-inset-bottom, 0px));
-    --topbar-height: calc(52px + env(safe-area-inset-top, 0px));
+    --mobile-nav-height: calc(64px + env(safe-area-inset-bottom, 0px));
+    --topbar-height: calc(64px + env(safe-area-inset-top, 0px));
   }
   body {
     touch-action: manipulation;
-    font-size: 14px;
+    font-size: calc(15px * var(--app-font-scale, 1));
   }
   .app-shell {
     height: var(--app-height, 100dvh);
   }
   .app-topbar {
-    height: var(--topbar-height);
-    padding: env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0
-      max(10px, env(safe-area-inset-left, 0px));
+    min-height: var(--topbar-height);
+    padding: env(safe-area-inset-top, 0px) max(8px, env(safe-area-inset-right, 0px)) 0
+      max(8px, env(safe-area-inset-left, 0px));
+    gap: 8px;
+  }
+  .app-topbar-leading {
+    gap: 4px;
+  }
+  .app-brand {
+    gap: 6px;
+  }
+  .app-brand-mark {
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
+    border-radius: 9px;
+  }
+  .app-brand-subtitle {
+    display: none;
   }
   .app-topbar-title {
-    font-size: 15px;
+    font-size: 19px;
     letter-spacing: 1px;
   }
   .app-topbar .ant-tag,
@@ -59,12 +75,12 @@
     display: none;
   }
   .app-topbar-actions {
-    gap: 6px;
+    gap: 2px;
   }
   .icon-btn-round {
     width: 44px;
     height: 44px;
-    border-radius: 8px;
+    border-radius: 10px;
   }
   .app-content {
     padding: 12px max(12px, env(safe-area-inset-right, 0px)) 12px
@@ -106,10 +122,15 @@
     font-size: 20px;
   }
   .mobile-nav .active {
-    background: var(--accent);
-    color: var(--text-on-accent);
-    border-radius: 8px;
-    font-weight: 700;
+    color: var(--accent);
+    font-weight: 650;
+  }
+  .mobile-nav a .anticon {
+    padding: 4px 14px;
+    border-radius: 16px;
+  }
+  .mobile-nav .active .anticon {
+    background: var(--accent-soft);
   }
   .app-sidebar,
   .conv-panel {

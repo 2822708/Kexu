@@ -1,10 +1,14 @@
-# 联网手机首版运行包
+# 手机端运行包
+
+当前版本：[课序PWA 2026-10-19 preview.2](kexu-2026.10.19/README.md)，包含新UI和周课表遮挡修复，支持设备离线读写、自动加密快照和手动恢复。[旧本地preview.1](local-first-2026.10.18/README.md)保留。以下联网Java包是历史版本，业务数据仍在服务端。
+
+## 2026-10-12历史联网包
 
 开发验收版：2026-10-12。当前版本复用 Java 服务，手机课表、考试和待办需要联网。
 
 - [下载 ZIP](TangentTimetable-mobile-online-2026-10-12.zip?raw=1)
-- [启动说明](../../docs/mobile/README.md)
-- [部署与验证记录](../../docs/mobile/DEPLOYMENT.md)
+- [启动说明](../../docs/mobile/ONLINE_2026_10_12.md)
+- [部署与验证记录](../../docs/mobile/ONLINE_DEPLOYMENT_2026_10_12.md)
 - [文件校验值](SHA256SUMS.txt)
 - [发布清单](RELEASE_MANIFEST.json)
 

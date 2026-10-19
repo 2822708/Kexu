@@ -1,4 +1,4 @@
-/** Cache only public build assets. User data always stays on the Java service. */
+/** Cache only complete public builds; business data lives in the device's IndexedDB. */
 export function createServiceWorkerSource(options: {
   version: string
   base: string
@@ -12,6 +12,7 @@ const CACHE_NAME = CACHE_PREFIX + ${JSON.stringify(version)};
 const BASE = ${JSON.stringify(base)};
 const SHELL = BASE + 'index.html';
 const ACTIVATION = BASE + '__pwa_activation__';
+const READY = BASE + '__pwa_ready__';
 const PRECACHE = ${JSON.stringify(precache)};
 const ASSETS = new Set(${JSON.stringify(assets)});
 
@@ -25,9 +26,12 @@ async function previousBuildAsset(path) {
 }
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(
-    PRECACHE.map((url) => new Request(url, { credentials: 'omit', cache: 'reload' }))
-  )));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(PRECACHE.map((url) => new Request(url, { credentials: 'omit', cache: 'reload' })));
+    // Written only after the entire public build, including lazy dependencies, succeeds.
+    await cache.put(READY, new Response(${JSON.stringify(version)}));
+  })());
   // Updates wait until the user has saved their work and explicitly confirms.
 });
 self.addEventListener('activate', (event) => {
@@ -63,6 +67,21 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'ACTIVATE_SAVED_UPDATE') {
     event.waitUntil(self.skipWaiting());
   }
+  if (event.data && event.data.type === 'GET_OFFLINE_STATUS' && event.ports && event.ports[0]) {
+    const port = event.ports[0];
+    event.waitUntil((async () => {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        const marker = await cache.match(READY);
+        let missing = 0;
+        for (const path of PRECACHE) if (!await cache.match(path)) missing++;
+        port.postMessage({ type: 'OFFLINE_STATUS', ready: !!marker && missing === 0,
+          version: ${JSON.stringify(version)}, assetCount: PRECACHE.length, missingCount: missing });
+      } catch {
+        port.postMessage({ type: 'OFFLINE_STATUS', ready: false });
+      }
+    })());
+  }
 });
 self.addEventListener('fetch', (event) => {
   const request = event.request;
@@ -71,7 +90,7 @@ self.addEventListener('fetch', (event) => {
       !url.pathname.startsWith(BASE) || url.search ||
       request.headers.has('Authorization') || request.headers.has('X-API-Key')) return;
   const relative = url.pathname.slice(BASE.length);
-  if (/^(api|auth|ai|backups?)(\\/|$)/i.test(relative)) return;
+  if (/^(api|auth|ai|backups?|snapshots?|vaults?|cloud)(\\/|$)/i.test(relative)) return;
 
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
@@ -80,7 +99,7 @@ self.addEventListener('fetch', (event) => {
         return await fetch(request);
       } catch {
         const shell = await caches.match(SHELL, { cacheName: CACHE_NAME });
-        return shell || new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><p>当前离线。请联网后重新打开大切课程表。</p>',
+        return shell || new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><p>本机课表数据仍保存在浏览器中，但离线页面资源尚未准备完整。请联网后重新打开课序；不要清除网站数据。</p>',
           { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
       }
     })());

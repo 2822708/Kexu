@@ -389,7 +389,9 @@ export default function AiChatComposer({
             updateDraft(event.target.value)
           }}
           placeholder={
-            mobile ? '输入指令，可添加文件或截图' : '输入指令，或拖入文字、文件、截图；Enter 发送'
+            mobile
+              ? '描述你的安排，可附文件或截图'
+              : '描述你的安排，或拖入文件、截图；Enter 发送，Shift+Enter 换行'
           }
           autoSize={{ minRows: 1, maxRows: 4 }}
           disabled={disabled}
@@ -445,7 +447,7 @@ export default function AiChatComposer({
         </Popconfirm>
       </div>
       {sending ? (
-        <Button danger icon={<StopOutlined />} onClick={onStop}>
+        <Button className="assistant-send-button" danger icon={<StopOutlined />} onClick={onStop}>
           停止
         </Button>
       ) : (
@@ -455,6 +457,7 @@ export default function AiChatComposer({
           }
         >
           <Button
+            className="assistant-send-button"
             type="primary"
             icon={<SendOutlined />}
             loading={busy === 'images'}

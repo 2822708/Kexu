@@ -1,0 +1,111 @@
+# Apply only after certbot has issued this domain's actual certificate.
+# The bootstrap and HTTPS templates replace the SAME site file; never enable both.
+log_format tangent_private '$remote_addr [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent';
+limit_req_zone $binary_remote_addr zone=tangent_api_rate:1m rate=60r/m;
+limit_req_zone $binary_remote_addr zone=tangent_registration_rate:1m rate=1r/m;
+limit_conn_zone $binary_remote_addr zone=tangent_api_connections:1m;
+map "$status:$uri" $tangent_cache_control {
+    default "no-cache";
+    ~^[45][0-9][0-9]: "no-store";
+    ~^[0-9][0-9][0-9]:/index\.html$ "no-store";
+    ~^[0-9][0-9][0-9]:/sw\.js$ "no-store";
+    ~^[0-9][0-9][0-9]:/releases/stable\.json$ "no-store";
+    ~^[0-9][0-9][0-9]:/api/ "no-store";
+    ~^[23][0-9][0-9]:/assets/ "public, max-age=31536000, immutable";
+    ~^[23][0-9][0-9]:/releases/ "public, max-age=31536000, immutable";
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name timetable.zozovip.work;
+    access_log /var/log/nginx/timetable.access.log tangent_private;
+    error_log /var/log/nginx/timetable.error.log error;
+    add_header Cache-Control "no-store" always;
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/timetable/acme;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+    location / { return 308 https://timetable.zozovip.work$request_uri; }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name timetable.zozovip.work;
+    ssl_certificate /etc/letsencrypt/live/timetable.zozovip.work/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/timetable.zozovip.work/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:TangentTLS:1m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    root /var/www/timetable/current/web;
+    index index.html;
+    include /etc/nginx/mime.types;
+    # Older distro mime.types may omit module workers and PWA manifests.
+    types {
+        application/javascript mjs;
+        application/manifest+json webmanifest;
+    }
+    default_type application/octet-stream;
+    server_tokens off;
+    autoindex off;
+    access_log /var/log/nginx/timetable.access.log tangent_private;
+    error_log /var/log/nginx/timetable.error.log error;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    add_header X-Frame-Options DENY always;
+    add_header Permissions-Policy "camera=(), microphone=(self), geolocation=()" always;
+    add_header Strict-Transport-Security "max-age=86400" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'" always;
+    add_header Cache-Control $tangent_cache_control always;
+
+    location = /api/v1/vaults {
+        limit_req zone=tangent_registration_rate burst=2 nodelay;
+        limit_conn tangent_api_connections 4;
+        client_max_body_size 1k;
+        client_body_timeout 20s;
+        proxy_pass http://127.0.0.1:9001;
+        proxy_set_header Host $host;
+        proxy_set_header Origin $http_origin;
+        proxy_set_header Connection "";
+        proxy_http_version 1.1;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 35s;
+        proxy_cache off;
+    }
+    location ^~ /api/v1/ {
+        limit_req zone=tangent_api_rate burst=20 nodelay;
+        limit_conn tangent_api_connections 4;
+        client_max_body_size 10m;
+        client_body_timeout 20s;
+        proxy_pass http://127.0.0.1:9001;
+        proxy_set_header Host $host;
+        proxy_set_header Origin $http_origin;
+        proxy_set_header Connection "";
+        proxy_http_version 1.1;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 35s;
+        proxy_cache off;
+    }
+    location = /api/v1 { return 404; }
+    location ^~ /api/ { return 404; }
+
+    # Retained hashed resources serve old open tabs after an application rollout.
+    location ^~ /assets/ {
+        root /var/www/timetable;
+        try_files $uri =404;
+    }
+    location = /sw.js { try_files $uri =404; }
+    location = /manifest.webmanifest { try_files $uri =404; }
+    # This directory contains public ZIPs and manifests only, never deployed cloud code or data.
+    location ^~ /releases/ {
+        alias /var/www/timetable/downloads/;
+        autoindex off;
+    }
+    location ~ /\. { return 404; }
+    location / { try_files $uri $uri/ /index.html; }
+}

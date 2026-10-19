@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createServiceWorkerSource } from './serviceWorkerSource'
 
@@ -16,6 +16,10 @@ export function mobilePwa() {
       if (!base.startsWith('/') || !base.endsWith('/')) {
         throw new Error('Mobile PWA requires an absolute local base, such as / or /timetable/.')
       }
+      const parsedBase = new URL(base, 'https://pwa.invalid')
+      if (parsedBase.search || parsedBase.hash)
+        throw new Error('Mobile PWA base cannot contain a query or fragment.')
+      base = parsedBase.pathname
     },
     transformIndexHtml() {
       return [
@@ -43,38 +47,56 @@ export function mobilePwa() {
     },
     generateBundle(_options, bundle) {
       const hash = createHash('sha256')
-      const allAssets = []
-      const initial = new Set(['index.html', 'pwa/icon-192.png', 'pwa/icon-512.png'])
-      const collect = (file) => {
-        if (initial.has(file)) return
-        initial.add(file)
-        const item = bundle[file]
-        if (item?.type === 'chunk') item.imports.forEach(collect)
-      }
+      const files = new Set()
+      let totalBytes = 0
       for (const [file, item] of Object.entries(bundle).sort(([a], [b]) => a.localeCompare(b))) {
         if (file.endsWith('.map')) continue
-        hash.update(file).update(item.type === 'chunk' ? item.code : item.source)
-        allAssets.push(`${base}${file}`)
-        if (item.type === 'chunk' && item.isEntry) collect(file)
-        if (file.endsWith('.css')) initial.add(file)
+        const source = item.type === 'chunk' ? item.code : item.source
+        hash.update(file).update(source)
+        totalBytes += Buffer.byteLength(source)
+        files.add(file)
       }
-      const assets = [...allAssets, `${base}pwa/icon-192.png`, `${base}pwa/icon-512.png`]
-      const precache = [...initial].map((file) => `${base}${file}`)
-      hash.update(createServiceWorkerSource({ version: 'template', base, assets, precache }))
-      for (const size of [192, 512])
-        hash.update(readFileSync(resolve(publicDir, `pwa/icon-${size}.png`)))
-      const version = hash.digest('hex').slice(0, 16)
+      const collectPublic = (directory, prefix = '') => {
+        for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) =>
+          a.name.localeCompare(b.name),
+        )) {
+          const file = `${prefix}${entry.name}`
+          if (entry.isDirectory()) collectPublic(resolve(directory, entry.name), `${file}/`)
+          else if (entry.isSymbolicLink())
+            throw new Error(`Mobile offline public assets must be regular files: ${file}`)
+          else if (entry.isFile() && !file.endsWith('.map')) {
+            if (['sw.js', 'manifest.webmanifest'].includes(file))
+              throw new Error(`Reserved mobile PWA file in public/: ${file}`)
+            const bytes = readFileSync(resolve(directory, entry.name))
+            hash.update(file).update(bytes)
+            totalBytes += bytes.byteLength
+            files.add(file)
+          }
+        }
+      }
+      if (publicDir) collectPublic(publicDir)
+      for (const required of ['index.html', 'pwa/icon-192.png', 'pwa/icon-512.png']) {
+        if (!files.has(required))
+          throw new Error(`Missing required mobile offline resource: ${required}`)
+      }
+      // Every lazy route, attachment parser and PDF worker must be available on the
+      // first offline visit. Never silently downgrade to a shell-only installation.
+      if (totalBytes > 40 * 1024 * 1024)
+        throw new Error(
+          'Mobile offline resources exceed 40 MiB; review the bundle before publishing.',
+        )
       const manifest = {
         id: base,
-        name: '大切课程表',
-        short_name: '大切课表',
-        description: '课表、待办与 AI 助手。业务数据需要连接服务。',
+        name: '课序 · 课表与待办',
+        short_name: '课序',
+        description:
+          '课表、待办与考试在本机保存，可离线读写；云端提供自动快照、手动恢复与版本分发。AI 需要联网。',
         lang: 'zh-CN',
         start_url: base,
         scope: base,
         display: 'standalone',
-        background_color: '#f5f0eb',
-        theme_color: '#2d2d2d',
+        background_color: '#f5f8fa',
+        theme_color: '#167d9a',
         icons: [192, 512].map((size) => ({
           src: `${base}pwa/icon-${size}.png`,
           sizes: `${size}x${size}`,
@@ -82,10 +104,19 @@ export function mobilePwa() {
           purpose: 'any maskable',
         })),
       }
+      const manifestSource = JSON.stringify(manifest, null, 2)
+      files.add('manifest.webmanifest')
+      const assets = [...files]
+        .sort()
+        .map((file) => `${base}${file.split('/').map(encodeURIComponent).join('/')}`)
+      const precache = [...assets]
+      hash.update(manifestSource)
+      hash.update(createServiceWorkerSource({ version: 'template', base, assets, precache }))
+      const version = hash.digest('hex').slice(0, 16)
       this.emitFile({
         type: 'asset',
         fileName: 'manifest.webmanifest',
-        source: JSON.stringify(manifest, null, 2),
+        source: manifestSource,
       })
       this.emitFile({
         type: 'asset',
