@@ -1,5 +1,7 @@
 # 课序 APK 与 Windows EXE（2026-10-19）
 
+[下载安装包与SHA256](../../releases/native/kexu-2026.10.19-release/README.md)。本机普通便携目录另放在项目空间的 `releases/native/kexu-2026.10.19-native.1/`，不含开发依赖或测试数据。
+
 本次把最新本地主数据前端封装为 Android 安装包和 Windows 便携程序。课表、待办、日任务、完成撤销、回顾和草稿共用现有 IndexedDB 业务逻辑；界面资源随包携带，打开应用不需要 Java 服务、Node 或网页服务器。AI 和云快照需要另外配置 HTTPS 服务，且服务端必须允许来自 `https://appassets.androidplatform.net` 的跨域请求。
 
 仓库当前云服务按网页同源部署设计，没有为外壳开放跨域响应。本次包以离线功能与JSON交换为交付范围；原生云备份需要后续配置精确来源的CORS网关并单独联调，不能直接把虚拟本地地址当作云服务器。真实AI供应商与云服务未在此次包中验收。
