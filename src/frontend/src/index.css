@@ -1,247 +1,83 @@
-/* ==================== TangentBlog Design System ==================== */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100..800&display=swap');
-
-/* ---------- Light Mode ---------- */
+/* 课序 · shared visual tokens. System fonts work offline on every device. */
+:root,
 :root[data-theme='light'] {
-  --bg-main: #f5f0eb;
-  --bg-sidebar: #fafaf7;
-  --bg-topbar: #2d2d2d;
+  color-scheme: light;
+  --bg-main: #f5f8fa;
+  --bg-sidebar: #ffffff;
+  --bg-topbar: #173244;
   --bg-card: #ffffff;
-  --bg-footer: #f0ebe4;
-  --bg-code: #2d2d2d;
-  --accent: #f8c3cd;
-  --accent-hover: #f0b8c4;
-  --accent-green: #a8e6cf;
-  --text-primary: #2d2d2d;
-  --text-secondary: #888888;
-  --text-muted: #666666;
+  --bg-footer: #f5f8fa;
+  --bg-code: #102d3b;
+  --accent: #167d9a;
+  --accent-hover: #106b85;
+  --accent-soft: #e7f4f7;
+  --accent-green: #69c9b3;
+  --teal: #0c7c72;
+  --teal-soft: #e8f5f0;
+  --text-primary: #173244;
+  --text-secondary: #536b78;
+  --text-muted: #647b87;
   --text-on-dark: #ffffff;
-  --text-on-accent: #2d2d2d;
-  --border-dark: #2d2d2d;
-  --border-light: #dddddd;
-  --divider: #d0d0d0;
+  --text-on-accent: #ffffff;
+  --border-dark: #c7d6df;
+  --border-light: #dde6eb;
+  --divider: #dde6eb;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --warning: #8a4b00;
+  --warning-soft: #fff4e5;
+  --focus-ring: #167d9a;
+  --surface-shadow: 0 4px 16px rgb(23 50 68 / 4%);
 }
 
-/* ---------- Dark Mode ---------- */
 :root[data-theme='dark'] {
-  --bg-main: #1a1a1a;
-  --bg-sidebar: #363636;
-  --bg-topbar: #2d2d2d;
-  --bg-card: #242424;
-  --bg-footer: #111111;
-  --bg-code: #111111;
-  --accent: #9575cd;
-  --accent-hover: #8165bf;
-  --accent-green: #a8e6cf;
-  --text-primary: #f0ebe4;
-  --text-secondary: #999999;
-  --text-muted: #888888;
-  --text-on-dark: #ffffff;
-  --text-on-accent: #2d2d2d;
-  --border-dark: #4a4a4a;
-  --border-light: #4a4a4a;
-  --divider: #4a4a4a;
+  color-scheme: dark;
+  --bg-main: #101d27;
+  --bg-sidebar: #172a35;
+  --bg-topbar: #16323f;
+  --bg-card: #172a35;
+  --bg-footer: #101d27;
+  --bg-code: #0b1821;
+  --accent: #69c6d5;
+  --accent-hover: #8dd7e2;
+  --accent-soft: #203f4c;
+  --accent-green: #7bd5be;
+  --teal: #65c5ad;
+  --teal-soft: #163f3a;
+  --text-primary: #e5f0f5;
+  --text-secondary: #abc1cc;
+  --text-muted: #97afbb;
+  --text-on-dark: #e5f0f5;
+  --text-on-accent: #0d232c;
+  --border-dark: #46616e;
+  --border-light: #314a57;
+  --divider: #314a57;
+  --danger: #ff958c;
+  --danger-soft: #472c30;
+  --warning: #e7b86a;
+  --warning-soft: #423821;
+  --focus-ring: #69c6d5;
+  --surface-shadow: 0 4px 16px rgb(0 0 0 / 12%);
 }
 
-/* ---------- Reset ---------- */
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family:
-    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
-  background: var(--bg-main) !important;
-  color: var(--text-primary) !important;
-  font-size: calc(13px * var(--app-font-scale, 1));
-  line-height: 1.5;
-}
-#root {
-  min-height: 100vh;
-}
-
-/* ---------- Scrollbar ---------- */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   background: var(--bg-main);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-dark);
-  border-radius: 0;
-}
-
-/* ==================== Layout ==================== */
-.app-shell {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-  background: var(--bg-main);
-}
-
-.app-topbar {
-  height: 48px;
-  background: var(--bg-topbar);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  flex-shrink: 0;
-  border-bottom: 1px solid #000;
-}
-.app-topbar-title {
-  color: var(--text-on-dark);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  cursor: pointer;
-  white-space: nowrap;
-  user-select: none;
-}
-.app-topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.icon-btn-round {
-  width: 32px;
-  height: 32px;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border: 1px solid #888;
-  background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 16px;
-  font-weight: 700;
-  transition: background 0.15s;
-  user-select: none;
+  font-size: calc(14px * var(--app-font-scale, 1));
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
-.icon-btn-round:hover {
-  background: var(--accent);
-}
-
-.app-body {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-.app-sidebar {
-  width: 220px;
-  flex-shrink: 0;
-  background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-light);
-  padding: 20px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-}
-.sidebar-avatar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.sidebar-avatar-img {
-  width: 44px;
-  height: 44px;
-  border-radius: 22px;
-  background: var(--accent);
-  border: 2px solid var(--bg-card);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-on-dark);
-  font-size: 22px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.sidebar-avatar-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.sidebar-divider {
-  height: 1px;
-  background: var(--divider);
-  width: 100%;
-}
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.sidebar-nav-item {
-  height: 34px;
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background 0.1s;
-  user-select: none;
-}
-.sidebar-nav-item:hover {
-  background: var(--bg-main);
-}
-.sidebar-nav-item.active {
-  background: var(--accent);
-  border: 1px solid var(--border-dark);
-  font-weight: 700;
-  color: var(--text-on-accent);
-}
-.sidebar-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sidebar-stats-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-.sidebar-stats-item {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.sidebar-kaomoji {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.app-content {
-  flex: 1;
-  padding: 20px 28px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.app-footer {
-  height: 24px;
-  background: var(--bg-footer);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-shrink: 0;
-  border-top: 1px solid var(--border-light);
-}
-.app-footer-text {
-  font-size: 9px;
-  color: var(--text-secondary);
-  letter-spacing: 0.5px;
-}
+button, input, select, textarea { font-family: inherit; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+#root { min-height: 100dvh; }
+::selection { color: var(--text-primary); background: var(--accent-soft); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-dark); border-radius: 8px; }
 
 /* ==================== Components ==================== */
 .page-header {
@@ -263,7 +99,7 @@ body {
   background: var(--bg-code);
   border: 1px solid var(--border-dark);
   border-radius: 4px;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12.5px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -286,7 +122,7 @@ body {
   width: 420px;
   max-width: 100%;
   background: var(--bg-card);
-  border: 3px solid var(--border-dark);
+  border: 1px solid var(--border-light);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -302,173 +138,15 @@ body {
   padding: 24px 20px;
 }
 
-/* ==================== Antd Overrides ==================== */
-.ant-card {
-  border: 2px solid var(--border-dark) !important;
-  border-radius: 4px !important;
-}
-.ant-card-head {
-  border-bottom: 2px solid var(--border-dark) !important;
-  font-weight: 700 !important;
-}
-.ant-btn {
-  font-family: inherit !important;
-  font-weight: 600 !important;
-  border-radius: 4px !important;
-}
-.ant-btn-primary {
-  background: var(--accent) !important;
-  color: var(--text-on-accent) !important;
-  border: 1px solid var(--border-dark) !important;
-  font-weight: 700 !important;
-}
-.ant-btn-primary:hover {
-  background: var(--accent-hover) !important;
-  color: var(--text-on-accent) !important;
-}
-.ant-btn-default {
-  background: var(--bg-card) !important;
-  border: 1px solid var(--border-dark) !important;
-  color: var(--text-primary) !important;
-}
-.ant-btn-default:hover {
-  background: var(--bg-main) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-dark) !important;
-}
-.ant-input,
-.ant-input-affix-wrapper,
-.ant-input-number,
-.ant-picker,
-.ant-select .ant-select-selector {
-  border-radius: 4px !important;
-  font-family: inherit !important;
-}
-.ant-input:focus,
-.ant-input-affix-wrapper:focus,
-.ant-input-affix-wrapper-focused,
-.ant-picker-focused,
-.ant-select-focused .ant-select-selector {
-  border-color: var(--border-dark) !important;
-  box-shadow: 0 0 0 2px var(--accent) !important;
-}
-.ant-table {
-  border: 2px solid var(--border-dark) !important;
-  border-radius: 4px !important;
-}
-.ant-table-thead > tr > th {
-  font-weight: 700 !important;
-  border-bottom: 2px solid var(--border-dark) !important;
-}
-.ant-table-tbody > tr > td {
-  border-bottom: 1px solid var(--border-light) !important;
-}
-.ant-modal-content {
-  border: 2px solid var(--border-dark) !important;
-  border-radius: 4px !important;
-  overflow: hidden;
-}
-.ant-modal-header {
-  border-bottom: 2px solid var(--border-dark) !important;
-}
-.ant-menu-horizontal {
-  border-bottom: none !important;
-  font-family: inherit !important;
-}
-.ant-segmented {
-  background: var(--bg-sidebar) !important;
-  border-radius: 4px !important;
-  padding: 2px !important;
-}
-.ant-segmented-item {
-  font-family: inherit !important;
-  font-size: 12px !important;
-  transition: none !important;
-  color: var(--text-primary) !important;
-}
-/* antd 的滑动高亮条 thumb 背景默认是白色，需与选中项一致，并去掉滑动过渡实现瞬间切换 */
-.ant-segmented-thumb {
-  background: var(--accent) !important;
-  transition: none !important;
-}
-.ant-segmented-item-selected {
-  background: var(--accent) !important;
-  color: var(--text-on-accent) !important;
-  font-weight: 700 !important;
-  box-shadow: none !important;
-  transition: none !important;
-}
-.ant-segmented-item:hover {
-  background: transparent !important;
-}
-.ant-segmented-item::after {
-  transition: none !important;
-}
-.ant-tag {
-  font-family: inherit !important;
-  border-radius: 0 !important;
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  border: 1px solid var(--border-dark) !important;
-}
-.ant-alert {
-  border-radius: 4px !important;
-  border: 1px solid var(--border-dark) !important;
-}
-.ant-statistic-title {
-  font-size: 11px !important;
-  color: var(--text-secondary) !important;
-}
-.ant-statistic-content {
-  font-family: inherit !important;
-  font-size: 24px !important;
-  font-weight: 700 !important;
-}
-.ant-empty-description {
-  font-size: 13px !important;
-  color: var(--text-secondary) !important;
-}
-.ant-slider-track {
-  background: var(--accent) !important;
-}
-.ant-slider-handle::after {
-  border-color: var(--border-dark) !important;
-  box-shadow: 0 0 0 2px var(--accent) !important;
-}
-.ant-tooltip-inner {
-  font-family: inherit !important;
-  font-size: 12px !important;
-}
-.ant-dropdown-menu {
-  font-family: inherit !important;
-  border: 1px solid var(--border-dark) !important;
-  border-radius: 4px !important;
-}
-.ant-switch {
-  background: var(--border-dark) !important;
-}
-.ant-switch-checked {
-  background: var(--accent) !important;
-}
-.ant-checkbox-checked .ant-checkbox-inner {
-  background: var(--accent) !important;
-  border-color: var(--border-dark) !important;
-}
-.ant-radio-button-wrapper {
-  font-family: inherit !important;
-  border-radius: 4px !important;
-}
-.ant-radio-button-wrapper:not(:first-child)::before {
-  display: none !important;
-}
-.ant-radio-button-wrapper-checked {
-  background: var(--accent) !important;
-  color: var(--text-on-accent) !important;
-  border-color: var(--border-dark) !important;
-}
-.ant-radio-button-wrapper + .ant-radio-button-wrapper {
-  margin-inline-start: 8px !important;
-}
+/* Ant Design owns component colors and states through ThemeProvider tokens. */
+.ant-card { box-shadow: var(--surface-shadow); }
+.ant-btn { font-weight: 600; }
+.ant-card-head-title { font-weight: 650; }
+.ant-table-thead > tr > th { font-weight: 650; }
+.ant-modal-content { overflow: hidden; }
+.ant-statistic-content { font-variant-numeric: tabular-nums; }
+.ant-tag { line-height: 1.65; }
+
 .app-loading {
   min-height: 100vh;
   display: flex;
@@ -949,12 +627,6 @@ body {
 
 /* ==================== Responsive ==================== */
 /* 抽屉类控件默认隐藏（桌面不需要） */
-.topbar-menu-btn {
-  display: none;
-}
-.sidebar-backdrop {
-  display: none;
-}
 .conv-toggle-btn {
   display: none;
 }
@@ -964,33 +636,12 @@ body {
 
 /* 窄屏：侧边栏与 AI 对话列表变为左侧抽屉 */
 @media (max-width: 900px) {
-  .topbar-menu-btn {
-    display: flex;
-  }
-
-  .sidebar-backdrop,
   .conv-backdrop {
     display: block;
     position: fixed;
-    inset: 48px 0 24px 0;
+    inset: var(--topbar-height, 72px) 0 var(--mobile-nav-height, 0px);
     background: rgba(0, 0, 0, 0.45);
     z-index: 99;
-  }
-
-  .app-sidebar {
-    position: fixed;
-    top: 48px;
-    bottom: 24px;
-    left: 0;
-    width: 220px;
-    z-index: 100;
-    transform: translateX(-105%);
-    transition: transform 0.2s ease;
-    border-right: 1px solid var(--border-dark);
-    box-shadow: 2px 0 14px rgba(0, 0, 0, 0.35);
-  }
-  .app-sidebar.open {
-    transform: translateX(0);
   }
 
   .conv-toggle-btn {
@@ -998,8 +649,8 @@ body {
   }
   .conv-panel {
     position: fixed;
-    top: 48px;
-    bottom: 24px;
+    top: var(--topbar-height, 72px);
+    bottom: var(--mobile-nav-height, 0px);
     left: 0;
     width: 240px !important;
     z-index: 110;
@@ -1026,26 +677,6 @@ body {
 
 /* 手机尺寸 */
 @media (max-width: 640px) {
-  .app-topbar {
-    padding: 0 10px;
-    gap: 8px;
-  }
-  .app-topbar-title {
-    font-size: 15px;
-    letter-spacing: 1px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .app-topbar .ant-tag {
-    display: none;
-  }
-
-  .app-content {
-    padding: 10px;
-    gap: 10px;
-  }
-
   .page-header {
     flex-direction: column;
     align-items: stretch;
@@ -1135,6 +766,178 @@ body {
   }
 }
 
+/* ==================== Focus workspace ==================== */
+.focus-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.focus-page-header h2 {
+  font-size: 22px !important;
+}
+.focus-date-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.focus-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.8fr);
+  align-items: start;
+  gap: 16px;
+}
+.focus-task-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.focus-progress-card .ant-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.focus-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.focus-list-card .ant-card-head-title {
+  min-width: 0;
+}
+.focus-task-list {
+  display: flex;
+  flex-direction: column;
+}
+.focus-task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.focus-task-row:first-child {
+  padding-top: 2px;
+}
+.focus-task-row:last-child {
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+.focus-task-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.focus-task-copy > .ant-typography {
+  overflow-wrap: anywhere;
+}
+.focus-task-row.is-completed .focus-task-copy {
+  opacity: 0.68;
+}
+.focus-timer-card {
+  position: sticky;
+  top: 8px;
+}
+.focus-timer-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 20px;
+}
+.focus-timer-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 10px;
+  font-weight: 700;
+}
+.focus-timer-progress {
+  margin: 6px auto 0;
+}
+.focus-clock-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.focus-clock-time {
+  margin: 0 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+}
+.focus-current-task {
+  min-height: 24px;
+  max-width: 100%;
+  margin: 0 !important;
+  text-align: center;
+}
+.focus-timer-controls {
+  display: flex;
+  justify-content: center;
+  min-height: 40px;
+}
+.focus-paused-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
+}
+.focus-timer-hint {
+  text-align: center;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .focus-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .focus-timer-card {
+    position: static;
+    order: -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .focus-page-header {
+    align-items: flex-start;
+  }
+  .focus-page-header h2 {
+    font-size: 19px !important;
+  }
+  .focus-date-row {
+    align-items: flex-start;
+  }
+  .focus-progress-card .ant-card-body {
+    padding: 14px;
+  }
+  .focus-task-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .focus-task-row > .ant-space {
+    width: 100%;
+  }
+  .focus-timer-card .ant-card-body {
+    padding: 16px 12px;
+  }
+  .focus-timer-progress .ant-progress-inner {
+    width: 176px !important;
+    height: 176px !important;
+  }
+}
+
 /* ============ 小组件预览页 /widget（与前端暗夜模式保持一致的风格） ============ */
 /* 硬编码暗夜模式设计令牌，保证预览页始终与应用的深色 UI 一致 */
 .widget-page {
@@ -1146,7 +949,7 @@ body {
   flex-direction: column;
   color: #f0ebe4;
   overflow: hidden;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   padding: 6px 10px 6px;
 }
 .widget-card-loading,

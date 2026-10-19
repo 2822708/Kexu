@@ -20,8 +20,13 @@ import { useApp } from '../store/AppContext'
 import type { RecurringTodo, RecurringTodoPayload } from '../types'
 import { dayjs } from '../utils/schedule'
 import { describeFrequency, describeOffset } from '../utils/recurring'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { LOCAL_MODE } from '../local/mode'
+
+const archivedScript = (rule: RecurringTodo) => LOCAL_MODE && rule.frequency === 'CUSTOM'
 
 export default function RecurringTodoPanel() {
+  const mobile = useMediaQuery('(max-width: 767px)')
   const { recurringTodos, refreshRecurring, refreshTodos } = useApp()
   const [modal, setModal] = useState<{ open: boolean; rule: RecurringTodo | null }>({
     open: false,
@@ -34,10 +39,14 @@ export default function RecurringTodoPanel() {
     try {
       if (modal.rule) {
         await recurringApi.update(modal.rule.id, payload)
-        message.success('循环任务已更新')
+        message.success(
+          LOCAL_MODE && payload.frequency === 'CUSTOM' ? '脚本文本已保存' : '循环任务已更新',
+        )
       } else {
         await recurringApi.create(payload)
-        message.success('循环任务已创建')
+        message.success(
+          LOCAL_MODE && payload.frequency === 'CUSTOM' ? '脚本文本已保存' : '循环任务已创建',
+        )
       }
       setModal({ open: false, rule: null })
       await refreshRecurring()
@@ -49,6 +58,7 @@ export default function RecurringTodoPanel() {
   }
 
   const toggle = async (rule: RecurringTodo) => {
+    if (archivedScript(rule)) return
     try {
       await recurringApi.toggle(rule.id)
       await refreshRecurring()
@@ -68,9 +78,10 @@ export default function RecurringTodoPanel() {
   }
 
   const triggerNow = async (rule: RecurringTodo) => {
+    if (archivedScript(rule)) return
     try {
       await recurringApi.triggerNow(rule.id)
-      message.success('已立即生成一条待办')
+      message.success(LOCAL_MODE ? '已处理本次触发' : '已立即生成一条待办')
       await Promise.all([refreshRecurring(), refreshTodos()])
     } catch (e) {
       message.error(e instanceof Error ? e.message : '生成失败')
@@ -86,9 +97,11 @@ export default function RecurringTodoPanel() {
           <Typography.Text strong={rule.enabled} type={rule.enabled ? undefined : 'secondary'}>
             {title}
           </Typography.Text>
-          {!rule.enabled && <Tag>已停用</Tag>}
-          {rule.frequency === 'CUSTOM' && <Tag color="geekblue">自定义</Tag>}
-          {rule.chainAfterComplete && (
+          {!rule.enabled && !archivedScript(rule) && <Tag>已停用</Tag>}
+          {rule.frequency === 'CUSTOM' && (
+            <Tag color="geekblue">{LOCAL_MODE ? '脚本文本' : '自定义'}</Tag>
+          )}
+          {rule.chainAfterComplete && !archivedScript(rule) && (
             <Tooltip title="完成当期后立即生成下一期">
               <Tag color="purple">连续</Tag>
             </Tooltip>
@@ -99,14 +112,14 @@ export default function RecurringTodoPanel() {
     {
       title: '触发规则',
       width: 160,
-      render: (_, rule) => describeFrequency(rule),
+      render: (_, rule) => (archivedScript(rule) ? '仅保存文本，不执行' : describeFrequency(rule)),
     },
     {
       title: '截止',
       width: 140,
       render: (_, rule) => (
         <Typography.Text type="secondary">
-          触发后 {describeOffset(rule.ddlOffsetMinutes)}
+          {archivedScript(rule) ? '—' : `触发后 ${describeOffset(rule.ddlOffsetMinutes)}`}
         </Typography.Text>
       ),
     },
@@ -114,7 +127,9 @@ export default function RecurringTodoPanel() {
       title: '下次触发',
       width: 170,
       render: (_, rule) =>
-        rule.enabled && rule.nextTriggerAt ? (
+        archivedScript(rule) ? (
+          <Typography.Text type="secondary">不会自动生成</Typography.Text>
+        ) : rule.enabled && rule.nextTriggerAt ? (
           <Space size={4} direction="vertical" style={{ lineHeight: 1.3 }}>
             <span>{dayjs(rule.nextTriggerAt).format('MM-DD HH:mm')}</span>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -128,18 +143,23 @@ export default function RecurringTodoPanel() {
     {
       title: '启用',
       width: 70,
-      render: (_, rule) => (
-        <Switch size="small" checked={rule.enabled} onChange={() => toggle(rule)} />
-      ),
+      render: (_, rule) =>
+        archivedScript(rule) ? (
+          <Typography.Text type="secondary">不执行</Typography.Text>
+        ) : (
+          <Switch size="small" checked={rule.enabled} onChange={() => toggle(rule)} />
+        ),
     },
     {
       title: '操作',
       width: 120,
       render: (_, rule) => (
         <Space size={0}>
-          <Tooltip title="立即生成一条待办">
-            <Button type="text" icon={<ThunderboltOutlined />} onClick={() => triggerNow(rule)} />
-          </Tooltip>
+          {!archivedScript(rule) && (
+            <Tooltip title="立即生成一条待办">
+              <Button type="text" icon={<ThunderboltOutlined />} onClick={() => triggerNow(rule)} />
+            </Tooltip>
+          )}
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -175,28 +195,86 @@ export default function RecurringTodoPanel() {
           </Button>
         }
       >
-        <Table
-          size="small"
-          rowKey="id"
-          columns={columns}
-          dataSource={recurringTodos}
-          pagination={false}
-          scroll={{ x: 800 }}
-          locale={{
-            emptyText: (
-              <Empty
-                description={
-                  <Space direction="vertical" size={2}>
-                    <span>还没有循环任务</span>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      例如：每周五 12:00 提醒「刷本周网课」，本周日 12:00 截止
-                    </Typography.Text>
-                  </Space>
-                }
-              />
-            ),
-          }}
-        />
+        {mobile ? (
+          <div className="mobile-record-list">
+            {!recurringTodos.length && <Empty description="还没有循环任务" />}
+            {recurringTodos.map((rule) => (
+              <Card key={rule.id} size="small">
+                <div className="mobile-record-title">
+                  <Typography.Text strong>{rule.title}</Typography.Text>
+                  {archivedScript(rule) ? (
+                    <Tag>仅保存文本</Tag>
+                  ) : (
+                    <Switch
+                      aria-label={`启用 ${rule.title}`}
+                      checked={rule.enabled}
+                      onChange={() => toggle(rule)}
+                    />
+                  )}
+                </div>
+                <p>
+                  {archivedScript(rule)
+                    ? '脚本文本仅在本机保留和备份，不执行，也不生成待办。'
+                    : `${describeFrequency(rule)} · 触发后 ${describeOffset(rule.ddlOffsetMinutes)} 截止`}
+                </p>
+                <p className="text-muted">
+                  {archivedScript(rule)
+                    ? '可编辑文本，或改用每日、每周、每月规则。'
+                    : rule.enabled
+                      ? rule.nextTriggerAt
+                        ? `下次 ${dayjs(rule.nextTriggerAt).format('MM-DD HH:mm')}`
+                        : '等待计算下次触发'
+                      : '已停用'}
+                </p>
+                {rule.chainAfterComplete && !archivedScript(rule) && <Tag>完成后生成下一期</Tag>}
+                <Space wrap>
+                  {!archivedScript(rule) && (
+                    <Button icon={<ThunderboltOutlined />} onClick={() => triggerNow(rule)}>
+                      立即生成
+                    </Button>
+                  )}
+                  <Button icon={<EditOutlined />} onClick={() => setModal({ open: true, rule })}>
+                    编辑
+                  </Button>
+                  <Popconfirm
+                    title="删除该循环任务？"
+                    description="已生成的待办会保留"
+                    okText="删除"
+                    cancelText="取消"
+                    onConfirm={() => remove(rule)}
+                  >
+                    <Button danger icon={<DeleteOutlined />}>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Table
+            size="small"
+            rowKey="id"
+            columns={columns}
+            dataSource={recurringTodos}
+            pagination={false}
+            scroll={{ x: 800 }}
+            locale={{
+              emptyText: (
+                <Empty
+                  description={
+                    <Space direction="vertical" size={2}>
+                      <span>还没有循环任务</span>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        例如：每周五 12:00 提醒「刷本周网课」，本周日 12:00 截止
+                      </Typography.Text>
+                    </Space>
+                  }
+                />
+              ),
+            }}
+          />
+        )}
       </Card>
 
       <RecurringFormModal

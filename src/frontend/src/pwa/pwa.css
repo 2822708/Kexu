@@ -1,0 +1,53 @@
+.pwa-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pwa-controls:empty {
+  display: none;
+}
+.pwa-controls .ant-btn {
+  box-shadow: none;
+}
+
+.pwa-offline {
+  position: fixed;
+  top: calc(var(--topbar-height, 72px) + 8px);
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  z-index: 1100;
+  padding: 10px 12px;
+  background: #fff3cd;
+  color: #594000;
+  border: 1px solid #dec679;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+@media (max-width: 767px) {
+  /* The composer occupies the space above mobile navigation. Installation and
+     updates remain available on the other pages without covering Send. */
+  .pwa-controls.pwa-controls-chat {
+    display: none;
+  }
+  .pwa-controls .ant-btn {
+    min-height: 44px;
+    width: 44px;
+    min-width: 44px;
+    padding-inline: 0;
+  }
+  .pwa-controls .ant-btn > span:not(.ant-btn-icon) {
+    display: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .app-topbar .app-brand-mark { display: none; }
+}
+
+[data-keyboard-open] .pwa-controls,
+[data-keyboard-open] .pwa-offline {
+  display: none;
+}

@@ -1,0 +1,133 @@
+.day-agenda {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 12px;
+}
+.day-agenda-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.day-agenda-toolbar .ant-picker {
+  width: 156px;
+}
+.day-agenda-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.day-agenda-section {
+  display: grid;
+  gap: 10px;
+}
+.day-agenda-card {
+  min-width: 0;
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--border-dark);
+  border-radius: 10px;
+  background: var(--bg-card);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.day-agenda-exam {
+  border-left-color: #b42318;
+}
+.day-agenda-card-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+}
+.day-agenda-card h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.day-agenda-time {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.day-agenda-detail {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+.day-agenda-detail > span:first-child {
+  color: var(--text-muted);
+}
+.day-agenda-detail > span:last-child {
+  overflow-wrap: anywhere;
+}
+.day-agenda-card .ant-btn {
+  margin-top: 2px;
+  align-self: flex-end;
+}
+
+@media (max-width: 767px) {
+  .day-agenda {
+    gap: 12px;
+  }
+  .day-agenda-toolbar {
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .day-agenda-toolbar .ant-picker {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+    height: 44px;
+  }
+  .day-agenda-toolbar .ant-picker input {
+    font-size: 16px;
+  }
+  .day-agenda .ant-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .day-agenda-summary h4 {
+    font-size: 18px;
+  }
+  .day-agenda-card {
+    padding: 14px;
+  }
+  .tt-page .tt-scroll {
+    touch-action: pan-x pan-y;
+  }
+  .tt-page .tt-scroll .timetable-grid {
+    min-width: 820px;
+    grid-template-columns: 56px repeat(7, minmax(0, 1fr));
+    font-size: calc(12px * var(--tt-scale, 1));
+    grid-auto-rows: minmax(calc(48px * var(--tt-scale, 1)), 1fr);
+  }
+  .tt-page .tt-scroll .tt-cell {
+    padding: 3px;
+    min-height: 42px;
+  }
+  .tt-page .tt-scroll .tt-period span:not(.tt-period-num) {
+    font-size: 0.9em;
+    line-height: 1.3;
+  }
+  .tt-page .tt-scroll .course-block {
+    padding: 6px 4px;
+  }
+  .tt-page .tt-scroll .course-block-meta {
+    font-size: 0.9em;
+  }
+  .tt-page .course-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
