@@ -211,6 +211,22 @@ npm run build
 2. **「上传文件仅存本地浏览器缓存」的真实语义**。文本类文件（PDF/DOCX/TXT/MD/CSV/JS/HTML）确实是纯客户端本地提取（pdfjs / mammoth 在浏览器内完成，字节不出设备）；但截图 OCR 复用既有 `aiApi.parseImageText`，**经服务器瞬态转发、不落盘**；解析产生的 notice 元数据落设备工作区（服务端）。页面文案因此写「文件在浏览器本地读取，原文不作保存」，**不要**写「自动存入本地并解析」——原文件并不保存，写了就是误导。
 3. **订阅 = 本地收藏查询条件**。`timetable.querySubs.v1` 只存 id/category/keyword/时间，作用是「之后一键重新生成计划」。没有后台匹配、没有推送——文案不得声称「会提醒你」。
 
+### 3.10 多 provider 路由与降级的三条硬约束（2026-10-19）
+
+改动 `LlmClientRegistry` / `FallbackLlmClient` / `AbstractOpenAiLlmClient` 前必读：
+
+1. **流式调用一旦吐过正文，就绝不能再切 provider 重试。** 否则备用 provider 的回复会接在
+   已吐出的内容后面，用户看到两份内容拼在一起。`FallbackLlmClient` 用计数监听器盯着
+   `onReasoning` / `onContent`，已产出就直接抛原错误。非流式没有这个顾虑，可以放心重试。
+2. **499（客户端已断开）不重试。** 用户都走了，再切一家纯属浪费上游配额。其余错误码
+   （401/429/502/504…）换一家往往就能成功——这正是配第二个 provider 的意义。
+3. **装饰器顺序是 `BudgetAware(Fallback(primary, backups))`。** 预算检查必须在最外层：
+   超限的调用一次 token 都不该花，更不该去重试。反过来包会让每次重试都多一次预算判定。
+
+**踩过的坑**：`LlmClientRegistry` 不要直接注入 `ObjectMapper` / `LlmUsageRecorder`。精简的测试
+上下文（如 `campus-agent-plan`）没有 `LlmUsageMapper`，硬依赖会让整个容器起不来——12 个测试
+就是这么挂的。用 `ObjectProvider` 且**只在真配了 provider 时才 `getIfAvailable()`**。
+
 ---
 
 ## 4. 关键文件地图
@@ -273,6 +289,36 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-19 · WorkBuddy · 多 LLM provider + 场景分级路由 + 故障降级（6.1 #2/#3/#6），182/182 绿
+
+沿用「先把页面做完」之后的基建推进。用户一句「继续」，取 HANDOVER 6.1 里剩余且能独立交付的一条链：
+多 provider（#2）+ 分级路由（#3）+ 降级重试（#6）。动机是现实的——DeepSeek Key 待轮换，单点故障风险摆在那。
+
+**抽象层重构**：`DeepSeekLlmClient` 的 430 行里只有「模型名 / Key / 超时」是 DeepSeek 特有的，其余
+（请求构造、流式解析、超时看门狗、token 埋点）对所有 OpenAI 兼容服务都通用。上提为
+`AbstractOpenAiLlmClient`，DeepSeek 退化为薄子类，行为不变（171 个既有测试原地保护）。
+
+**新增**：
+- `OpenAiCompatibleLlmClient` + `LlmProviderConfig`：智谱 GLM / 通义 / 豆包 / Moonshot / 自建网关
+  都是同一套 chat/completions，填配置即可挂载，**不需要为每家写一个类**
+- `app.llm.providers.<id>` / `routes.<SCENE>` / `fallback`：默认全空，行为与 V1.0 完全等价
+- `FallbackLlmClient`：主 provider 失败按顺序切备用各试一次
+
+**两条自己立的约束**（写进测试钉住）：
+1. **流式一旦吐过正文就不再切换 provider**——否则用户会看到两份内容拼在一起。宁可失败
+2. **499（客户端已断开）不重试**——用户都走了，重试纯属浪费上游配额
+
+**踩坑**：registry 构造新增 `ObjectMapper` / `LlmUsageRecorder` 依赖后，12 个测试容器起不来
+（`NoSuchBeanDefinitionException: LlmUsageRecorder`）——精简测试上下文没有 `LlmUsageMapper`。
+改为 `ObjectProvider` 按需获取：没配 provider 的上下文根本不会去取这两个 bean。
+
+**验收**：182/182 全绿（171 原有 + 11 新增 `LlmRoutingTest`）；standalone jar 重启后
+`/` 200、`/api/health` 401（鉴权正常）。提交 `144295c` + `db8c9b3`。
+
+**未做（明确边界）**：provider 目前只能靠配置文件/环境变量添加，**界面里还不能填**。
+桌面单机版用户不会去改 yml，所以这只能算「服务端部署可用」。要补界面配置需要连带决定
+Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings` 开关），留给下一轮。
 
 ### 2026-10-19 · WorkBuddy · PWA 化：可安装 Web App（manifest + SW + 安装提示），含 manifest MIME 坑
 
@@ -648,11 +694,11 @@ npm run build
 | # | 事项 | 说明 |
 |---|---|---|
 | 1 | **补用户行为埋点** | ✅ **P0-1 已完成提案确认/拒绝埋点**（`ai_event` + `decided_at` + `/api/stats/proposals`）。**仍缺**：计划采纳率（生成后 24h 内完成或调整占比）/ 7 日留存 / 计划采纳率口径（`daily_plan` 没有决定时刻字段，要先补数据） |
-| 2 | **多 LLM provider 注册** | `LlmClientRegistry` 目前只有 DeepSeek 一家。补一个 OpenAI 兼容客户端（智谱 GLM / 通义 / 豆包均兼容），消除单点故障并获得议价能力 |
-| 3 | **按任务分级路由** | 意图分类、简单改写走 flash 级；每日计划、复杂推理走主力级。2026 年国产模型价格：DeepSeek-V4-Lite 0.1/0.2 元每百万 token、GLM-4-Flash 免费、V4-Pro 1.0/2.0（缓存命中 0.025） |
+| 2 | **多 LLM provider 注册** | ✅ **已完成**（`OpenAiCompatibleLlmClient` + `app.llm.providers.<id>`；抽象层抽为 `AbstractOpenAiLlmClient`，DeepSeek 退化为薄子类）。**仍缺**：界面里填 provider 配置——目前只能改 yml/环境变量，桌面单机版用户用不上 |
+| 3 | **按任务分级路由** | ✅ **已完成**（`app.llm.routes.<SCENE>=<providerId>`，7 处调用点改 `forScene(SCENE_*)`）。**下一步**：等真有第二个 provider 上线，按实测单价把 EXTRACT/OCR 这类轻活切过去；2026 年国产模型价格：DeepSeek-V4-Lite 0.1/0.2 元每百万 token、GLM-4-Flash 免费、V4-Pro 1.0/2.0（缓存命中 0.025） |
 | 4 | **Prompt Caching** | 系统提示词 + 学生画像这类稳定前缀打 cache 标记，输入成本可降 80–90% |
 | 5 | **token 计量与预算** | ✅ **P0-1 + P0-2 均已完成**（`llm_usage` + `/api/stats/usage` + 统计页用量与预算卡片 + `LlmBudgetService` 两级额度熔断，详见 3.8）。**默认不限制**，要熔断必须显式配 `app.llm.budget.*` |
-| 6 | **降级与重试** | provider 故障自动切备用；含已列入待排期的「计划生成失败重试退避」 |
+| 6 | **降级与重试** | ✅ **provider 故障自动切备用已完成**（`FallbackLlmClient` + `app.llm.fallback`；流式吐过正文就不再切换，499 不重试）。**仍缺**：已列入待排期的「计划生成失败重试退避」 |
 
 ### 6.2 第二阶段：记忆系统升级（调研报告 §5 方向 A，约 2–3 周）
 
