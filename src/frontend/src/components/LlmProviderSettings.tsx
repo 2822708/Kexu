@@ -60,6 +60,82 @@ function formatLatency(ms: number): string {
 }
 
 /**
+ * 顶部状态条：现在到底在用谁。
+ *
+ * <p>三种状态刻意用三种颜色，因为它们的严重程度完全不同：
+ * 正常（绿）/ 一条都不能用（红）/ <b>设的那个不可用、正在兜底</b>（警告）。
+ * 最后一种最需要喊出来——用户以为在用的是 A，实际在跑的是 B，账单和效果都对不上，
+ * 而且界面上不写清楚就永远发现不了。
+ */
+function ActiveProviderBanner({
+  data,
+  busy,
+  onReset,
+}: {
+  data: LlmProvidersPayload
+  busy: string | null
+  onReset: () => void
+}) {
+  const { activeProvider, activeSource, configActiveProvider, ready } = data
+
+  if (!ready.length) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="当前没有可用的服务提供方，AI 功能会返回「服务未配置」"
+        description="填好地址、模型名和 API Key 并保存后即可使用。"
+      />
+    )
+  }
+
+  if (activeSource === 'fallback') {
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        message={`默认服务「${activeProvider}」当前不可用，正在使用：${ready.join('、')}`}
+        description={
+          <Space direction="vertical" size={4}>
+            <Typography.Text style={{ fontSize: 12 }}>
+              它的地址、模型名或 Key 还没填全。请在下方补全，或换一个能用的设为默认。
+            </Typography.Text>
+            <Button size="small" onClick={onReset} loading={busy === '__reset__'}>
+              改回配置文件里的「{configActiveProvider}」
+            </Button>
+          </Space>
+        }
+      />
+    )
+  }
+
+  return (
+    <Alert
+      type="success"
+      showIcon
+      message={
+        <Space size={8} wrap>
+          <span>
+            当前默认：<strong>{activeProvider}</strong>
+          </span>
+          <Tag color="processing">{activeSource === 'local' ? '界面设置' : '配置文件'}</Tag>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            可用：{ready.join('、')}
+          </Typography.Text>
+        </Space>
+      }
+      action={
+        activeSource === 'local' ? (
+          <Button size="small" type="text" onClick={onReset} loading={busy === '__reset__'}>
+            改回「{configActiveProvider}」
+          </Button>
+        ) : null
+      }
+    />
+  )
+}
+
+/**
  * 多 AI 服务提供方配置（成本治理 6.1 #2）。
  *
  * <p>存在的理由：{@code app.llm.providers.*} 只能改 yml 或环境变量，桌面单机版用户
@@ -78,6 +154,8 @@ export default function LlmProviderSettings() {
   const [probeResults, setProbeResults] = useState<Record<string, LlmProbeResult>>({})
   /** 结果区只展示最近测的那一条，全都铺开会显得页面很吵 */
   const [lastProbed, setLastProbed] = useState<string | null>(null)
+  /** 正在切换默认的值（逐行 loading，避免连点） */
+  const [switching, setSwitching] = useState<string | null>(null)
   const [form] = Form.useForm<{
     id: string
     baseUrl: string
@@ -155,6 +233,37 @@ export default function LlmProviderSettings() {
   }
 
   /**
+   * 把某个 provider 设为默认。
+   *
+   * <p>失败必须原样报出后端给的 reason：最常见的原因是「配置不全」，用户需要知道
+   * 缺的是哪一样，而不是笼统的「切换失败」。
+   */
+  const activate = async (id: string) => {
+    setSwitching(id)
+    try {
+      setData(await aiApi.setActiveProvider(id))
+      message.success(`已切换到 ${id}，下次对话就用它`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '切换默认服务失败', 8)
+    } finally {
+      setSwitching(null)
+    }
+  }
+
+  /** 回到配置文件设定的默认值 */
+  const resetActive = async () => {
+    setSwitching('__reset__')
+    try {
+      setData(await aiApi.resetActiveProvider())
+      message.success('已回退到配置文件设定的默认服务')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '操作失败')
+    } finally {
+      setSwitching(null)
+    }
+  }
+
+  /**
    * 测一次连通性。
    *
    * <p>成功和失败都不弹 error toast——失败原因要能停留着看。只有「请求本身没发出去」
@@ -218,6 +327,9 @@ export default function LlmProviderSettings() {
       dataIndex: 'configured',
       render: (configured: boolean, row) => (
         <Space size={6} wrap>
+          {row.id === data?.activeProvider ? (
+            <Tag color="processing">默认</Tag>
+          ) : null}
           <Tag color={configured ? 'success' : 'default'}>{configured ? '可用' : '未完成'}</Tag>
           <Tag>{SOURCE_LABEL[row.source]}</Tag>
         </Space>
@@ -260,11 +372,24 @@ export default function LlmProviderSettings() {
               {
                 title: '',
                 key: 'actions',
-                width: 150,
+                width: 210,
                 render: (_: unknown, row) => {
                   const result = probeResults[row.id]
+                  const isActive = row.id === data?.activeProvider
                   return (
                     <Space size={2}>
+                      {isActive ? null : (
+                        <Button
+                          size="small"
+                          type="link"
+                          /* 配置不全的 provider 当默认会让 AI 整体不可用，后端也会拒，这里先禁掉少一次往返 */
+                          disabled={!row.configured || switching !== null}
+                          loading={switching === row.id}
+                          onClick={() => void activate(row.id)}
+                        >
+                          设为默认
+                        </Button>
+                      )}
                       <Button
                         size="small"
                         type="link"
@@ -336,19 +461,7 @@ export default function LlmProviderSettings() {
           />
         ) : null}
 
-        {data?.ready.length ? (
-          <Alert
-            type="success"
-            showIcon
-            message={`当前可用：${data.ready.join('、')}`}
-          />
-        ) : data ? (
-          <Alert
-            type="warning"
-            showIcon
-            message="当前没有可用的服务提供方，AI 功能会返回「服务未配置」"
-          />
-        ) : null}
+        {data ? <ActiveProviderBanner data={data} busy={switching} onReset={() => void resetActive()} /> : null}
 
         <Form form={form} layout="vertical" requiredMark={false} style={{ marginTop: 4 }}>
           <Space size={12} wrap style={{ width: '100%' }}>

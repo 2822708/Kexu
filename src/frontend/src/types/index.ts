@@ -209,7 +209,12 @@ export interface LlmProvider {
 export interface LlmProvidersPayload {
   editable: boolean
   providers: LlmProvider[]
+  /** 生效的默认 provider（界面设置 > 配置文件） */
   activeProvider: string
+  /** 默认值从哪来：local=界面设的 / config=yml 或环境变量 / fallback=设的那个不可用，正按可用性兜底 */
+  activeSource: 'local' | 'config' | 'fallback'
+  /** 配置文件里的原始值，用于「重置为配置文件」时告诉用户会回到哪 */
+  configActiveProvider: string
   routes: Record<string, string>
   fallback: string[]
   /** 当前真正可用的 providerId，用来回答「填完了到底生效没有」 */

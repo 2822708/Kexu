@@ -197,6 +197,10 @@ npm run build
 | **standalone 真机验证必须 `-Pstandalone` 打包** | H2 驱动只在该 profile 里是 `runtime` scope，不带就 `Cannot load driver class: org.h2.Driver`，而且报错会伪装成 `courseMapper` → `sqlSessionFactory` → `dataSource` 一长串 bean 创建失败，看着像代码问题。同一 profile 还负责把 `frontend/dist` 复制进 jar。真机验证前先 `unzip -l target/*.jar \| grep -c "BOOT-INF/lib/h2"` 自查 |
 | **真机验证要 `--app.bootstrap-key=`** | 否则 `ApiKeyBootstrap` 走「无初始账号」分支，所有写接口 401（连注册都要 Key，形成死锁）。日志特征：`No bootstrap account configured` |
 | **「把错误原文附在翻译后面」的清洗顺序** | 我曾用「滤掉非字母数字后看剩下什么」判断原文是否只有状态码，结果把中文（「账户余额不足」）也滤成空，差点吃掉用户唯一能查文档的线索。**正确顺序：先剥掉自己的模板词（中文，会干扰判断）→ 见非 ASCII 就一律保留 → 最后才清洗做判断**。并且这个判断要配一正一反两条测试，只测「不显示冗余」会掩盖「误吃信息」 |
+| **`llm.provider.` 前缀是保留给 provider 名的** | `localProviderIds()` 会把 `llm.provider.<x>.*` 里的 `<x>` 当 provider 名收集。想加「默认 provider」这类全局键，必须放在前缀之外（本项目用 `llm.active-provider`），否则会凭空多出一个名叫 `active` / `default` 的 provider，而且症状很怪：设置页多一行空配置 |
+| **改 `active-provider` 的读法要一次改全三处** | `forScene` / `activeProviderId` / 构造函数日志各读一次，漏一处就出现「切了但日志还写着旧的」或「切了但对话还用旧的」。统一收进一个 `configuredActiveProvider()`，并写一条**变异测试**（把它改回直接读 properties，测试必须失败）——只断言「界面显示了新值」是测不出这个的 |
+| **兜底态必须显式暴露，不能静默回退** | 默认 provider 配置坏了时 registry 会按可用性自动回退（这是对的，否则全站 503）。但如果界面只显示「当前默认：alpha」，用户会以为在跑 alpha，实际在跑 beta，账单和效果都对不上。要有一个明确的 fallback 态并给出警告 + 一键改回的出口 |
+| **删掉正在当默认的 provider 要连带清默认设置** | 否则下次启动指向不存在的 id。但不该「自动挑下一个」——默认用谁是用户的决定。相应地，端点测试的 `@BeforeEach` 也要单独复位默认值，因为那个「删 provider」的清理循环只在默认正好等于该 provider 时才连带清 |
 
 ### 3.8 预算熔断（成本治理 P0-2）
 
@@ -307,6 +311,53 @@ npm run build
 
 ## 5. 会话日志（倒序，最新在最上）
 
+### 2026-10-19 · WorkBuddy · 界面里切换默认 provider（成本治理 6.1 #2 收尾）
+
+**动机**：上一轮做完连通性测试后还剩最后一个缺口——**测通了也不代表在用它**。
+`active-provider` 只读 yml，桌面单机版用户没法换默认服务。
+
+**做了什么**：
+1. `LlmProviderSettings` 新增本地覆盖键 `llm.active-provider`，优先级同 provider 字段
+   （界面 > 配置文件）
+2. 三道写入校验：id 合法、provider 存在、**配置必须完整**
+3. `PUT /api/ai/providers/active` + `DELETE /api/ai/providers/active`（重置回配置文件）
+4. registry 三处取 `active-provider` 的地方统一走 `configuredActiveProvider()`
+5. 设置页：表格状态列加「默认」标签、操作列加「设为默认」、顶部状态条三态
+
+**最关键的约束：不能把默认设成配置不全的 provider。**
+放行的话用户点完看不出任何异常，问题要到下一次对话才炸，且报错完全不指向这里。
+所以后端直接 400 拒绝，前端按钮同步禁用——两道闸，而不是「相信前端会拦」。
+
+**状态条刻意分三色**，因为严重程度完全不同：
+- 绿：正常，标出「界面设置 / 配置文件」来源，界面设的可一键改回
+- 红：一条都不可用
+- **黄（fallback）**：设的那个不可用、正在按可用性兜底
+
+黄色这一态最需要喊出来——用户以为在用的是 A，实际在跑 B，账单和效果都对不上，
+不写清楚就永远发现不了。这个状态没有用「静默回退」敷衍过去。
+
+**验证**：
+- 新增 11 项测试（7 个 settings + 4 个端点），**全量 232/232 绿**
+- **变异验证**：把 registry 改回只读 `properties.getActiveProvider()`，
+  `registryRoutesToUiSelectedProvider` 立刻失败——证明测的是「注册表真的读了」，
+  而不只是「界面显示了」
+- **真机端到端**（standalone jar + 两个会回显端口的假上游 + 真发起 AI 对话）：
+  - 默认 alpha → 对话回复「来自端口17901」；切到 beta → 回复「来自端口17903」。
+    **这是最硬的证据：切换真的改变了实际调用走向，不只是界面刷新**
+  - 把默认的 alpha Key 清掉 → `activeSource=fallback`，AI 自动走 beta 而不是 503
+  - Chromium 点击 8 项断言全过：状态条、默认标签、禁用态、切换、改回
+  - 截图：`docs/assets/llm-provider-active-switched.png`（切换成功）、
+    `llm-provider-active-fallback.png`（兜底警告）
+
+**踩到的坑**：
+- **`llm.active-provider` 不能放 `llm.provider.` 前缀下**：那个前缀被
+  `localProviderIds()` 当 provider 名扫描，`llm.provider.active` 会被误认成名叫
+  `active` 的 provider
+- **删 provider 要连带清默认设置**：否则下次启动指向不存在的 id。但不做「自动挑下一个」
+  ——默认用谁是用户的决定，不该替他猜
+- **端点测试的 `@BeforeEach` 要一起复位默认**：删 provider 才连带清默认，
+  所以那个循环清不掉残留
+
 ### 2026-10-19 · WorkBuddy · provider 连通性测试（成本治理 6.1 #2 收尾）
 
 **动机**：上一轮做完界面配置后，用户填完 Key 只能靠「生成一次计划」间接验证。
@@ -357,6 +408,7 @@ toast 三秒就没了。结果区能停着看、能对照着改，还带可关�
 
 **未做**：「设为默认 provider」按钮（要改 `active-provider`，涉及运行时改 yml 语义，
 需先加本地覆盖层，否则可能把默认设成未配置的 provider 导致全站 503）。
+（已在 2026-10-19「界面里切换默认 provider」一条中完成。）
 
 ### 2026-10-19 · WorkBuddy · 设置页配置 AI 服务提供方（成本治理 6.1 #2 收尾）
 

@@ -95,10 +95,13 @@ public class LlmClientRegistry {
         this.clients = Collections.unmodifiableMap(collected);
         rebuildDynamicClients();
 
-        String configuredActive = normalize(properties.getActiveProvider());
-        if (!this.clients.containsKey(configuredActive)) {
-            log.warn("app.llm.active-provider={} 未注册，已注册的 provider：{}；将按可用性回退",
-                    configuredActive, this.clients.keySet());
+        String configuredActive = configuredActiveProvider();
+        // 用合并视图判断：界面配置的 provider 在 dynamicClients 里，不在 this.clients 里，
+        // 只看 clients 会把「刚在界面配好的 provider」误报成未注册
+        Map<String, LlmClient> startupView = mergedClients();
+        if (!startupView.containsKey(configuredActive)) {
+            log.warn("默认 provider={} 未注册，已注册的 provider：{}；将按可用性回退",
+                    configuredActive, startupView.keySet());
         }
         logProviders("启动");
     }
@@ -207,8 +210,21 @@ public class LlmClientRegistry {
      */
     public LlmClient forScene(String scene) {
         String routed = scene == null ? null : resolveRoute(scene);
-        String primaryId = routed != null ? routed : normalize(properties.getActiveProvider());
+        String primaryId = routed != null ? routed : configuredActiveProvider();
         return wrap(primaryId);
+    }
+
+    /**
+     * 生效的默认 provider：界面设置 &gt; {@code app.llm.active-provider}。
+     *
+     * <p>两者都不合法时返回 deepseek（{@link #normalize} 的兜底），由 {@link #wrap}
+     * 按可用性回退——「改了默认 provider 就全站 503」是不可接受的。
+     */
+    private String configuredActiveProvider() {
+        if (providerSettings != null) {
+            return normalize(providerSettings.activeProviderId());
+        }
+        return normalize(properties.getActiveProvider());
     }
 
     /** AI 功能是否可用（任一已注册的客户端已配置）。 */
@@ -226,7 +242,7 @@ public class LlmClientRegistry {
         try {
             return active().providerId();
         } catch (BusinessException unavailable) {
-            return normalize(properties.getActiveProvider());
+            return configuredActiveProvider();
         }
     }
 

@@ -170,6 +170,125 @@ class LlmProviderSettingsTest {
         assertThat(LlmProviderSettings.mask(null)).isEmpty();
     }
 
+    // ==================== 默认 provider 切换 ====================
+
+    @Test
+    void uiActiveProviderWinsOverYmlActiveProvider() {
+        LlmProperties properties = new LlmProperties();
+        properties.setActiveProvider("deepseek");
+        LlmProviderSettings settings = settings(properties, true);
+        settings.save("glm", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", "sk-glm-key-123456",
+                null, null, null);
+
+        assertThat(settings.activeProviderId()).as("没设置时应跟随 yml").isEqualTo("deepseek");
+
+        settings.saveActiveProvider("glm");
+
+        assertThat(settings.activeProviderId()).isEqualTo("glm");
+        assertThat(settings.hasLocalActiveProvider()).isTrue();
+    }
+
+    /**
+     * 不能把默认设成未配置的 provider。
+     *
+     * <p>这是本功能最重要的一条约束：设错了会让 AI 整体不可用，而用户点完那一刻看不出
+     * 任何异常——问题要到下一次对话才炸出来，还完全不指向这里。
+     */
+    @Test
+    void cannotActivateProviderWithIncompleteConfig() {
+        LlmProperties properties = new LlmProperties();
+        LlmProviderSettings settings = settings(properties, true);
+        // 只填了地址和模型，没有 Key
+        settings.save("glm", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", null, null, null, null);
+
+        assertThatThrownBy(() -> settings.saveActiveProvider("glm"))
+                .isInstanceOf(com.timetable.exception.BusinessException.class)
+                .hasMessageContaining("不能设为默认");
+        assertThat(settings.activeProviderId()).as("被拒绝后默认值不能变").isEqualTo("deepseek");
+    }
+
+    @Test
+    void cannotActivateUnknownProvider() {
+        LlmProviderSettings settings = settings(new LlmProperties(), true);
+
+        assertThatThrownBy(() -> settings.saveActiveProvider("nosuch"))
+                .isInstanceOf(com.timetable.exception.BusinessException.class)
+                .hasMessageContaining("没有找到 provider");
+    }
+
+    /** 删掉正在当默认的那个 provider，默认设置要一并清掉，否则下次启动指向不存在的 id */
+    @Test
+    void deletingActiveProviderAlsoClearsActiveSetting() {
+        LlmProviderSettings settings = settings(new LlmProperties(), true);
+        settings.save("glm", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", "sk-glm-key-123456",
+                null, null, null);
+        settings.saveActiveProvider("glm");
+
+        settings.clear("glm");
+
+        assertThat(settings.hasLocalActiveProvider()).isFalse();
+        assertThat(settings.activeProviderId()).isEqualTo("deepseek");
+    }
+
+    /**
+     * registry 必须真的按界面设置的路由，而不只是「界面上显示了」。
+     *
+     * <p>只测 {@code activeProviderId()} 会漏掉最关键的一环：注册表有没有读这个值。
+     * 那样测试全绿但功能是坏的。
+     */
+    @Test
+    void registryRoutesToUiSelectedProvider() {
+        LlmProperties properties = new LlmProperties();
+        LlmProviderSettings settings = settings(properties, true);
+        settings.save("glm", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", "sk-glm-key-123456",
+                null, null, null);
+        settings.save("qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus",
+                "sk-qwen-key-123456", null, null, null);
+
+        LlmClientRegistry registry = registry(settings, properties);
+        settings.saveActiveProvider("glm");
+
+        assertThat(registry.activeProviderId()).isEqualTo("glm");
+
+        settings.saveActiveProvider("qwen");
+
+        assertThat(registry.activeProviderId())
+                .as("切换默认后注册表要立刻跟上，不需要重启")
+                .isEqualTo("qwen");
+    }
+
+    /** 场景路由优先于默认 provider：显式指定了场景用谁，就不该被默认值盖掉 */
+    @Test
+    void sceneRouteStillBeatsUiActiveProvider() {
+        LlmProperties properties = new LlmProperties();
+        properties.getRoutes().put("EXTRACT", "qwen");
+        LlmProviderSettings settings = settings(properties, true);
+        settings.save("glm", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", "sk-glm-key-123456",
+                null, null, null);
+        settings.save("qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus",
+                "sk-qwen-key-123456", null, null, null);
+        settings.saveActiveProvider("glm");
+
+        LlmClientRegistry registry = registry(settings, properties);
+
+        assertThat(registry.forScene("EXTRACT").providerId()).isEqualTo("qwen");
+        assertThat(registry.forScene("CHAT").providerId()).isEqualTo("glm");
+    }
+
+    /** 服务器部署（不可编辑）时，默认 provider 只认 yml，本地值一律忽略 */
+    @Test
+    void nonEditableDeploymentIgnoresLocalActiveProvider() {
+        LlmProperties properties = new LlmProperties();
+        properties.setActiveProvider("glm");
+        LlmProviderSettings settings = settings(properties, false);
+
+        assertThat(settings.activeProviderId()).isEqualTo("glm");
+        assertThat(settings.hasLocalActiveProvider()).isFalse();
+        assertThatThrownBy(() -> settings.saveActiveProvider("glm"))
+                .isInstanceOf(com.timetable.exception.BusinessException.class)
+                .hasMessageContaining("部署环境管理");
+    }
+
     // ==================== 辅助 ====================
 
     private LlmProviderSettings settings(LlmProperties properties, boolean editable) {

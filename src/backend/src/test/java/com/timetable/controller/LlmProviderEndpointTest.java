@@ -89,6 +89,9 @@ class LlmProviderEndpointTest {
         for (String id : List.of("glm", "qwen", "bad")) {
             mvc.perform(delete("/api/ai/providers/" + id).header("X-API-Key", ADMIN));
         }
+        // 默认 provider 也要复位：它不在上面那个循环的清理范围里（删 provider 才连带清），
+        // 留着会让别的用例看到「默认是 glm」
+        mvc.perform(delete("/api/ai/providers/active").header("X-API-Key", ADMIN));
     }
 
     @Test
@@ -226,6 +229,67 @@ class LlmProviderEndpointTest {
                 .andExpect(jsonPath("$.data.ok").value(false))
                 .andExpect(jsonPath("$.data.error").isNotEmpty())
                 .andExpect(jsonPath("$.data.providerId").value("glm"));
+    }
+
+    // ==================== 默认 provider 切换 ====================
+
+    @Test
+    void adminCanSwitchActiveProviderAndItTakesEffectImmediately() throws Exception {
+        save("glm", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", "sk-glm-key-123456");
+
+        mvc.perform(put("/api/ai/providers/active").header("X-API-Key", ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsBytes(Map.of("id", "glm"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.activeProvider").value("glm"))
+                .andExpect(jsonPath("$.data.activeSource").value("local"));
+
+        assertThat(registry.activeProviderId())
+                .as("切完要立刻生效，不需要重启")
+                .isEqualTo("glm");
+    }
+
+    /**
+     * 把默认设成配置不全的 provider 必须被拒绝。
+     *
+     * <p>如果放行，用户点完不会看到任何异常，问题要等下一次对话才炸出来，
+     * 而且报错完全不指向这里——这是最坏的一类失败。
+     */
+    @Test
+    void switchingToIncompleteProviderIsRejected() throws Exception {
+        save("glm", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", null);
+
+        mvc.perform(put("/api/ai/providers/active").header("X-API-Key", ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsBytes(Map.of("id", "glm"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("不能设为默认")));
+    }
+
+    @Test
+    void resettingActiveProviderFallsBackToConfig() throws Exception {
+        save("glm", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", "sk-glm-key-123456");
+        mvc.perform(put("/api/ai/providers/active").header("X-API-Key", ADMIN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsBytes(Map.of("id", "glm"))));
+
+        // 这条同时钉住路由：/active 不能被 /{id} 抢走，否则会走成「删除 provider active」
+        mvc.perform(delete("/api/ai/providers/active").header("X-API-Key", ADMIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.activeProvider").value("deepseek"))
+                .andExpect(jsonPath("$.data.activeSource").value("config"))
+                .andExpect(jsonPath("$.data.providers[*].id", hasItem("glm")));
+    }
+
+    @Test
+    void nonAdminCannotSwitchActiveProvider() throws Exception {
+        register(USER);
+        save("glm", "https://a.example.com", "m", "sk-testing-key-1234");
+
+        mvc.perform(put("/api/ai/providers/active").header("X-API-Key", USER)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsBytes(Map.of("id", "glm"))))
+                .andExpect(status().isForbidden());
     }
 
     // ==================== 辅助 ====================

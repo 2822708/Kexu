@@ -43,6 +43,15 @@ public class LlmProviderSettings {
     static final String SUFFIX_MAX_TOKENS = ".max-tokens";
     static final String SUFFIX_TEMPERATURE = ".temperature";
 
+    /**
+     * 默认 provider 的本地覆盖键。
+     *
+     * <p>刻意<b>不</b>放在 {@code llm.provider.} 前缀下：那个前缀被
+     * {@link #localProviderIds()} 当作 provider 名扫描，多一个 {@code llm.provider.active}
+     * 会被误认成名叫 {@code active} 的 provider。
+     */
+    static final String KEY_ACTIVE_PROVIDER = "llm.active-provider";
+
     /** providerId 会进键名，必须限制字符集（防注入奇怪键，也让 settings.properties 可读） */
     private static final Pattern VALID_ID = Pattern.compile("^[a-z0-9][a-z0-9_-]{0,31}$");
 
@@ -94,6 +103,9 @@ public class LlmProviderSettings {
      */
     public String version() {
         StringBuilder sb = new StringBuilder();
+        // 默认 provider 不改变任何客户端，但它是「配置指纹」的一部分：
+        // 排查「我改了默认怎么没生效」时，指纹不变会让人直接排除掉这个方向。
+        sb.append("active=").append(activeProviderId()).append('\n');
         for (Map.Entry<String, LlmProviderConfig> entry : snapshot().entrySet()) {
             LlmProviderConfig c = entry.getValue();
             sb.append(entry.getKey()).append('|')
@@ -195,6 +207,66 @@ public class LlmProviderSettings {
         return settings.canStoreSecret();
     }
 
+    /**
+     * 生效的默认 providerId：界面设置的优先，否则用 {@code app.llm.active-provider}。
+     *
+     * <p>与 provider 字段覆盖同一套优先级（界面 &gt; 配置文件）。
+     */
+    public String activeProviderId() {
+        if (localSettingsEnabled) {
+            String local = normalizeId(settings.get(KEY_ACTIVE_PROVIDER));
+            if (!local.isEmpty()) {
+                return local;
+            }
+        }
+        return normalizeId(properties.getActiveProvider());
+    }
+
+    /** 是否存在界面侧的默认 provider 设置（用于告诉用户「现在是谁在生效」）。 */
+    public boolean hasLocalActiveProvider() {
+        return localSettingsEnabled && !normalizeId(settings.get(KEY_ACTIVE_PROVIDER)).isEmpty();
+    }
+
+    /**
+     * 界面里切换默认 provider。
+     *
+     * <p>两道校验都是必要的，而且都是为了避免「设置成功但 AI 全挂了」：
+     * <ol>
+     *   <li>provider 必须已注册（在合并视图里）。设成一个不存在的 id，registry 只能
+     *       按可用性回退，用户以为切过去了其实没有。</li>
+     *   <li>provider 必须已配置完整。这条更关键——{@code active()} 在指定 provider
+     *       不可用时虽然会回退，但无 fallback 且无可回退项时会 503。宁可当场拒绝，
+     *       也不要让用户在毫无提示的情况下把整个 AI 功能关掉。</li>
+     * </ol>
+     */
+    public void saveActiveProvider(String providerId) {
+        requireEditable();
+        String id = normalizeId(providerId);
+        if (!isValidId(id)) {
+            throw new com.timetable.exception.BusinessException(400,
+                    "provider 标识只能用小写字母、数字、下划线和连字符，且不超过 32 个字符");
+        }
+        LlmProviderConfig config = snapshot().get(id);
+        if (config == null) {
+            throw new com.timetable.exception.BusinessException(404,
+                    "没有找到 provider「" + id + "」，请先保存它的地址、模型和 Key");
+        }
+        if (!config.isComplete()) {
+            throw new com.timetable.exception.BusinessException(400,
+                    "provider「" + id + "」还缺地址、模型名或 API Key，不能设为默认——"
+                            + "设成默认会让 AI 功能整体不可用");
+        }
+        settings.set(KEY_ACTIVE_PROVIDER, id);
+        log.info("默认 provider 已切换为 {}", id);
+    }
+
+    /** 清除界面设置的默认 provider，回退到 {@code app.llm.active-provider}。 */
+    public void clearActiveProvider() {
+        requireEditable();
+        settings.set(KEY_ACTIVE_PROVIDER, null);
+        log.info("默认 provider 的界面设置已清除，回退到 app.llm.active-provider");
+    }
+
     /** 删除本地覆盖，回退到 yml/环境变量。 */
     public void clear(String providerId) {
         requireEditable();
@@ -202,6 +274,12 @@ public class LlmProviderSettings {
         for (String suffix : new String[]{SUFFIX_BASE_URL, SUFFIX_MODEL, SUFFIX_API_KEY,
                 SUFFIX_TIMEOUT, SUFFIX_MAX_TOKENS, SUFFIX_TEMPERATURE}) {
             settings.set(key(id, suffix), null);
+        }
+        // 删掉配置却留着「它是默认」，下次启动就会指向一个不存在的 provider。
+        // 这里不做「自动挑下一个」：默认用谁是用户的决定，不该替他猜。
+        if (id.equals(normalizeId(settings.get(KEY_ACTIVE_PROVIDER)))) {
+            settings.set(KEY_ACTIVE_PROVIDER, null);
+            log.info("provider {} 被删除，默认 provider 设置一并清除", id);
         }
         log.info("provider {} 的本地配置已清除", id);
     }

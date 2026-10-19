@@ -268,6 +268,12 @@ export const aiApi = {
    */
   testProvider: (id: string) =>
     request<LlmProbeResult>(`/ai/providers/${encodeURIComponent(id)}/test`, { method: 'POST' }),
+  /** 把某个 provider 设为默认（界面设置优先于配置文件） */
+  setActiveProvider: (id: string) =>
+    request<LlmProvidersPayload>('/ai/providers/active', { method: 'PUT', body: { id } }),
+  /** 清除界面侧的默认设置，回退到配置文件里的值 */
+  resetActiveProvider: () =>
+    request<LlmProvidersPayload>('/ai/providers/active', { method: 'DELETE' }),
   listConversations: () => request<AiConversation[]>('/ai/conversations'),
   pageConversations: (cursor: string | null = null) =>
     request<CursorPage<AiConversation>>(

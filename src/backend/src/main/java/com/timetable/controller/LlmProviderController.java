@@ -88,12 +88,44 @@ public class LlmProviderController {
         }
 
         data.put("providers", providers);
-        data.put("activeProvider", llmProperties.getActiveProvider());
+        // 生效值（界面 > 配置文件），以及它到底来自哪里——排查「我改了默认怎么没生效」的第一手信息
+        data.put("activeProvider", providerSettings.activeProviderId());
+        data.put("activeSource", describeActiveSource());
+        data.put("configActiveProvider", llmProperties.getActiveProvider());
         data.put("routes", llmProperties.getRoutes() == null ? Map.of() : llmProperties.getRoutes());
         data.put("fallback", llmProperties.getFallback() == null ? List.of() : llmProperties.getFallback());
         // 当前真正可用的 providerId，便于用户确认「填完了是不是生效了」
         data.put("ready", readyProviders());
         return ApiResponse.success(data);
+    }
+
+    /**
+     * 切换默认 provider（界面设置，优先于 {@code app.llm.active-provider}）。
+     *
+     * <p>校验在 {@link LlmProviderSettings#saveActiveProvider} 里：provider 必须存在且
+     * 配置完整。宁可当场 400，也不要让用户把 AI 静默切成不可用。
+     */
+    @PutMapping("/active")
+    public ApiResponse<Map<String, Object>> switchActive(@RequestBody Map<String, String> body) {
+        requireAdmin();
+        requireLocalSettings();
+        String id = body == null ? null : body.get("id");
+        if (id == null || id.isBlank()) {
+            throw new BusinessException(400, "请指定要设为默认的 provider");
+        }
+        providerSettings.saveActiveProvider(id);
+        log.info("默认 provider 已切换为 {}", providerSettings.activeProviderId());
+        return list();
+    }
+
+    /** 清除界面侧的默认 provider，回退到配置文件里的值。 */
+    @DeleteMapping("/active")
+    public ApiResponse<Map<String, Object>> resetActive() {
+        requireAdmin();
+        requireLocalSettings();
+        providerSettings.clearActiveProvider();
+        log.info("默认 provider 已回退到配置文件：{}", llmProperties.getActiveProvider());
+        return list();
     }
 
     /** 新增或更新一个 provider。{@code apiKey} 传 null 表示不改动现有 Key。 */
@@ -191,6 +223,28 @@ public class LlmProviderController {
             return "both";
         }
         return local ? "local" : "config";
+    }
+
+    /**
+     * 生效的默认 provider 来自哪里。
+     *
+     * <p>只有三种回答，且都要能一眼看懂：
+     * {@code local}（界面设的）、{@code config}（yml/环境变量）、
+     * {@code fallback}（设的那个不可用，正在按可用性兜底）——最后一种最需要暴露，
+     * 因为它意味着「你以为在用的不是实际在用的」。
+     */
+    private String describeActiveSource() {
+        String effective = providerSettings.activeProviderId();
+        LlmProviderConfig config = providerSettings.snapshot().get(effective);
+        boolean usable = config != null && config.isComplete();
+        if (!usable) {
+            // deepseek 的 Key 在 DeepSeekKeyStore，不在 provider 配置里，不能用 config 判空
+            if (LlmClientRegistry.DEEPSEEK.equals(effective)) {
+                return providerSettings.hasLocalActiveProvider() ? "local" : "config";
+            }
+            return "fallback";
+        }
+        return providerSettings.hasLocalActiveProvider() ? "local" : "config";
     }
 
     private void validateBaseUrl(String baseUrl) {
