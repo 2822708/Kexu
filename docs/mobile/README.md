@@ -6,7 +6,7 @@
 
 ## 运行
 
-交付包与校验值见 [本地版发行目录](../../releases/mobile/kexu-2026.10.19/README.md)。解压到 E 盘普通目录，使用 Node.js 22 或更新的兼容 LTS 运行包内说明中的本机入口。源代码开发：
+交付包与校验值见 [日任务发行目录](../../releases/mobile/kexu-2026.10.19-daily/README.md)。解压到 E 盘普通目录，使用 Node.js 22 或更新的兼容 LTS 运行包内说明中的本机入口。源代码开发：
 
 ```powershell
 cd src/frontend

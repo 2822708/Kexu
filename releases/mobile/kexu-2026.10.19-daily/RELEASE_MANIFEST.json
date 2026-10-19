@@ -1,0 +1,33 @@
+{
+  "version": "2026.10.19-daily-preview.3",
+  "sourceLocalCommit": "638814f9eaefdda1758fba07cc92805a32bcc502",
+  "sourceTree": "40a37bd2b3b5fd6b31a2eb1bf6abcd4813b1f2f1",
+  "sourceDirty": false,
+  "zip": "Kexu-2026.10.19-daily-preview.3.zip",
+  "bytes": 1128773,
+  "sha256": "6e33011f7c90db7c4a613976640f43dff9db15f66454191ff5c76616cea2eefa",
+  "entries": 52,
+  "localSchemaVersions": [
+    2
+  ],
+  "snapshotVersions": [
+    1,
+    2
+  ],
+  "snapshotScope": "core-with-daily-v2",
+  "packageManifestSha256": "c85d9aea09a2b23e8f928cc1a0167f1bc744dd579a3619dad4df0e8059a846a3",
+  "validation": {
+    "zipCrc": true,
+    "allFilesByteEqual": true,
+    "frontendTests": 157,
+    "deploymentTests": 7,
+    "physicalPhone": false,
+    "productionHttps": false,
+    "httpHealth": 200,
+    "httpRoutes": 8,
+    "httpWebFiles": 33,
+    "httpBytesEqual": true,
+    "serverUnreachable": "ECONNREFUSED",
+    "pwaReloadAndLocalWrites": true
+  }
+}
