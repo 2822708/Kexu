@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>课序 · 日任务策划草案</title>
+<style>
+:root{--bg:#f5f8fa;--surface:#fff;--ink:#173244;--muted:#536b78;--line:#dde6eb;--blue:#167d9a;--soft:#e7f4f7;--teal:#0c7c72;--green:#edf7f3;--warning:#8a4b00;--warm:#fff4e5;--danger:#b42318}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}button,input,textarea{font:inherit}button{min-height:44px;border:1px solid var(--line);border-radius:8px;padding:8px 14px;background:var(--surface);color:var(--ink);cursor:pointer;touch-action:manipulation}button:hover{border-color:#91b8c3;background:#f8fbfc}button:disabled{cursor:default;opacity:.55}button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #49a4bb;outline-offset:3px}.primary{background:var(--blue);border-color:var(--blue);color:#fff}.primary:hover{background:#116c86;color:#fff}.quiet{border-color:transparent;background:transparent;color:var(--blue)}.small{font-size:13px;padding:7px 10px}.muted{color:var(--muted)}.tiny{font-size:12px}.eyebrow{font-size:12px;letter-spacing:.06em;color:var(--blue);font-weight:650}h1,h2,h3,p{margin:0}h1{font-size:30px;line-height:1.35}h2{font-size:18px;line-height:1.5}h3{font-size:16px}a{color:var(--blue)}[hidden]{display:none!important}.draft-banner{padding:12px 20px;background:#e7f0f4;border-bottom:1px solid #cfdee5;color:#365564;font-size:13px;text-align:center}.app{max-width:1240px;margin:auto;padding:28px 28px 80px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:26px}.brand{font-size:23px;letter-spacing:3px;color:var(--blue);font-weight:700}.top-note{font-size:12px;color:var(--muted)}.heading{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:22px}.heading p{color:var(--muted);margin-top:8px}.date{font-size:13px;color:var(--muted);margin-bottom:6px}.hero{background:var(--soft);border:1px solid #d0e8ee;border-radius:14px;padding:22px 24px;margin-bottom:24px}.hero h2{font-size:21px;margin:5px 0}.hero-copy{font-size:14px;color:#396171}.facts{display:flex;gap:24px;flex-wrap:wrap;margin-top:18px;padding-top:16px;border-top:1px solid #cfe3e9}.fact{font-size:13px;color:#476572}.fact strong{display:block;color:var(--ink);font-size:24px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.4}.layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(270px,1fr);gap:22px;align-items:start}.stack{display:flex;flex-direction:column;gap:20px;min-width:0}.panel{padding:20px 22px;background:var(--surface);border:1px solid var(--line);border-radius:12px;min-width:0}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.panel-head h2{display:flex;gap:8px;align-items:center}.count{color:var(--muted);font-size:12px;font-weight:400;white-space:nowrap}.intro{font-size:13px;color:var(--muted);margin-top:-3px;margin-bottom:14px}.priority-list{list-style:none;padding:0;margin:0}.priority-item{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}.priority-item:last-child{border-bottom:0}.priority-number{display:flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;background:var(--soft);color:var(--blue);font-size:12px;font-weight:650}.priority-copy{flex:1;min-width:0;overflow-wrap:anywhere}.priority-copy p{font-size:14px}.priority-copy span{font-size:12px;color:var(--muted)}.priority-item.is-done .priority-number{background:var(--green);color:var(--teal)}.priority-picker{margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}.picker-list{display:grid;gap:6px;margin-top:8px}.picker-list button{text-align:left;width:100%;display:flex;justify-content:space-between;gap:10px}.picker-list button[aria-pressed=true]{border-color:var(--blue);background:var(--soft);color:var(--blue)}.picker-list span{overflow-wrap:anywhere}.section-tabs{display:flex;gap:4px;background:var(--bg);border-radius:9px;padding:4px;margin-bottom:2px}.section-tabs button{border:0;background:transparent;flex:1;padding:8px}.section-tabs button[aria-selected=true]{background:#fff;color:var(--blue);box-shadow:0 1px 4px #17324410}.task-list{list-style:none;margin:0;padding:0}.task-row{display:flex;gap:12px;align-items:flex-start;padding:17px 0;border-bottom:1px solid var(--line);scroll-margin-top:22px}.task-row:last-child{border-bottom:0}.check{width:44px;height:44px;min-width:44px;padding:0;border-color:#a8c3cd;display:flex;justify-content:center;align-items:center;font-size:20px;border-radius:10px}.check-shape{width:17px;height:17px;border:1.5px solid #769da9;border-radius:4px}.is-done .check{border-color:#beded4;background:var(--green);color:var(--teal)}.task-body{min-width:0;flex:1}.task-title{font-size:15px;font-weight:600;overflow-wrap:anywhere;line-height:1.55;padding-top:1px}.is-done .task-title{color:var(--muted);font-weight:500}.meta{display:flex;gap:6px 10px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:5px}.tag{display:inline-block;line-height:1.5;padding:2px 6px;background:var(--bg);color:var(--muted);border-radius:4px;font-size:11px}.tag.important{background:var(--soft);color:var(--blue)}.tag.temporary{background:var(--warm);color:var(--warning)}.task-actions{display:flex;flex-wrap:wrap;gap:2px 6px;margin-top:7px}.task-actions button{padding:5px 7px;font-size:12px;min-height:44px}.empty{padding:28px 8px;text-align:center;color:var(--muted);font-size:14px}.empty strong{display:block;color:var(--ink);font-weight:500;margin-bottom:4px}.add-panel{border-top:1px solid var(--line);padding-top:17px;margin-top:8px}.add-modes{display:flex;gap:6px;margin-bottom:11px}.add-modes button{min-height:44px;padding:7px 11px;font-size:13px;background:var(--bg);border-color:transparent}.add-modes button[aria-pressed=true]{background:var(--soft);color:var(--blue);border-color:#c7e3ea}.input-row{display:flex;gap:8px}input[type=text],textarea{border:1px solid #bbcdd6;border-radius:8px;background:#fff;color:var(--ink);padding:11px 12px;font-size:16px;min-width:0;width:100%}input[type=text]{min-height:46px}textarea{resize:vertical;min-height:88px}.input-row input{flex:1}.input-row button{white-space:nowrap}.input-hint{font-size:12px;color:var(--muted);margin-top:8px}.field-error{font-size:13px;color:var(--danger);margin-top:7px;min-height:0}.duplicate{padding:11px 12px;margin-top:11px;background:var(--warm);border:1px solid #ecd6b1;border-radius:8px;color:#714a1e;font-size:13px}.duplicate button{margin-top:8px;background:#fff8ed}.arrangement{display:grid;grid-template-columns:46px minmax(0,1fr);gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}.arrangement:last-child{border-bottom:0}.arrangement-time{font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}.arrangement-time span{display:block}.arrangement-copy{border-left:2px solid #cfe4e9;padding-left:12px;min-width:0}.arrangement-copy p{font-size:14px;overflow-wrap:anywhere}.arrangement-copy small{font-size:12px;color:var(--muted)}.arrangement-copy.exam{border-left-color:#b88540}.arrangement-copy .tag{margin-top:6px}.fixed-note{padding-top:13px;color:var(--muted);font-size:12px}details summary{cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--ink);list-style:none}details summary::-webkit-details-marker{display:none}details summary::after{content:'＋';color:var(--muted)}details[open] summary::after{content:'−'}details .details-copy{font-size:13px;color:var(--muted);margin:10px 0 12px}.review-card{background:var(--green);border-color:#d5e9e2}.review-card p{font-size:14px;color:#48685e;margin:9px 0 16px}.review-card button{width:100%}.review-preview{padding:12px 0 0;font-size:13px;color:#385d50;overflow-wrap:anywhere}.footnote{font-size:12px;color:var(--muted);margin-top:24px;text-align:center}.status{margin:15px 0 0;font-size:13px;color:#396171;min-height:22px;overflow-wrap:anywhere}.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 28px);z-index:30;display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px;background:#173d4a;color:#fff;box-shadow:0 6px 24px #17324424;border-radius:10px;font-size:13px}.toast span{overflow-wrap:anywhere}.toast button{background:#fff;color:#17546a;border-color:#fff;flex-shrink:0;min-width:58px}.toast-progress{position:absolute;bottom:0;left:0;height:3px;background:#75c5d3;width:100%;transform-origin:left;animation:toast-timer 6s linear forwards}@keyframes toast-timer{to{transform:scaleX(0)}}dialog{border:1px solid var(--line);border-radius:14px;max-width:550px;width:calc(100% - 28px);padding:0;color:var(--ink);background:#fff;max-height:calc(100dvh - 36px)}dialog::backdrop{background:#17324470}.dialog-inner{padding:24px;overflow:auto}.dialog-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.dialog-head button{padding:6px;width:44px;font-size:22px}.dialog-intro{font-size:13px;color:var(--muted);margin:7px 0 18px}.review-facts{padding:15px 16px;background:var(--soft);border-radius:9px;display:grid;gap:6px;margin-bottom:20px}.review-facts p{font-size:14px}.review-facts small{font-size:12px;color:var(--muted)}fieldset{border:0;padding:0;margin:0 0 18px}legend,.field-label{font-size:14px;font-weight:600;margin-bottom:10px;display:block}.feelings{display:grid;grid-template-columns:1fr 1fr;gap:8px}.feelings label{min-height:44px;display:flex;gap:8px;align-items:center;padding:10px 11px;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:14px}.feelings label:has(input:checked){background:var(--soft);border-color:var(--blue);color:var(--blue)}.feelings input{accent-color:var(--blue);width:17px;height:17px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;flex-wrap:wrap}.tomorrow-item{padding:10px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}.tomorrow-item span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:14px}.tomorrow-item:last-child{border-bottom:0}.inline-note{font-size:12px;color:var(--muted);margin-top:12px}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.heading-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.quick-dock{display:none}.review-update{margin-top:12px;padding:9px 11px;border:1px solid #c9ded3;border-radius:7px;background:#fff;color:#386452;font-size:13px}.priority-complete{width:44px;min-width:44px;height:44px;min-height:44px;flex-shrink:0;padding:0;border:1px solid #b6d3dc;border-radius:10px;font-size:16px}
+@media(max-width:800px){.app{padding:20px 18px calc(110px + env(safe-area-inset-bottom,0px))}.layout{grid-template-columns:minmax(0,1fr)}.top{margin-bottom:22px}.heading{align-items:flex-start}.heading>button{flex-shrink:0}.top-note{max-width:140px;text-align:right}.panel{padding:18px}.hero{padding:20px}.facts{gap:17px}.fact strong{font-size:22px}.heading h1{font-size:27px}.draft-banner{padding:10px 15px;font-size:12px}.dialog-inner{padding:20px}.desktop-quick{display:none}.quick-dock{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;position:fixed;bottom:0;left:0;right:0;z-index:25;background:#ffffffed;border-top:1px solid var(--line);padding:10px max(14px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px));box-shadow:0 -3px 16px #17324408}.quick-dock button{min-width:0;min-height:46px;padding:9px 10px;font-size:14px}.toast{bottom:calc(80px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 28px)}.heading-actions{flex-shrink:0}}
+@media(max-width:360px){.app{padding:18px 12px 92px}.hero,.panel{padding:16px}.heading{gap:10px;flex-wrap:wrap}.heading>button{width:100%}.facts{gap:14px}.fact{font-size:12px}.fact strong{font-size:20px}.panel-head{gap:8px}.panel-head h2{font-size:17px}.task-row{gap:9px}.input-row{gap:6px}.input-row button{padding:8px 10px}.feelings{grid-template-columns:1fr}.top-note{max-width:125px;font-size:11px}.priority-item{gap:8px}}
+@media(max-width:360px){.app{padding-bottom:calc(108px + env(safe-area-inset-bottom,0px))}.heading-actions{width:100%}.heading-actions #open-review-top{width:100%}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}.toast-progress{display:none}}
+</style>
+</head>
+<body>
+<div class="draft-banner">日任务策划草案 · 合成示例 · 不保存真实数据</div>
+<main class="app">
+  <header class="top"><div class="brand">课序</div><div class="top-note">所有交互只在本页内演示<br>刷新后恢复示例</div></header>
+  <div class="heading"><div><p class="date">2026年10月19日 · 周一 · 示例日期</p><h1>今天，一件件来</h1><p>先选重要的，临时发生的也值得被看见。</p></div><div class="heading-actions"><button class="desktop-quick" data-quick-mode="pending" aria-label="快速添加临时任务">＋ 临时任务</button><button class="desktop-quick" data-quick-mode="logged" aria-label="快速补记已做">补记已做</button><button id="open-review-top">今日回顾</button></div></div>
+  <section class="hero" aria-labelledby="progress-title"><div class="eyebrow">看见今天的推进</div><h2 id="progress-title">你已经处理好了 2 件事</h2><p class="hero-copy" id="progress-copy">其中 1 件是计划外的小事，付出也被记下了。</p><div class="facts"><div class="fact"><strong id="fact-completed">2 项</strong>任务已完成</div><div class="fact"><strong id="fact-priority">0 / 2</strong>自选重点已完成</div><div class="fact"><strong id="fact-temporary">1 项</strong>临时处理已完成</div></div></section>
+  <div class="layout">
+    <div class="stack">
+      <section class="panel" aria-labelledby="priority-title"><div class="panel-head"><h2 id="priority-title">我的重点 <span id="priority-count" class="count">2 / 3</span></h2><button class="quiet small" id="toggle-priority" aria-expanded="false" aria-controls="priority-picker">选择重点</button></div><p class="intro">最多选 3 项。只选一件，也很好；不选也可以。</p><ol class="priority-list" id="priority-list"></ol><div class="priority-picker" id="priority-picker" hidden><p class="tiny muted">重点由你决定，取消重点不等于完成任务。</p><div class="picker-list" id="priority-options"></div></div></section>
+      <section class="panel" aria-labelledby="tasks-title"><div class="panel-head"><h2 id="tasks-title">今日清单</h2><span class="count">完成由你确认</span></div><div class="section-tabs" role="tablist" aria-label="任务状态"><button role="tab" id="tab-pending" aria-selected="true" aria-controls="task-panel" data-tab="pending">待做 <span id="pending-count">3</span></button><button role="tab" id="tab-done" aria-selected="false" aria-controls="task-panel" data-tab="done">已完成 <span id="done-count">2</span></button></div><div id="task-panel" role="tabpanel" aria-labelledby="tab-pending" tabindex="0"><ul class="task-list" id="task-list"></ul></div>
+        <div class="add-panel"><div class="add-modes" role="group" aria-label="记录方式"><button id="mode-pending" type="button" aria-pressed="true" data-mode="pending">＋ 临时任务</button><button id="mode-logged" type="button" aria-pressed="false" data-mode="logged">✓ 补记已做</button></div><form id="quick-form" novalidate><label for="quick-title" class="visually-hidden">任务内容</label><div class="input-row"><input id="quick-title" type="text" maxlength="120" placeholder="突然想到一件要做的事…" autocomplete="off" aria-describedby="input-hint input-error"><button class="primary" id="add-button" type="submit">加入今天</button></div><p class="input-hint" id="input-hint">只写标题就能加入，不强制填写截止时间。按 Enter 提交。</p><p class="field-error" id="input-error" role="alert"></p><div class="duplicate" id="duplicate-warning" hidden><p>示例中已有同名任务。确实是另一件事，也可以继续添加。</p><button id="duplicate-continue" type="button">仍然添加一项</button><button class="quiet" id="duplicate-cancel" type="button">返回修改</button></div></form></div>
+      </section>
+      <section class="panel" id="tomorrow-panel" hidden><details id="tomorrow-details"><summary><h2>已安排明天 <span class="count" id="tomorrow-count"></span></h2></summary><p class="details-copy">这些任务已移出今天，未计入完成。此处只演示本页内的安排。</p><div id="tomorrow-list"></div></details></section>
+    </div>
+    <aside class="stack" aria-label="固定安排与收尾工具">
+      <section class="panel" aria-labelledby="schedule-title"><div class="panel-head"><h2 id="schedule-title">固定安排</h2><span class="count">课程与考试</span></div><div class="arrangement"><div class="arrangement-time">08:00<span>09:40</span></div><div class="arrangement-copy"><p>高等数学</p><small>教学楼 A301</small><br><span class="tag">课程 · 时间已过，参加情况未确认</span></div></div><div class="arrangement"><div class="arrangement-time">14:00<span>15:40</span></div><div class="arrangement-copy"><p>大学物理实验</p><small>实验楼 204</small><br><span class="tag">课程 · 今日安排</span></div></div><div class="arrangement"><div class="arrangement-time">16:00<span>17:30</span></div><div class="arrangement-copy exam"><p>线性代数阶段测验</p><small>教学楼 B202</small><br><span class="tag">考试 · 今日安排</span></div></div><p class="fixed-note">固定安排单独呈现，不计入上方任务成就。时间结束也不代表已参加或已完成。</p></section>
+      <section class="panel"><details id="focus-details"><summary><h2>需要时，专注一会儿</h2></summary><p class="details-copy">计时是行动工具，不是完成任务的门槛。此草案不运行计时器。</p><button id="focus-demo">查看专注入口示意</button><p class="inline-note">到点后仍由你确认任务是否完成。</p></details></section>
+      <section class="panel review-card" aria-labelledby="review-title"><div class="eyebrow">留一分钟给自己</div><h2 id="review-title">今天值得肯定的是什么？</h2><p>看一眼已经做的，再留一句自己的感受。没做完的，也可以先放下。</p><button id="open-review-card">看看今日小结</button><div id="review-preview" class="review-preview" hidden></div><div id="review-fact-update" class="review-update" role="status" hidden>事实有更新，可重新查看。你已保存的感受与笔记保持原样。</div></section>
+    </aside>
+  </div>
+  <p id="page-status" class="status" role="status" aria-live="polite">本页为可交互策划草案，所有变化仅存在于当前页面内存。</p><p class="footnote">没有积分、排行榜或连续打卡要求。此草案不连接业务数据、AI 或任何网络服务。</p>
+</main>
+<nav class="quick-dock" aria-label="手机快速记录"><button class="primary" data-quick-mode="pending" aria-label="快速添加临时任务">＋ 临时任务</button><button data-quick-mode="logged" aria-label="快速补记已做">补记已做</button></nav>
+<div class="toast" id="toast" hidden><span id="toast-text" role="status" aria-live="polite"></span><button id="toast-undo" type="button">撤销</button><div class="toast-progress" id="toast-progress" aria-hidden="true"></div></div>
+<dialog id="review-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description"><div class="dialog-inner"><div class="dialog-head"><h2 id="dialog-title">给今天一个温和的收尾</h2><button id="close-review" aria-label="关闭今日回顾" type="button">×</button></div><p class="dialog-intro" id="dialog-description">本草案内的小结，所有项目都可以跳过。不为你打分。</p><div class="review-facts" id="review-facts"></div><form id="review-form"><fieldset><legend>今天感觉如何？</legend><div class="feelings"><label><input type="radio" name="feeling" value="很充实">很充实</label><label><input type="radio" name="feeling" value="还可以">还可以</label><label><input type="radio" name="feeling" value="有点累">有点累</label><label><input type="radio" name="feeling" value="暂不评价" checked>暂不评价</label></div></fieldset><label class="field-label" for="review-note">今天值得肯定的是… <span class="count">可不填</span></label><textarea id="review-note" maxlength="200" placeholder="例如：虽然很忙，还是把报告整理好了。"></textarea><p class="input-hint">只留一句也可以。仅暂存在本草案内，刷新即清空。</p><div class="dialog-actions"><button type="button" id="review-later">先放着</button><button type="submit" class="primary">在草案内保存回顾</button></div></form></div></dialog>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const tasks = [
+    {id:1,title:'提交物理实验报告',kind:'planned',done:false,priority:true,tomorrow:false,meta:'今天 18:00 截止'},
+    {id:2,title:'听一段英语，记下三个表达',kind:'planned',done:false,priority:true,tomorrow:false,meta:'按自己的节奏'},
+    {id:3,title:'整理今天的课堂笔记',kind:'planned',done:false,priority:false,tomorrow:false,meta:'今日计划'},
+    {id:4,title:'读完十五分钟的书',kind:'planned',done:true,priority:false,tomorrow:false,meta:'今日已记录'},
+    {id:5,title:'帮小组打印实验材料',kind:'temporary',done:true,priority:false,tomorrow:false,meta:'计划外的事，也被看见了'}
+  ];
+  let nextId = 6;
+  let selectedTab = 'pending';
+  let addMode = 'pending';
+  let duplicateCandidate = null;
+  let toastTimer = null;
+  let undoAction = null;
+  let reviewDraft = {feeling:'暂不评价',note:''};
+  let savedReview = null;
+  let composing = false;
+  let compositionEndedAt = -Infinity;
+  const praised = new Set([4,5]);
+  function node(tag, className, text) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text !== undefined) el.textContent = text;
+    return el;
+  }
+  function button(text, action, className, label) {
+    const el = node('button',className || '',text);
+    el.type = 'button';
+    if (label) el.setAttribute('aria-label',label);
+    el.addEventListener('click',action);
+    return el;
+  }
+  function status(text) { $('page-status').textContent = text + '（仅本草案内）'; }
+  function toast(text, undo) {
+    if (toastTimer) clearTimeout(toastTimer);
+    undoAction = undo || null;
+    $('toast-text').textContent = text + '（草案）';
+    $('toast-undo').hidden = !undoAction;
+    $('toast').hidden = false;
+    $('toast-progress').replaceWith($('toast-progress').cloneNode());
+    toastTimer = setTimeout(() => { $('toast').hidden = true; undoAction = null; },6000);
+  }
+  function todayTasks() { return tasks.filter((task) => !task.tomorrow); }
+  function facts() {
+    const today = todayTasks();
+    const completed = today.filter((task) => task.done);
+    const priorities = today.filter((task) => task.priority);
+    return {today,completed,priorities,priorityDone:priorities.filter((task) => task.done),temporaryDone:completed.filter((task) => task.kind !== 'planned')};
+  }
+  function factSignature() {
+    return JSON.stringify(tasks.map(({id,title,kind,done,priority,tomorrow}) => ({id,title,kind,done,priority,tomorrow})));
+  }
+  function renderSavedReview() {
+    $('review-preview').hidden = !savedReview;
+    $('review-fact-update').hidden = !savedReview || savedReview.factSignature === factSignature();
+    if (!savedReview) return;
+    $('review-preview').replaceChildren(node('strong','','本草案内已保存的回顾：' + savedReview.feeling),node('p','',savedReview.note || '没有留话，也可以。以后还可以再改。'),node('span','tiny','感受与笔记只在再次保存后更新，刷新即清空。'));
+  }
+  function renderFacts() {
+    const f = facts();
+    $('progress-title').textContent = f.completed.length ? '你已经处理好了 ' + f.completed.length + ' 件事' : '从一件小事开始，也很好';
+    $('progress-copy').textContent = f.temporaryDone.length ? '其中 ' + f.temporaryDone.length + ' 件是临时处理或补记，付出也被记下了。' : f.completed.length ? '每一项由你确认的行动，都算得数。' : '不必填满清单，今天可以按自己的节奏来。';
+    $('fact-completed').textContent = f.completed.length + ' 项';
+    $('fact-priority').textContent = f.priorities.length ? f.priorityDone.length + ' / ' + f.priorities.length : '未设置';
+    $('fact-temporary').textContent = f.temporaryDone.length + ' 项';
+    $('priority-count').textContent = f.priorities.length + ' / 3';
+    $('pending-count').textContent = f.today.filter((task) => !task.done).length;
+    $('done-count').textContent = f.completed.length;
+    renderReviewFacts();
+    renderSavedReview();
+  }
+  function renderPriorities() {
+    const chosen = facts().priorities;
+    $('priority-list').replaceChildren();
+    if (!chosen.length) $('priority-list').append(node('li','empty','还没选重点。可以只选一件，也可以先不选。'));
+    chosen.forEach((task,index) => {
+      const li = node('li','priority-item' + (task.done ? ' is-done' : ''));
+      const complete = button(task.done ? '✓' : String(index + 1),() => setDone(task,!task.done),'priority-number priority-complete',(task.done ? '撤销重点完成：' : '完成重点：') + task.title);
+      complete.setAttribute('aria-pressed',String(task.done));
+      li.append(complete);
+      const copy = node('div','priority-copy');
+      copy.append(node('p','',task.title),node('span','',task.done ? '这一项已完成' : '今天想推进的事'));
+      li.append(copy,button('取消重点',() => setPriority(task,false),'quiet small','取消重点：' + task.title));
+      $('priority-list').append(li);
+    });
+    $('priority-options').replaceChildren();
+    const options = todayTasks();
+    if (!options.length) $('priority-options').append(node('p','tiny muted','先在下方加一件想做的事。'));
+    options.forEach((task) => {
+      const option = button('',() => setPriority(task,!task.priority),'','设为重点：' + task.title);
+      option.setAttribute('aria-label',(task.priority ? '取消重点：' : '设为重点：') + task.title);
+      option.setAttribute('aria-pressed',String(task.priority));
+      option.append(node('span','',task.title),node('span','',task.priority ? '已选' : '选择'));
+      $('priority-options').append(option);
+    });
+  }
+  function setPriority(task,value) {
+    if (value && facts().priorities.length >= 3) { toast('最多选 3 个重点。可以先取消一项，再重新选择'); return; }
+    task.priority = value;
+    render();
+    toast(value ? '已选为今日重点：' + task.title : '已取消重点，任务仍保留：' + task.title);
+    status(value ? '重点已在示例中调整，不影响完成数量' : '取消重点不算完成，也不会移除任务');
+  }
+  function renderTasks() {
+    $('task-list').replaceChildren();
+    const visible = todayTasks().filter((task) => task.done === (selectedTab === 'done'));
+    if (!visible.length) {
+      const item = node('li','empty');
+      item.append(node('strong','',selectedTab === 'done' ? '还没有完成记录' : '今天的待做清单暂时空了'),node('span','',selectedTab === 'done' ? '做完一件，再来记下它。' : '休息一下，或者记录一件临时发生的小事。'));
+      $('task-list').append(item);
+      return;
+    }
+    visible.forEach((task) => {
+      const li = node('li','task-row' + (task.done ? ' is-done' : ''));
+      li.id = 'task-' + task.id;
+      const check = button('',() => setDone(task,!task.done),'check',(task.done ? '撤销完成：' : '完成任务：') + task.title);
+      check.setAttribute('aria-pressed',String(task.done));
+      check.append(task.done ? node('span','','✓') : node('span','check-shape'));
+      const body = node('div','task-body');
+      body.append(node('p','task-title',task.title));
+      const meta = node('div','meta');
+      if (task.priority) meta.append(node('span','tag important','我的重点'));
+      if (task.kind === 'temporary') meta.append(node('span','tag temporary','临时任务'));
+      if (task.kind === 'logged') meta.append(node('span','tag temporary','已做补记'));
+      meta.append(node('span','',task.meta));
+      body.append(meta);
+      const actions = node('div','task-actions');
+      if (!task.done) {
+        actions.append(button(task.priority ? '取消重点' : '设为重点',() => setPriority(task,!task.priority),'quiet',(task.priority ? '取消重点：' : '设为重点：') + task.title));
+        actions.append(button('安排明天',() => moveTomorrow(task),'quiet','安排明天：' + task.title));
+      } else actions.append(button('撤销完成',() => setDone(task,false),'quiet','恢复待做：' + task.title));
+      body.append(actions);
+      li.append(check,body);
+      $('task-list').append(li);
+    });
+  }
+  function setDone(task,value,fromUndo) {
+    if (task.done === value) return;
+    task.done = value;
+    if (value) {
+      const first = !praised.has(task.id);
+      praised.add(task.id);
+      render();
+      toast((first ? '这件事处理好了：' : '已恢复为完成状态：') + task.title,() => setDone(task,false,true));
+      status(first ? '已确认完成一项。上方进展按有效完成状态计算' : '完成状态已恢复。同一任务不会重复累计');
+    } else {
+      render();
+      toast('已恢复待做：' + task.title,fromUndo ? null : () => setDone(task,true,true));
+      status('已撤销这项完成，进展同步扣回；可以稍后继续');
+    }
+  }
+  function moveTomorrow(task) {
+    const wasPriority = task.priority;
+    task.tomorrow = true;
+    task.priority = false;
+    render();
+    toast('已移出今天，安排明天；没有算作完成',() => { task.tomorrow = false; task.priority = wasPriority && facts().priorities.length < 3; render(); toast('已回到今天：' + task.title); status('已撤销明日安排，原任务仍未完成'); });
+    status('已安排明天，移出今日清单；这不是完成任务');
+  }
+  function renderTomorrow() {
+    const moved = tasks.filter((task) => task.tomorrow);
+    $('tomorrow-panel').hidden = moved.length === 0;
+    $('tomorrow-count').textContent = moved.length + ' 项';
+    $('tomorrow-list').replaceChildren();
+    moved.forEach((task) => {
+      const row = node('div','tomorrow-item');
+      row.append(node('span','',task.title),button('放回今天',() => { task.tomorrow = false; render(); toast('已放回今天，仍待你完成'); status('任务已回到今日清单，未计入完成'); },'quiet small','放回今天：' + task.title));
+      $('tomorrow-list').append(row);
+    });
+  }
+  function renderReviewFacts() {
+    const f = facts();
+    $('review-facts').replaceChildren();
+    $('review-facts').append(node('p','','任务已完成 ' + f.completed.length + ' 项，其中临时处理与补记 ' + f.temporaryDone.length + ' 项。'));
+    $('review-facts').append(node('p','',f.priorities.length ? '自选重点已完成 ' + f.priorityDone.length + ' / ' + f.priorities.length + ' 项。' : '今天没有设置重点，也可以有值得肯定的事。'));
+    const moved = tasks.filter((task) => task.tomorrow).length;
+    if (moved) $('review-facts').append(node('p','','另有 ' + moved + ' 项安排明天，未计入完成。'));
+    $('review-facts').append(node('small','','固定课程与考试不计入任务完成数。小结依据当前有效状态，重复完成不累加。'));
+  }
+  function render() { renderFacts(); renderPriorities(); renderTasks(); renderTomorrow(); }
+  function selectTab(tab) {
+    selectedTab = tab;
+    document.querySelectorAll('[data-tab]').forEach((el) => el.setAttribute('aria-selected',String(el.dataset.tab === tab)));
+    $('task-panel').setAttribute('aria-labelledby','tab-' + tab);
+    renderTasks();
+  }
+  function selectMode(mode) {
+    addMode = mode;
+    duplicateCandidate = null;
+    $('duplicate-warning').hidden = true;
+    $('input-error').textContent = '';
+    $('quick-title').removeAttribute('aria-invalid');
+    document.querySelectorAll('[data-mode]').forEach((el) => el.setAttribute('aria-pressed',String(el.dataset.mode === mode)));
+    $('add-button').textContent = mode === 'logged' ? '记为已做' : '加入今天';
+    $('quick-title').placeholder = mode === 'logged' ? '刚刚已经做了什么？' : '突然想到一件要做的事…';
+    $('input-hint').textContent = mode === 'logged' ? '只记实际做过的事，不虚构截止时间或专注时长。' : '只写标题就能加入，不强制填写截止时间。按 Enter 提交。';
+    $('quick-title').focus();
+  }
+  function addTask(title,mode) {
+    const logged = mode === 'logged';
+    const task = {id:nextId++,title,kind:logged ? 'logged' : 'temporary',done:logged,priority:false,tomorrow:false,meta:logged ? '补记今天已做的事' : '今天临时加入 · 无截止要求'};
+    tasks.push(task);
+    if (logged) praised.add(task.id);
+    $('quick-title').value = '';
+    $('input-error').textContent = '';
+    $('quick-title').removeAttribute('aria-invalid');
+    $('duplicate-warning').hidden = true;
+    duplicateCandidate = null;
+    selectTab(logged ? 'done' : 'pending');
+    render();
+    toast(logged ? '这件已经做过的事，也被记下了' : '已加入今日清单，不改变你自选的重点',() => { const index = tasks.findIndex((item) => item.id === task.id); if (index !== -1) tasks.splice(index,1); render(); toast('已撤销这条示例记录'); status('新增记录已在本草案内撤销'); });
+    status(logged ? '已在本草案中补记完成，未记录虚构用时' : '临时任务已在本草案中加入，尚未完成');
+    $('quick-title').focus();
+  }
+  $('quick-form').addEventListener('submit',(event) => {
+    event.preventDefault();
+    if (composing || event.isComposing || Date.now() - compositionEndedAt < 50) return;
+    const title = $('quick-title').value.trim();
+    if (!title) {
+      $('input-error').textContent = '先写一句任务内容，再加入清单。';
+      $('quick-title').setAttribute('aria-invalid','true');
+      $('quick-title').focus();
+      return;
+    }
+    $('input-error').textContent = '';
+    $('quick-title').removeAttribute('aria-invalid');
+    if (tasks.some((task) => task.title.trim() === title)) {
+      duplicateCandidate = {title,mode:addMode};
+      $('duplicate-warning').hidden = false;
+      $('duplicate-continue').focus();
+      return;
+    }
+    addTask(title,addMode);
+  });
+  $('quick-title').addEventListener('compositionstart',() => { composing = true; });
+  $('quick-title').addEventListener('compositionend',() => { composing = false; compositionEndedAt = Date.now(); });
+  $('quick-title').addEventListener('keydown',(event) => {
+    if (event.key === 'Enter' && (event.isComposing || composing || event.keyCode === 229 || Date.now() - compositionEndedAt < 50)) event.preventDefault();
+  });
+  $('quick-title').addEventListener('input',() => { duplicateCandidate = null; $('duplicate-warning').hidden = true; $('input-error').textContent = ''; $('quick-title').removeAttribute('aria-invalid'); });
+  $('duplicate-continue').addEventListener('click',() => { if (duplicateCandidate) addTask(duplicateCandidate.title,duplicateCandidate.mode); });
+  $('duplicate-cancel').addEventListener('click',() => { duplicateCandidate = null; $('duplicate-warning').hidden = true; $('quick-title').focus(); });
+  document.querySelectorAll('[data-mode]').forEach((el) => el.addEventListener('click',() => selectMode(el.dataset.mode)));
+  document.querySelectorAll('[data-quick-mode]').forEach((el) => el.addEventListener('click',() => {
+    selectMode(el.dataset.quickMode);
+    $('quick-form').scrollIntoView({block:'center',behavior:'auto'});
+    $('quick-title').focus({preventScroll:true});
+  }));
+  document.querySelectorAll('[data-tab]').forEach((el) => {
+    el.addEventListener('click',() => selectTab(el.dataset.tab));
+    el.addEventListener('keydown',(event) => { if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return; event.preventDefault(); const next = el.dataset.tab === 'pending' ? 'done' : 'pending'; selectTab(next); $('tab-' + next).focus(); });
+  });
+  $('toggle-priority').addEventListener('click',() => { const open = $('priority-picker').hidden; $('priority-picker').hidden = !open; $('toggle-priority').setAttribute('aria-expanded',String(open)); });
+  $('toast-undo').addEventListener('click',() => { const action = undoAction; undoAction = null; $('toast').hidden = true; if (toastTimer) clearTimeout(toastTimer); if (action) action(); });
+  $('focus-demo').addEventListener('click',() => { toast('这里将进入任务专注工具，此草案不运行计时或完成任务'); status('专注入口仅作示意，当前没有计时器或真实任务操作'); });
+  function openReview() {
+    renderReviewFacts();
+    document.querySelectorAll('input[name=feeling]').forEach((el) => { el.checked = el.value === reviewDraft.feeling; });
+    $('review-note').value = reviewDraft.note;
+    $('review-dialog').showModal();
+  }
+  function captureReview() {
+    const checked = document.querySelector('input[name=feeling]:checked');
+    reviewDraft = {feeling:checked ? checked.value : '暂不评价',note:$('review-note').value.trim()};
+  }
+  function leaveReview() { captureReview(); $('review-dialog').close(); status(savedReview ? '本次编辑只留作草稿，已保存的感受与笔记未改变；刷新即清空' : '回顾草稿只留在本页内，尚未保存评价，刷新即清空'); }
+  $('open-review-top').addEventListener('click',openReview);
+  $('open-review-card').addEventListener('click',openReview);
+  $('close-review').addEventListener('click',leaveReview);
+  $('review-later').addEventListener('click',leaveReview);
+  $('review-dialog').addEventListener('cancel',(event) => { event.preventDefault(); leaveReview(); });
+  $('review-form').addEventListener('submit',(event) => {
+    event.preventDefault();
+    captureReview();
+    savedReview = {...reviewDraft,factSignature:factSignature()};
+    renderSavedReview();
+    $('review-dialog').close();
+    toast('回顾已暂存在本草案内，可随时修改；刷新即清空');
+    status('本草案内回顾已更新，没有写入真实数据或发送网络请求');
+  });
+  render();
+})();
+</script>
+</body>
+</html>
