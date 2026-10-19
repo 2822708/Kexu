@@ -13,7 +13,7 @@ export default function DeviceConnectionPage() {
           className="login-card-header"
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
         >
-          <span>大切课程表</span>
+          <span>课序</span>
           <Button type="text" size="small" onClick={toggle}>
             {mode === 'dark' ? '浅色' : '深色'}
           </Button>
@@ -21,10 +21,11 @@ export default function DeviceConnectionPage() {
         <div className="login-card-body">
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Typography.Title level={4} style={{ margin: 0 }}>
-              <DesktopOutlined /> {ready ? '设备连接' : '正在连接本机课程表'}
+              <DesktopOutlined /> {ready ? '设备连接' : '正在连接课程表服务'}
             </Typography.Title>
             <Typography.Paragraph style={{ marginBottom: 0 }}>
-              首次打开会自动建立本机空间，以后自动进入，无需填写登录密钥。
+              首次打开会自动建立此浏览器的空间，以后自动进入，无需填写登录密钥。
+              此版本需要联网才能读取和保存数据。
             </Typography.Paragraph>
             {!ready && (
               <Spin tip="正在恢复已有账户或建立设备连接…">
@@ -45,7 +46,7 @@ export default function DeviceConnectionPage() {
               </Button>
             )}
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 12 }}>
-              本机指当前浏览器及其用户配置。换浏览器、使用无痕窗口或清除网站数据会进入新的空间。
+              空间绑定当前浏览器及其用户配置，暂不提供跨设备自动同步。换浏览器、使用无痕窗口或清除网站数据会进入新的空间。
               已有登录会保留；连接失败时也不会更换你的身份。
             </Typography.Paragraph>
           </Space>

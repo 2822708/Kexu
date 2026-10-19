@@ -1,0 +1,4 @@
+local.properties
+app/src/main/assets/www/
+app/src/main/assets/shell-assets.txt
+signing.properties

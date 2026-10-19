@@ -2,6 +2,10 @@
 
 大学生课程表、考试、待办与 AI 助手，包含 Web 和 Windows 桌面版。此目录是后续开发使用的独立项目，文档与源码由同一个 Git 仓库管理。
 
+## 当前手机端版本（2026-10-19）
+
+[本地主数据PWA](docs/mobile/README.md) 已实现设备离线读写、自动加密云快照和手动确认恢复；云只存快照与发行文件。应用显示名现为“课序”，采用浅色蓝绿UI，周课表遮挡已修复，日任务、完成反馈与回顾已经接入真实本地数据。源码在 `feature/local-first-snapshots`，[当前PWA运行包](releases/mobile/kexu-2026.10.19-daily/README.md)、[UI落实与截图](docs/design/UI_IMPLEMENTATION_2026_10_19.md)、[本地版验收](docs/mobile/ACCEPTANCE_2026_10_18.md)、[AI评测与优化](docs/ai/EVALUATION_2026-10-18.md)。最新前端另有 [APK与Windows EXE封装](docs/native/README.md)，不需要Java服务；独立Compose重写方案仍保持暂停。以下工作区建立记录保留历史背景。
+
 ## 目录
 
 ```text
@@ -23,8 +27,10 @@ Tangent-Timetable/
 │   └── archive/handoff-2026-09-26/  # 原交付包说明、会话、审查报告、补丁
 ├── src/
 │   ├── android/                    # Android 原生离线单机版 Kotlin/Compose 工程
+│   ├── android-shell/              # 最新本地前端的 Android APK 外壳
 │   ├── backend/                    # 共享后端，MySQL 与 standalone/H2 两种配置
 │   ├── frontend/                   # Web 与桌面版共享 React 前端
+│   ├── windows-shell/              # 最新本地前端的 Windows EXE 外壳
 │   └── desktop/                    # WinForms/WebView2 外壳和打包脚本
 └── releases/windows/TangentTimetable/ # 现成桌面程序（忽略，不提交大文件）
 ```
@@ -51,11 +57,11 @@ Tangent-Timetable/
 
 原版和修复版可直接用标签比较，无需在日常目录内保存两套源码。历史提交仍使用原目录名 `backend/`、`frontend/`；工作区建立提交将它们迁入 `src/`。
 
-新仓库仅建立本地版本管理，没有配置远程，也没有推送或部署。原交付目录保持原状。
+仓库已上传至私有GitHub `2822708/Timetable`。当前本地版使用独立分支，原交付目录保持原状；生产部署状态见最新验收报告。
 
 ## Android 移动端规划
 
-Android 原生工程及首个离线业务切片已建立在 src/android/，包括课表/考试/待办本地功能和 JSON 文件交换。当前没有可验证的 APK；工具链限制及后续待办见 [Android 实施状态](docs/android/ANDROID_IMPLEMENTATION_STATUS.md)。完整产品边界、AI/提醒/小组件架构仍见 [Android 实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)。
+Android Compose原生工程及首个离线业务切片已建立在 src/android/，包括课表/考试/待办本地功能和 JSON 文件交换。该独立重写工程仍暂停，其历史工具链限制及后续待办见 [Android 实施状态](docs/android/ANDROID_IMPLEMENTATION_STATUS.md)。本次APK封装使用独立的 `src/android-shell/` 和当前本地前端，详见 [封装说明](docs/native/README.md)。完整原生产品边界、AI/提醒/小组件架构仍见 [Android 实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)。
 
 ## 本轮范围
 

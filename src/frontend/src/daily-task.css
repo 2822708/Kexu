@@ -1,0 +1,597 @@
+.daily-workspace {
+  max-width: 1240px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px 28px 28px;
+  color: var(--text-primary);
+}
+.daily-workspace button,
+.daily-review-sheet button {
+  touch-action: manipulation;
+}
+.daily-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 26px;
+}
+.daily-heading h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 27px;
+  font-weight: 650;
+}
+.daily-brand {
+  color: var(--teal);
+  font-size: 25px;
+}
+.daily-date-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  background: var(--bg-card);
+}
+.daily-date-control .ant-btn {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.daily-date-control .ant-picker {
+  width: 145px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.daily-date-control input {
+  font-size: 16px !important;
+  text-align: center;
+}
+.daily-date-note {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: -14px;
+  margin-bottom: 12px;
+}
+.daily-date-note .ant-btn {
+  min-height: 44px;
+}
+.daily-main {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  padding: 10px 24px 20px;
+  box-shadow: var(--surface-shadow);
+}
+.daily-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+.daily-list-tabs,
+.daily-list-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.daily-list-tabs button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 15px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+}
+.daily-list-tabs button[aria-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 650;
+}
+.daily-list-tabs span {
+  margin-left: 5px;
+  font-size: 13px;
+}
+.daily-list-tools .ant-btn {
+  min-height: 46px;
+  min-width: 44px;
+}
+.daily-entry-list {
+  min-height: 280px;
+  padding-top: 12px;
+}
+.daily-entry {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 44px;
+  align-items: start;
+  gap: 16px;
+  padding: 22px 8px;
+  border-bottom: 1px solid var(--border-light);
+  position: relative;
+}
+.daily-entry.is-priority {
+  padding: 22px 12px 22px 9px;
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--teal);
+  background: linear-gradient(110deg, var(--accent-soft), var(--teal-soft));
+  border-radius: 12px;
+  margin: 8px 0;
+}
+.daily-check-wrap {
+  position: relative;
+}
+.daily-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--border-dark);
+  border-radius: 50%;
+  color: var(--teal);
+  background: var(--bg-card);
+  font-size: 23px;
+  cursor: pointer;
+}
+.daily-check:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.daily-check[aria-pressed='true'] {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: var(--text-on-accent);
+}
+.daily-empty-check {
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--border-dark);
+  border-radius: 6px;
+}
+.daily-entry-copy {
+  min-width: 0;
+  padding-top: 9px;
+}
+.daily-entry-title {
+  font-size: calc(20px * var(--app-font-scale, 1));
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  font-weight: 550;
+}
+.daily-priority-star {
+  color: var(--teal);
+  font-size: 13px;
+  margin-right: 8px;
+  vertical-align: 2px;
+}
+.daily-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.daily-entry.is-completed .daily-entry-title {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+.daily-entry.is-celebrating .daily-entry-title {
+  text-decoration: none;
+}
+.daily-more.ant-btn {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  font-size: 21px;
+}
+.daily-empty {
+  padding: 38px 8px;
+  font-size: 19px;
+  color: var(--text-primary);
+}
+.daily-empty p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 8px;
+}
+.daily-quick-composer {
+  margin-top: 20px;
+}
+.daily-composer-modes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-bottom: 7px;
+}
+.daily-composer-modes button {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  min-height: 44px;
+  padding: 4px 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.daily-composer-modes button[aria-pressed='true'] {
+  color: var(--teal);
+  font-weight: 650;
+}
+.daily-composer-modes button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.daily-composer-modes button:last-child {
+  margin-left: auto;
+}
+.daily-quick-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 14px;
+  background: var(--accent-soft);
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+}
+.daily-quick-form .ant-input {
+  font-size: 18px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0;
+}
+.daily-quick-form .ant-btn {
+  min-height: 46px;
+  min-width: 46px;
+  border-radius: 12px;
+  background: var(--teal);
+}
+.daily-feedback {
+  min-height: 40px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--teal);
+  overflow-wrap: anywhere;
+}
+.daily-feedback .ant-btn {
+  min-height: 44px;
+}
+.daily-tools {
+  margin-top: 10px;
+  padding: 14px 0 10px;
+  border-top: 1px solid var(--border-light);
+}
+.daily-tool-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 6px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.daily-tool-row button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+.daily-tool-row button[aria-expanded='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--border-light);
+}
+.daily-tool-row button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.daily-tool-row .anticon {
+  color: var(--teal);
+}
+.daily-review-status {
+  font-size: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  margin: 6px 0;
+}
+.daily-tool-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-top: 14px;
+}
+.daily-tool-panel[hidden] {
+  display: none;
+}
+.daily-tool-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.daily-tool-panel .ant-btn {
+  min-height: 44px;
+}
+.daily-agenda-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid var(--border-light);
+  padding: 14px 0;
+}
+.daily-agenda-row > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.daily-agenda-row time {
+  font-size: 14px;
+  min-width: 42px;
+}
+.daily-agenda-row strong {
+  font-size: 16px;
+}
+.daily-agenda-row p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.daily-focus-options {
+  display: flex;
+  gap: 10px;
+}
+.daily-focus-options .ant-select:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.daily-focus-options .ant-select:last-child {
+  width: 115px;
+}
+.daily-focus-options .ant-select {
+  min-height: 44px;
+}
+.daily-clock {
+  font-variant-numeric: tabular-nums;
+  font-size: 46px;
+  text-align: center;
+  color: var(--accent);
+  margin: 16px 0 4px;
+}
+.daily-timer-target {
+  margin: 0 0 12px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.daily-timer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.daily-muted {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+.daily-pool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 48vh;
+  overflow: auto;
+}
+.daily-pool-list > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-light);
+  padding: 8px 0;
+}
+.daily-pool-list span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.daily-pool-list small {
+  display: block;
+  color: var(--text-secondary);
+}
+.daily-pool-list .ant-btn {
+  min-height: 44px;
+  flex-shrink: 0;
+}
+.daily-review-sheet .ant-btn {
+  min-height: 44px;
+}
+.daily-review-sheet .ant-input,
+.daily-review-sheet textarea {
+  font-size: 16px;
+}
+.daily-review-sheet p {
+  overflow-wrap: anywhere;
+}
+.daily-completion-effect {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.daily-completion-effect i {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+  animation: daily-spark 0.44s ease-out both;
+  --spark-x: -25px;
+  --spark-y: -25px;
+}
+.daily-completion-effect i:nth-child(2) {
+  --spark-x: 25px;
+  --spark-y: -22px;
+  background: var(--accent);
+}
+.daily-completion-effect i:nth-child(3) {
+  --spark-x: 24px;
+  --spark-y: 26px;
+}
+.daily-completion-effect i:nth-child(4) {
+  --spark-x: -23px;
+  --spark-y: 25px;
+  background: var(--accent);
+}
+.is-celebrating .daily-check {
+  animation: daily-check-pop 0.44s ease-out;
+}
+@keyframes daily-spark {
+  from {
+    transform: translate(0, 0);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(var(--spark-x), var(--spark-y));
+    opacity: 0;
+  }
+}
+@keyframes daily-check-pop {
+  50% {
+    box-shadow: 0 0 0 7px var(--teal-soft);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .daily-completion-effect {
+    display: none;
+  }
+  .is-celebrating .daily-check {
+    animation: none;
+  }
+}
+@media (max-width: 767px) {
+  .daily-workspace {
+    padding: 0 0 24px;
+  }
+  .daily-heading {
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .daily-heading h1 {
+    font-size: 24px;
+    gap: 6px;
+  }
+  .daily-brand {
+    font-size: 20px;
+  }
+  .daily-date-control {
+    gap: 0;
+  }
+  .daily-date-control .ant-btn {
+    width: 44px;
+    min-width: 44px;
+  }
+  .daily-date-control .ant-picker {
+    width: 126px;
+    padding-inline: 3px;
+  }
+  .daily-date-control .ant-picker-suffix {
+    display: none;
+  }
+  .daily-main {
+    border-radius: 14px;
+    padding: 6px 10px 14px;
+  }
+  .daily-list-toolbar {
+    padding-bottom: 8px;
+    gap: 4px;
+  }
+  .daily-list-tabs button {
+    padding: 7px 9px;
+    font-size: 15px;
+  }
+  .daily-list-tools {
+    gap: 0;
+  }
+  .daily-list-tools .ant-btn {
+    padding-inline: 8px;
+  }
+  .daily-entry {
+    gap: 8px;
+    padding: 18px 0;
+    grid-template-columns: 52px minmax(0, 1fr) 44px;
+  }
+  .daily-entry.is-priority {
+    padding: 18px 2px 18px 4px;
+  }
+  .daily-entry-title {
+    font-size: calc(19px * var(--app-font-scale, 1));
+  }
+  .daily-entry-meta {
+    gap: 3px 8px;
+  }
+  .daily-entry-list {
+    min-height: 270px;
+  }
+  .daily-composer-modes {
+    gap: 0;
+  }
+  .daily-composer-modes button {
+    font-size: 12px;
+    padding-inline: 5px;
+  }
+  .daily-quick-form {
+    padding-left: 8px;
+  }
+  .daily-tool-row {
+    gap: 2px;
+  }
+  .daily-tool-row button {
+    padding: 6px 2px;
+    gap: 5px;
+    font-size: 13px;
+  }
+  .daily-tool-panel {
+    padding: 14px 12px;
+  }
+  .daily-agenda-row {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .daily-agenda-row > .ant-btn {
+    margin-left: auto;
+  }
+}
+@media (max-width: 359px) {
+  .daily-heading {
+    flex-wrap: wrap;
+  }
+  .daily-date-control {
+    margin-left: auto;
+  }
+  .daily-entry-title {
+    font-size: calc(19px * var(--app-font-scale, 1));
+  }
+}

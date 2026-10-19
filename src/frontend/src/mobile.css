@@ -1,0 +1,300 @@
+.app-loading-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+}
+.app-shell {
+  height: 100dvh;
+}
+.app-body,
+.app-content {
+  min-width: 0;
+  min-height: 0;
+}
+.mobile-nav {
+  display: none;
+}
+.sidebar-backdrop {
+  border: 0;
+  padding: 0;
+}
+.mobile-record-list {
+  display: grid;
+  gap: 12px;
+}
+.mobile-record-list p {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.mobile-record-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --mobile-nav-height: calc(64px + env(safe-area-inset-bottom, 0px));
+    --topbar-height: calc(64px + env(safe-area-inset-top, 0px));
+  }
+  body {
+    touch-action: manipulation;
+    font-size: calc(15px * var(--app-font-scale, 1));
+  }
+  .app-shell {
+    height: var(--app-height, 100dvh);
+  }
+  .app-topbar {
+    min-height: var(--topbar-height);
+    padding: env(safe-area-inset-top, 0px) max(8px, env(safe-area-inset-right, 0px)) 0
+      max(8px, env(safe-area-inset-left, 0px));
+    gap: 8px;
+  }
+  .app-topbar-leading {
+    gap: 4px;
+  }
+  .app-brand {
+    gap: 6px;
+  }
+  .app-brand-mark {
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
+    border-radius: 9px;
+  }
+  .app-brand-subtitle {
+    display: none;
+  }
+  .app-topbar-title {
+    font-size: 19px;
+    letter-spacing: 1px;
+  }
+  .app-topbar .ant-tag,
+  .device-connection-badge {
+    display: none;
+  }
+  .app-topbar-actions {
+    gap: 2px;
+  }
+  .icon-btn-round {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+  .app-content {
+    padding: 12px max(12px, env(safe-area-inset-right, 0px)) 12px
+      max(12px, env(safe-area-inset-left, 0px));
+    gap: 12px;
+  }
+  .app-footer {
+    display: none;
+  }
+  .mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    flex-shrink: 0;
+    height: var(--mobile-nav-height);
+    padding: 4px env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-left, 0px);
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-light);
+    z-index: 90;
+  }
+  .mobile-nav a,
+  .mobile-nav button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 48px;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    text-decoration: none;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .mobile-nav .anticon {
+    font-size: 20px;
+  }
+  .mobile-nav .active {
+    color: var(--accent);
+    font-weight: 650;
+  }
+  .mobile-nav a .anticon {
+    padding: 4px 14px;
+    border-radius: 16px;
+  }
+  .mobile-nav .active .anticon {
+    background: var(--accent-soft);
+  }
+  .app-sidebar,
+  .conv-panel {
+    top: var(--topbar-height);
+    bottom: var(--mobile-nav-height);
+    max-width: calc(100vw - 48px);
+  }
+  .app-sidebar:not(.open),
+  .conv-panel:not(.open) {
+    visibility: hidden;
+  }
+  .sidebar-backdrop,
+  .conv-backdrop {
+    inset: var(--topbar-height) 0 var(--mobile-nav-height);
+  }
+  .sidebar-nav-item {
+    height: 44px;
+    font-size: 15px;
+  }
+  .ant-btn {
+    min-height: 44px;
+    height: auto;
+    white-space: normal;
+  }
+  .ant-btn-icon-only {
+    min-width: 44px;
+  }
+  .ant-segmented-item-label {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ant-input,
+  .ant-input-affix-wrapper input,
+  .ant-input-number-input,
+  .ant-select-selection-search-input,
+  .ant-picker-input input,
+  textarea.ant-input {
+    font-size: 16px !important;
+  }
+  .ant-input,
+  .ant-input-affix-wrapper,
+  .ant-picker,
+  .ant-select-single .ant-select-selector {
+    min-height: 44px !important;
+  }
+  .ant-picker-dropdown {
+    max-width: calc(100vw - 12px);
+    overflow-x: auto;
+  }
+  .ant-modal {
+    top: max(8px, env(safe-area-inset-top, 0px)) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .ant-modal-body {
+    max-height: calc(var(--app-height, 100dvh) - 160px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .ant-modal-content {
+    padding: 16px !important;
+  }
+  .ant-modal-close {
+    width: 44px !important;
+    height: 44px !important;
+    top: 4px !important;
+    right: 4px !important;
+  }
+  .ant-space {
+    max-width: 100%;
+  }
+  .ant-card-head-title,
+  .ant-typography {
+    overflow-wrap: anywhere;
+  }
+  .ant-float-btn {
+    bottom: calc(var(--mobile-nav-height) + 16px) !important;
+    right: max(16px, env(safe-area-inset-right, 0px)) !important;
+  }
+  .ai-chat-page {
+    gap: 0 !important;
+    overflow: hidden;
+  }
+  .ai-chat-main .ant-card-head {
+    min-height: 52px;
+    padding: 0 12px;
+    flex-shrink: 0;
+  }
+  .ai-chat-main .ant-card-body {
+    padding: 10px !important;
+    overflow: hidden;
+  }
+  .ai-chat-main .ant-card-head-title > .ant-space {
+    flex-wrap: wrap;
+    gap: 4px !important;
+    padding: 6px 0;
+  }
+  .ai-chat-main .ant-alert {
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .chat-input-bar.ai-chat-composer {
+    flex-wrap: wrap;
+    padding-top: 8px;
+    gap: 6px;
+  }
+  .ai-chat-composer-field {
+    flex-basis: calc(100% - 116px);
+  }
+  .chat-input-bar .ai-chat-attachment {
+    align-self: flex-end;
+    padding-inline: 8px;
+  }
+  .ai-chat-composer-field .ai-chat-composer-text {
+    padding-right: 48px;
+    min-height: 44px;
+  }
+  .ai-chat-composer-field .ai-chat-composer-mic {
+    width: 40px;
+    height: 40px;
+  }
+  .ai-chat-composer-image .ant-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+  .chat-bubble {
+    font-size: 14px;
+  }
+  .todo-record {
+    flex-wrap: wrap;
+  }
+  .todo-record .ant-list-item-meta {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+  .todo-record .ant-list-item-action {
+    margin: 8px 0 0 auto;
+  }
+  .todo-record .ant-checkbox-wrapper {
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .exam-time-fields > .ant-space-item {
+    width: 100%;
+  }
+  .ant-switch {
+    min-height: 28px;
+  }
+  .login-wrapper {
+    min-height: 100dvh;
+    padding: max(12px, env(safe-area-inset-top, 0px)) 12px
+      max(12px, env(safe-area-inset-bottom, 0px));
+  }
+  [data-keyboard-open] .mobile-nav,
+  [data-keyboard-open] .ant-float-btn {
+    display: none;
+  }
+  [data-keyboard-open] {
+    --mobile-nav-height: 0px;
+  }
+}
