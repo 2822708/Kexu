@@ -48,7 +48,21 @@ public class LlmProperties {
      */
     private boolean fallbackEnabled = true;
 
+    /**
+     * 生成类调用（当前只有每日计划）在模型输出不合规时的重试策略。
+     *
+     * <p>与 {@code fallback} 是两件事：fallback 处理的是「provider 挂了」，发生在
+     * {@code LlmClient} 内部；plan-retry 处理的是「provider 正常，但模型这次输出没通过
+     * 服务端校验」，发生在业务层。两者叠加时顺序是「先业务重试，再换 provider，再业务重试」。
+     */
+    private PlanRetry planRetry = new PlanRetry();
+
     public String getActiveProvider() { return activeProvider; }
+
+    public PlanRetry getPlanRetry() { return planRetry; }
+    public void setPlanRetry(PlanRetry planRetry) {
+        this.planRetry = planRetry == null ? new PlanRetry() : planRetry;
+    }
     public void setActiveProvider(String activeProvider) { this.activeProvider = activeProvider; }
 
     public Map<String, LlmProviderConfig> getProviders() { return providers; }
@@ -68,4 +82,48 @@ public class LlmProperties {
 
     public boolean isFallbackEnabled() { return fallbackEnabled; }
     public void setFallbackEnabled(boolean fallbackEnabled) { this.fallbackEnabled = fallbackEnabled; }
+
+    /**
+     * 计划生成的重试退避参数（成本治理 6.1 #6）。
+     *
+     * <p>只对**可重试失败**生效——即模型输出没通过服务端校验（502）、上游超时/繁忙
+     * （503/504）、网络异常。模板缺失（500）、未配置 provider（503 但无 provider 可用）、
+     * 数据库写失败这类重试一百次也不会变的错误一律直接抛，不做无意义等待。
+     *
+     * <p>退避是指数式的：{@code initial-backoff-ms * 2^attempt}，再加最多
+     * {@code jitter-ms} 的随机抖动。抖动的作用是避免多个用户的失败请求在上游恢复的
+     * 同一瞬间齐刷刷打过去，把上游再打死一次。
+     */
+    public static class PlanRetry {
+
+        /** 总尝试次数（含首次）。默认 3 = 首轮 + 重试 2 次。 */
+        private int maxAttempts = 3;
+
+        /** 首次重试前的等待毫秒数。默认 800ms。 */
+        private long initialBackoffMs = 800L;
+
+        /** 单次等待上限，防止指数退避把请求拖到前端超时。默认 4000ms。 */
+        private long maxBackoffMs = 4000L;
+
+        /** 抖动上限（毫秒）。默认 300ms。 */
+        private long jitterMs = 300L;
+
+        /** 关掉即退化为 V1.0 行为：一次失败直接冒到前端。 */
+        private boolean enabled = true;
+
+        public int getMaxAttempts() { return maxAttempts; }
+        public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
+
+        public long getInitialBackoffMs() { return initialBackoffMs; }
+        public void setInitialBackoffMs(long initialBackoffMs) { this.initialBackoffMs = initialBackoffMs; }
+
+        public long getMaxBackoffMs() { return maxBackoffMs; }
+        public void setMaxBackoffMs(long maxBackoffMs) { this.maxBackoffMs = maxBackoffMs; }
+
+        public long getJitterMs() { return jitterMs; }
+        public void setJitterMs(long jitterMs) { this.jitterMs = jitterMs; }
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    }
 }

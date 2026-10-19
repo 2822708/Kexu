@@ -60,7 +60,7 @@ npm run build
 |---|---|
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效）；**信息处理中心 `/info` 落地**（信息收纳盒 + AI 查询中心 + 最近解析预览，两处边界适配见 3.9） |
-| 后端测试 | **171/171 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个） |
+| 后端测试 | **188/188 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个） |
 | 前端 | typecheck 通过；lint **0 错误 / 8 警告**（8 个警告全在存量文件，属基线，不得新增）；build 通过 |
 | 工作区 | 见 `git status`。**本地领先 origin 的提交均未推送**（数量以 `git rev-list --count origin/main..main` 实时为准，含 P0-1、通知箱/分时 UI、引导页/模块自定义、P0-2、身份修复及收工文档提交）。缺 `ghp_`/`github_pat_` 开头的 PAT，见 6.5 |
 | 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》两轮均已完成**。**2026-10-18 用真实 DeepSeek Key 完成了首次端到端验收**，并修复了一个只有真实调用才能暴露的 P0（流式对话工作线程丢失调用方身份，详见第 5 节当日条目）。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
@@ -131,6 +131,9 @@ npm run build
 - 生成即缓存，一天一条（uk(api_key, plan_date)）；`GET` 只读缓存，**永不烧 token**。
 - **stale 判定不加表字段**：用「输入表（course/exam/task/student_profile）`MAX(updated_at)` > `daily_plan.created_at`」判断。判定偏保守（改了下周的课也会提示），宁可多提示一次。
 - **`get()` 与 `generate()` 分工明确**：`get()` 只提示不重算（首页只读路径）；`generate()` 命中缓存但**已 stale 时删旧行覆盖重算**——用户主动点「重新生成」就是同意消耗这次 token。命中且未 stale 仍然直接返回缓存，一天不会重复烧额度。
+- **失败分类重试（2026-10-19，成本治理 6.1 #6）**：模型输出不合规是**常态**而非故障，一次就放弃等于把可恢复的抖动直接变成用户的失败。因此只对 502（校验不过）/ 503 / 504 重试，`app.llm.plan-retry.*` 控制次数与退避（指数 800→1600ms 封顶 4000ms + ≤300ms 抖动），默认 3 次；`enabled=false` 即退化为 V1.0 一次行为。**模板缺失（500）、未配置 provider（503 "AI 服务未配置"）、写库失败一律不重试**——重试一百次也还是那个结果，白等。抖动不是装饰：上游恢复瞬间多个用户的失败请求齐刷刷打过去会把上游再打死一次。
+- **并发去重（2026-10-19）**：`generate()` 按 `apiKey@planDate` 加 `ReentrantLock`，同一天只允许一个请求真正调模型。此前是「先查缓存 → 再删旧行 → 调模型」全程无锁：两个请求同时进来会各烧一次 token，然后同时 insert 撞 `uk_daily_plan_date`，用户看到 500。锁在 `finally` 里用 `hasQueuedThreads()` 判断后摘除（必须与 unlock 同线程，否则会挤掉锁对象导致失序）。这是单机方案——多实例部署时这套缓存本身也不成立，别拿它当分布式锁。
+- **旧计划不先删**：改成「新计划落库成功后再删旧行」（`replaceCached`）。先删后插的话，模型连续失败会让用户从「有份旧计划可看」变成「什么都没有」。有测试钉住（`keepsPreviousPlanWhenEveryRetryFails`）。
 
 ### 3.4 数据库与迁移
 
@@ -165,6 +168,8 @@ npm run build
 | `Timestamp.valueOf("2026-09-28 23:59")` 缺秒 | 用 `LocalDateTime.parse(s.replace(" ", "T"))` |
 | `isValidProposal` 的 switch 漏分支 | 漏了会静默丢弃整类提案；每加一种 action 必须同步 `splitToSingleActions` / `recordField` / 校验分支三处 |
 | `LlmClientRegistry.active()` 先抛 503 | 之后的 `isConfigured()` 分支是永远走不到的死代码 |
+| `mvn -q test` 会吞掉断言失败 | `-q` 只保留 ERROR 级别的 Maven 输出，surefire 的失败明细写进了 `target/surefire-reports/*.txt` 而不上屏。跑「预期会失败」的变异验证时，别拿 `mvn -q` 的 stdout 判断结果，去看那份报告（`Failures`/`Errors` 计数） |
+| 并发去重锁在 `finally` 里直接 remove | 必须 `if (!lock.hasQueuedThreads())` 才摘除，且判断与 `unlock()` 同线程。否则等锁的线程还没进排队队列时对象被摘走，后续请求会拿到一把新锁，锁形同虚设 |
 | 前端 `client.ts` 方法白名单 | 新增 HTTP 方法（如 PATCH）要在 Options 白名单里补 |
 | 前端 `&&` 短路返回 `unknown` | `m.target_id != null` 才能拿到 boolean，否则 `isUpdate && <Tag>` 报 TS2322 |
 | MockMvc `getContentAsString()` 无参 | 按 ISO-8859-1 解码 UTF-8 响应 → 中文乱码。必须写 `getContentAsString(StandardCharsets.UTF_8)`（jsonPath 内部用 UTF-8，所以断言可能过、自己解析却乱码） |
@@ -289,6 +294,24 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-19 · WorkBuddy · 计划生成失败重试退避 + 并发去重（成本治理 6.1 #6 收尾）
+
+**动机**：`#6 降级与重试` 此前只做了「provider 挂了切备用」，缺的是另一半——**provider 正常但模型这次没排好**。而后者恰恰是高频路径：模型输出漏课、时间格式错、忘排休息都会被服务端校验拦下抛 502，用户点一次「生成」失败一次，看起来像 AI 坏了。
+
+**改动（`DailyPlanServiceImpl`）**：
+
+1. **失败分类重试**：抽出 `generateWithRetry(...)`，只重试 502/503/504；500（模板缺失）、未配置 provider 抛的 503、写库失败一律直接抛。退避 = `initial × 2^(attempt-1)` 封顶 `max` + 抖动。默认 3 次 / 800ms→1600ms / 封顶 4000ms / 抖动 ≤300ms，全部走 `app.llm.plan-retry.*` 环境变量可调，`enabled=false` 退回 V1.0。
+2. **并发去重**：按 `apiKey@planDate` 加 `ReentrantLock`，把「查缓存 → 调模型 → 落库」整段纳入临界区；锁后重查缓存，其余并发请求直接命中。
+3. **旧计划保留**：先删后插改先插后删（`replaceCached`），重算失败不再把用户手里的旧计划一起弄没。
+4. **顺手修的 NPE**：原 `items.sort((a,b) -> a.getStart().compareTo(b.getStart()))` 比较的是解析出的 `LocalTime`，模型给畸形时间时 `start` 为 null → 排序 NPE → 500。改为按 `HH:mm` 字符串比较（定宽，字典序即时间序）。
+
+**验证**：
+- 新增 `AiCampusAgentDailyPlanRetryTest` 6 项，**全量 188/188 绿**（171 原有 + 11 上轮路由 + 6 本轮）。
+- **做了变异验证**，确认并发用例不是假绿：把 `GENEATION_LOCKS.computeIfAbsent` 换成 `new ReentrantLock()`（等价于不加锁）后，该用例立刻失败，报 `DuplicateKeyException: uk_daily_plan_date` —— 这正好实证了「无锁并发会撞唯一键，用户看到 500」。
+- 注意：`mvn -q` 下变异体的失败不打印到 stdout，要看 `target/surefire-reports/*.txt`（是第一眼看漏的原因，记一笔）。
+
+**未做**：界面配置 provider（#2 仍缺）；计划采纳率埋点（#1 仍缺，需要先给 `daily_plan` 补决定时刻字段）。
 
 ### 2026-10-19 · WorkBuddy · GitHub 推送打通（SSH 公钥注册生效），36 个提交全部上远端
 
@@ -717,7 +740,7 @@ Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings`
 | 3 | **按任务分级路由** | ✅ **已完成**（`app.llm.routes.<SCENE>=<providerId>`，7 处调用点改 `forScene(SCENE_*)`）。**下一步**：等真有第二个 provider 上线，按实测单价把 EXTRACT/OCR 这类轻活切过去；2026 年国产模型价格：DeepSeek-V4-Lite 0.1/0.2 元每百万 token、GLM-4-Flash 免费、V4-Pro 1.0/2.0（缓存命中 0.025） |
 | 4 | **Prompt Caching** | 系统提示词 + 学生画像这类稳定前缀打 cache 标记，输入成本可降 80–90% |
 | 5 | **token 计量与预算** | ✅ **P0-1 + P0-2 均已完成**（`llm_usage` + `/api/stats/usage` + 统计页用量与预算卡片 + `LlmBudgetService` 两级额度熔断，详见 3.8）。**默认不限制**，要熔断必须显式配 `app.llm.budget.*` |
-| 6 | **降级与重试** | ✅ **provider 故障自动切备用已完成**（`FallbackLlmClient` + `app.llm.fallback`；流式吐过正文就不再切换，499 不重试）。**仍缺**：已列入待排期的「计划生成失败重试退避」 |
+| 6 | **降级与重试** | ✅ **已完成**。两半都齐了：(a) provider 故障切备用（`FallbackLlmClient` + `app.llm.fallback`，流式吐过正文不切换、499 不重试）；(b) **计划生成失败重试退避**（`app.llm.plan-retry.*`，只重试 502/503/504，指数退避 + 抖动，`enabled=false` 可回滚）+ **同账号同日并发去重**（见 3.3） |
 
 ### 6.2 第二阶段：记忆系统升级（调研报告 §5 方向 A，约 2–3 周）
 

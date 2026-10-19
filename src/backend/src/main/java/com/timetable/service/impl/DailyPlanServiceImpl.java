@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.timetable.config.LlmProperties;
 import com.timetable.dto.DailyPlanDto;
 import com.timetable.entity.Course;
 import com.timetable.entity.LlmUsage;
@@ -34,11 +35,15 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * AI 每日计划（AI Campus Agent V1.0 Step 6）。
@@ -61,6 +66,14 @@ public class DailyPlanServiceImpl implements DailyPlanService {
     private static final int MAX_NOTE_CHARS = 50;
     private static final int MAX_SUMMARY_CHARS = 50;
 
+    /**
+     * 生成去重锁：key = {@code apiKey@planDate}。
+     *
+     * <p>用 {@link ConcurrentHashMap} 而不是 Guava/Redis：单机部署（本项目就是单机 + 本地库），
+     * 多实例部署前这套缓存本来也不成立。每把锁用完即摘，不会随用户数无限增长。
+     */
+    private static final ConcurrentHashMap<String, ReentrantLock> GENEATION_LOCKS = new ConcurrentHashMap<>();
+
     private final DailyPlanMapper mapper;
     private final ScheduleService scheduleService;
     private final CourseService courseService;
@@ -72,13 +85,15 @@ public class DailyPlanServiceImpl implements DailyPlanService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final JdbcTemplate jdbc;
+    private final LlmProperties llmProperties;
 
     public DailyPlanServiceImpl(DailyPlanMapper mapper, ScheduleService scheduleService,
                                 CourseService courseService, TaskService taskService,
                                 PeriodConfigService periodConfigService,
                                 StudentProfileService studentProfileService,
                                 LlmClientRegistry llmClients, PromptTemplateRegistry promptTemplates,
-                                ObjectMapper objectMapper, Clock clock, JdbcTemplate jdbc) {
+                                ObjectMapper objectMapper, Clock clock, JdbcTemplate jdbc,
+                                LlmProperties llmProperties) {
         this.mapper = mapper;
         this.scheduleService = scheduleService;
         this.courseService = courseService;
@@ -90,6 +105,7 @@ public class DailyPlanServiceImpl implements DailyPlanService {
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.jdbc = jdbc;
+        this.llmProperties = llmProperties;
     }
 
     @Override
@@ -156,17 +172,34 @@ public class DailyPlanServiceImpl implements DailyPlanService {
     public DailyPlanDto generate(String apiKey, Long scheduleId, LocalDate date) {
         LocalDate planDate = date == null ? LocalDate.now(clock) : date;
 
-        // 同一天重复点「生成」默认复用，避免重复烧 token。
-        // 但计划已被标记 stale（输入数据变过）时，用户主动点生成就是要重算——删掉旧行继续。
-        // 分工：get() 只读永不烧 token，只提示；generate() 由用户主动触发，允许真正重算。
+        // 同一账号同一天只允许一个请求真正干活：否则「首页 + 用户手点」并发进来会各调一次模型
+        // （重复烧 token），最后还有两行同时 insert 撞 uk(api_key, plan_date)。
+        // 分段加锁而不是把方法整体 synchronized：不同用户、不同日期互不排队。
+        String slot = apiKey + "@" + planDate;
+        ReentrantLock lock = GENEATION_LOCKS.computeIfAbsent(slot, key -> new ReentrantLock());
+        lock.lock();
+        try {
+            return generateExclusive(apiKey, scheduleId, planDate);
+        } finally {
+            lock.unlock();
+            // 必须与 unlock 同线程判断：等锁的线程此刻还没进排队队列，
+            // 若它随后进入会被下面的 remove 挤掉锁对象，导致后续请求拿到一把新锁而失序。
+            if (!lock.hasQueuedThreads()) {
+                GENEATION_LOCKS.remove(slot, lock);
+            }
+        }
+    }
+
+    /** 持锁执行：缓存 → 取输入 → 调模型（带退避重试）→ 校验 → 落库。 */
+    private DailyPlanDto generateExclusive(String apiKey, Long scheduleId, LocalDate planDate) {
+        // 拿到锁后必须重查缓存：可能刚有同一天的请求生成完，直接复用即可
         DailyPlan cached = select(apiKey, planDate);
         if (cached != null) {
             if (!inputChangedSince(apiKey, cached.getCreatedAt())) {
                 return toDto(cached, true);
             }
-            mapper.delete(new LambdaQueryWrapper<DailyPlan>()
-                    .eq(DailyPlan::getApiKey, apiKey)
-                    .eq(DailyPlan::getPlanDate, planDate));
+            // ⚠️ 旧行先不删：删了之后若模型连续失败，用户会从「有份旧计划可看」变成「什么都没有」。
+            // 改成等新计划落库成功再删（见下方 replaceCached）。
         }
 
         PromptTemplateRegistry.PromptTemplate template = promptTemplates.get("daily-plan");
@@ -199,27 +232,134 @@ public class DailyPlanServiceImpl implements DailyPlanService {
 
         String input = AiPromptBuilder.buildDailyPlanInput(
                 planDate, schedule, todayCourses, periods, openTasks, profile);
-        JsonNode root = parseJsonOrFail(client.chatJson(LlmUsage.SCENE_PLAN, List.of(
+        List<LlmClient.Message> messages = List.of(
                 new LlmClient.Message("system", template.body()),
-                new LlmClient.Message("user", input))));
+                new LlmClient.Message("user", input));
 
-        List<DailyPlanDto.DailyPlanItem> items = toValidatedItems(root, todayCourses, openTasks, periods);
-        String summary = truncate(root.path("summary").asText(""), MAX_SUMMARY_CHARS);
+        // 模型输出不合规是**常态**而非故障（尤其时间格式、漏课、忘排休息），
+        // 一次就放弃等于把可恢复的抖动直接变成用户的失败。重试期间输入数据不变，
+        // 因此只需要重新调用与校验，不必重建上下文。
+        DailyPlanDto generated = generateWithRetry(client, messages, todayCourses, openTasks, periods);
 
         DailyPlan plan = new DailyPlan();
         plan.setApiKey(apiKey);
         plan.setPlanDate(planDate);
-        plan.setContent(serializeItems(items));
-        plan.setSummary(summary);
+        plan.setContent(serializeItems(generated.getItems()));
+        plan.setSummary(generated.getSummary());
         plan.setCreatedAt(LocalDateTime.now(clock));
-        mapper.insert(plan);
+        replaceCached(cached, plan);
 
         DailyPlanDto dto = new DailyPlanDto();
         dto.setDate(planDate);
-        dto.setItems(items);
-        dto.setSummary(summary);
+        dto.setItems(generated.getItems());
+        dto.setSummary(generated.getSummary());
         dto.setCached(false);
         return dto;
+    }
+
+    /**
+     * 调用 + 校验，失败按退避重试。
+     *
+     * <p>只重试 {@link #retryable(BusinessException) 可重试} 的失败；其余（含 499 客户端断开）
+     * 立即抛出，不做无意义等待。次数与间隔由 {@code app.llm.plan-retry.*} 控制，
+     * {@code enabled=false} 时退化为 V1.0 的一次性行为。
+     */
+    private DailyPlanDto generateWithRetry(LlmClient client, List<LlmClient.Message> messages,
+                                           List<Course> todayCourses, List<Task> openTasks,
+                                           List<PeriodConfig> periods) {
+        LlmProperties.PlanRetry policy = llmProperties.getPlanRetry();
+        int maxAttempts = policy.isEnabled() ? Math.max(1, policy.getMaxAttempts()) : 1;
+        BusinessException last = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                JsonNode root = parseJsonOrFail(client.chatJson(LlmUsage.SCENE_PLAN, messages));
+                List<DailyPlanDto.DailyPlanItem> items =
+                        toValidatedItems(root, todayCourses, openTasks, periods);
+                DailyPlanDto dto = new DailyPlanDto();
+                dto.setItems(items);
+                dto.setSummary(truncate(root.path("summary").asText(""), MAX_SUMMARY_CHARS));
+                if (attempt > 1) {
+                    log.info("每日计划第 {} 次尝试通过校验（前序失败：{}）", attempt, last.getMessage());
+                }
+                return dto;
+            } catch (BusinessException failure) {
+                if (!retryable(failure)) {
+                    throw failure;
+                }
+                last = failure;
+                if (attempt == maxAttempts) {
+                    break;
+                }
+                long delay = backoffMillis(policy, attempt);
+                log.warn("每日计划生成失败（第 {}/{} 次，{}ms 后重试）：{}",
+                        attempt, maxAttempts, delay, failure.getMessage());
+                if (!sleepFor(delay)) {
+                    // 等待期间线程被中断（服务正在停机）：别再调模型，如实抛出
+                    Thread.currentThread().interrupt();
+                    throw failure;
+                }
+            }
+        }
+        log.warn("每日计划连续 {} 次未通过校验，放弃重试：{}", maxAttempts, last.getMessage());
+        throw last;
+    }
+
+    /**
+     * 哪些失败值得重试。
+     *
+     * <p>502 = 模型这次输出没通过校验（换个采样很可能就好了，这是重试的主战场）；
+     * 503/504 = 上游繁忙或超时；其余 4xx/5xx 是「配置或代码问题」，重试解决不了。
+     */
+    private boolean retryable(BusinessException failure) {
+        int code = failure.getCode();
+        return code == 502 || code == 503 || code == 504;
+    }
+
+    /** {@code initial * 2^(attempt-1)}，封顶 {@code max}，再加一点抖动打散重试尖峰。 */
+    private long backoffMillis(LlmProperties.PlanRetry policy, int attempt) {
+        long base = Math.max(0L, policy.getInitialBackoffMs());
+        int shift = Math.min(attempt - 1, 16); // 防止移位溢出
+        long delay = base << shift;
+        long cap = policy.getMaxBackoffMs();
+        if (cap > 0 && delay > cap) {
+            delay = cap;
+        }
+        long jitter = Math.max(0L, policy.getJitterMs());
+        if (jitter > 0) {
+            delay += ThreadLocalRandom.current().nextLong(jitter + 1);
+        }
+        return delay;
+    }
+
+    /** @return false 表示等待被中断 */
+    private boolean sleepFor(long millis) {
+        if (millis <= 0) {
+            return true;
+        }
+        try {
+            Thread.sleep(millis);
+            return true;
+        } catch (InterruptedException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 写新计划，并把过期旧计划删掉。
+     *
+     * <p>顺序是「先插后删」而不是「先删后插」：模型连续失败时旧计划还在，用户至少还有东西可看。
+     * 兜底再按 (api_key, plan_date) 删一次，清掉历史遗留的重复行。
+     */
+    private void replaceCached(DailyPlan stale, DailyPlan fresh) {
+        if (stale != null && stale.getId() != null) {
+            mapper.deleteById(stale.getId());
+        }
+        mapper.insert(fresh);
+        mapper.delete(new LambdaQueryWrapper<DailyPlan>()
+                .eq(DailyPlan::getApiKey, fresh.getApiKey())
+                .eq(DailyPlan::getPlanDate, fresh.getPlanDate())
+                .ne(DailyPlan::getId, fresh.getId()));
     }
 
     // ==================== 校验 ====================
@@ -321,7 +461,9 @@ public class DailyPlanServiceImpl implements DailyPlanService {
             throw new BusinessException(502, "AI 返回的计划没有安排休息，请重试");
         }
 
-        items.sort((a, b) -> a.getStart().compareTo(b.getStart()));
+        // 按 HH:mm 字符串排序：格式定宽，字典序即时间序。不用 a.getStart() 直接比较——
+        // 拿的是 String，之前那版 sort 依赖时间解析结果，模型给出畸形时间时会 NPE 到 500。
+        items.sort(Comparator.comparing(DailyPlanDto.DailyPlanItem::getStart));
         return items;
     }
 

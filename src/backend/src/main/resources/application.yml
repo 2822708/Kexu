@@ -66,6 +66,17 @@ app:
     # fallback:
     #   - glm
     fallback-enabled: ${APP_LLM_FALLBACK_ENABLED:true}
+    # 计划生成失败重试退避（成本治理 6.1 #6）。
+    # 只对「模型输出没通过服务端校验(502) / 上游超时繁忙(503,504) / 网络异常」重试；
+    # 模板缺失、未配置 provider、写库失败这类重试也不会变的错误直接抛，不做无意义等待。
+    # 退避 = initial-backoff-ms * 2^attempt + 随机抖动(≤jitter-ms)。
+    # enabled=false 即退化为 V1.0 行为：一次失败直接冒到前端。
+    plan-retry:
+      enabled: ${APP_LLM_PLAN_RETRY_ENABLED:true}
+      max-attempts: ${APP_LLM_PLAN_RETRY_MAX_ATTEMPTS:3}
+      initial-backoff-ms: ${APP_LLM_PLAN_RETRY_INITIAL_BACKOFF_MS:800}
+      max-backoff-ms: ${APP_LLM_PLAN_RETRY_MAX_BACKOFF_MS:4000}
+      jitter-ms: ${APP_LLM_PLAN_RETRY_JITTER_MS:300}
     # 单价配置（成本治理 P0-1）。统计页的金额是**估算**，按这里的单价算。
     # 模型价格一定会变，所以做成配置而非硬编码；用环境变量覆盖便于不改代码调价：
     #   LLM_PRICE_INPUT / LLM_PRICE_OUTPUT / LLM_PRICE_INPUT_DEEPSEEK_FLASH
