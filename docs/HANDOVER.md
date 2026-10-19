@@ -1037,6 +1037,8 @@ Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings`
 | — | **用 REA 核对线上部署版** | `compare_application_versions` 可对比 `timetable.zozovip.work` 与本地 build。工具已验证可用（见第 5 节 / `/workspace/REA-逆向验证报告.md`），待用户决定是否接入 MCP 常驻 |
 | — | ~~**推送本地全部提交到 GitHub**~~ | ✅ **已完成**（2026-10-19）。SSH 公钥注册生效，`feature/duolingo-style-ui` 36 个提交全部上远端（HEAD `c110ac9`），`main` 已对齐 `129e721`。**遗留**：feature 合并回 main 的 PR 未建；标签 v1.0 未强推。注意 git 的 ssh 不认非默认命名密钥，`core.sshCommand` 已配置 |
 | — | **轮换 DeepSeek API Key** | 该 Key 已在本轮对话中明文出现。验收已完成，建议用户在 DeepSeek 控制台作废旧 Key 换新，避免泄露风险 |
+| — | **双远端留哪个（`origin` vs `friend`）** | 目前两边都在推（5 个 ref），属双份维护，且已暴露两次问题：① `friend`（2822708/Timetable）的 `VERSIONING.md` 写「旧仓库不作为同步入口」，与「继续推它」自相矛盾；② 2026-10-19 推送时 GitHub 提示 **`2822708/Timetable` 已迁移到 `2822708/Kexu`**（当前 URL 仍可用，但随时可能失效）。**建议**：保留 `origin`（2552555/timetable-ai，CI 全绿、文档说它是同步入口），把 `friend` 降级为只读或删 remote。待用户拍板 |
+| — | **`friend` 上的历史分支怎么处理** | `friend` 有 4 个本地没有的分支：`ci/android-apk-build-20261017`、`feature/focus-task-mode`、`feature/local-first-snapshots`、`fix/complete-optimization-plan`；`origin` 有 `docs/local-main-preview-20261019` 和 yoloo 的 `fix/memory-order-and-version-docs`（判定「已合并/已废弃/要保留」后才能决定远端瘦身范围，见上一行的决策） |
 
 ### 6.6 已完成的旧待办（留档）
 
