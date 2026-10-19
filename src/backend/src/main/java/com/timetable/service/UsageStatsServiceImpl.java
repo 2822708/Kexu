@@ -80,6 +80,12 @@ public class UsageStatsServiceImpl implements UsageStatsService {
         long latencySum = 0;
         long latencyCount = 0;
         double cost = 0;
+        // 成本治理 6.1 #4：缓存命中统计。hit/miss 只在「上游报了字段」的调用上累加，
+        // 否则会把不支持缓存的 provider 算成命中率 0%。
+        long cacheHit = 0;
+        long cacheMiss = 0;
+        boolean anyCacheReported = false;
+        double cacheSaved = 0;
         Map<String, UsageStatsDto.SceneBreakdown> perScene = new LinkedHashMap<>();
         Map<LocalDate, UsageStatsDto.DailyPoint> perDay = new LinkedHashMap<>();
 
@@ -98,7 +104,19 @@ public class UsageStatsServiceImpl implements UsageStatsService {
 
             // 单价按该条记录实际用的模型取，缺 usage 时按 0 计不报错。
             LlmPricingProperties.PerMillion rate = pricing.forModel(row.getModel());
-            cost += (in * rate.getInput() + out * rate.getOutput()) / 1_000_000d;
+            double rowCost = rowCost(row, rate);
+            cost += rowCost;
+
+            Double savedRow = cacheSavedFor(row, rate);
+            if (savedRow != null) {
+                anyCacheReported = true;
+                int hit = row.getCacheHitTokens() == null ? 0 : row.getCacheHitTokens();
+                long missRaw = row.getCacheMissTokens() == null
+                        ? Math.max(0, in - hit) : row.getCacheMissTokens();
+                cacheHit += hit;
+                cacheMiss += missRaw;
+                cacheSaved += savedRow;
+            }
 
             String scene = row.getScene() == null ? LlmUsage.SCENE_UNKNOWN : row.getScene();
             UsageStatsDto.SceneBreakdown breakdown = perScene.computeIfAbsent(scene, s -> {
@@ -109,8 +127,7 @@ public class UsageStatsServiceImpl implements UsageStatsService {
             });
             breakdown.setCallCount(breakdown.getCallCount() + 1);
             breakdown.setTotalTokens(breakdown.getTotalTokens() + in + out);
-            breakdown.setEstimatedCost(roundMoney(breakdown.getEstimatedCost()
-                    + (in * rate.getInput() + out * rate.getOutput()) / 1_000_000d));
+            breakdown.setEstimatedCost(roundMoney(breakdown.getEstimatedCost() + rowCost));
 
             LocalDate date = row.getCreatedAt() == null ? since.toLocalDate() : row.getCreatedAt().toLocalDate();
             UsageStatsDto.DailyPoint point = perDay.computeIfAbsent(date, d -> {
@@ -129,6 +146,13 @@ public class UsageStatsServiceImpl implements UsageStatsService {
         dto.setTotalTokens(promptTokens + completionTokens);
         dto.setEstimatedCost(roundMoney(cost));
         dto.setAvgLatencyMs(latencyCount == 0 ? null : (int) (latencySum / latencyCount));
+        dto.setCacheHitTokens(cacheHit);
+        dto.setCacheMissTokens(cacheMiss);
+        dto.setCacheSavedCny(roundMoney(cacheSaved));
+        // 一个 provider 都没报缓存字段时留 null：显示 0% 会被误读成「缓存配错了」。
+        long cacheTotal = cacheHit + cacheMiss;
+        dto.setCacheHitRate(anyCacheReported && cacheTotal > 0
+                ? (double) cacheHit / cacheTotal : null);
         dto.setScenes(new ArrayList<>(perScene.values()));
         // 按日期升序，便于前端直接画趋势（缺日期不补零，避免看起来像有调用）。
         List<UsageStatsDto.DailyPoint> daily = new ArrayList<>(perDay.values());
@@ -238,6 +262,42 @@ public class UsageStatsServiceImpl implements UsageStatsService {
      * 出现这种值既难看又容易被误当成数据错误。4 位小数对「元/百万 token」这个
      * 量级足够精细（单次调用成本通常在 0.001元 以下，精度损失可忽略）。
      */
+    /**
+     * 单条调用的估算成本（成本治理 6.1 #4 起区分缓存价）。
+     *
+     * <p>命中部分按 cached-input 价、未命中部分按普通输入价，输出照旧。
+     * 上游没报缓存字段（null）时整段输入按普通价——不知道有没有命中，就按没命中算，
+     * 这才是不会低估成本的方向。
+     */
+    private double rowCost(LlmUsage row, LlmPricingProperties.PerMillion rate) {
+        int out = row.getCompletionTokens() == null ? 0 : row.getCompletionTokens();
+        if (row.getCacheHitTokens() == null) {
+            int in = row.getPromptTokens() == null ? 0 : row.getPromptTokens();
+            return (in * rate.getInput() + out * rate.getOutput()) / 1_000_000d;
+        }
+        int hit = Math.max(0, row.getCacheHitTokens());
+        int miss = row.getCacheMissTokens() == null
+                ? Math.max(0, (row.getPromptTokens() == null ? 0 : row.getPromptTokens()) - hit)
+                : Math.max(0, row.getCacheMissTokens());
+        return (hit * rate.effectiveCachedInput() + miss * rate.getInput()
+                + out * rate.getOutput()) / 1_000_000d;
+    }
+
+    /**
+     * 这一条相比「全部按普通输入价」省下的钱；上游没报缓存字段时返回 null。
+     *
+     * <p>返回 null 而不是 0，是为了让调用方能区分「没省」与「无从判断」——
+     * 把后者算进 0 会让前端多出一行「节省 ¥0.00」的无意义文案。
+     */
+    private static Double cacheSavedFor(LlmUsage row, LlmPricingProperties.PerMillion rate) {
+        if (row.getCacheHitTokens() == null) {
+            return null;
+        }
+        int hit = Math.max(0, row.getCacheHitTokens());
+        double gap = rate.getInput() - rate.effectiveCachedInput();
+        return hit * gap / 1_000_000d;
+    }
+
     private static double roundMoney(double value) {
         return Math.round(value * 10000d) / 10000d;
     }

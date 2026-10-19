@@ -49,6 +49,16 @@ public class LlmUsage {
     private Boolean stream;
     private Integer latencyMs;
     private String status;
+    /**
+     * 输入中命中前缀缓存的 token 数（成本治理 6.1 #4）。
+     *
+     * <p><b>null 与 0 是两件事</b>：null = 上游没报这个字段（该 provider 不支持缓存），
+     * 0 = 上游报了，但这次一个都没命中。合成 0 会让「刚接入的 provider」被算成命中率 0%，
+     * 看着像缓存失效，实际是从未有机会命中。统计侧据此决定要不要把它算进分母。
+     */
+    private Integer cacheHitTokens;
+    /** 输入中未命中缓存的 token 数。语义同上，null 表示上游未报。 */
+    private Integer cacheMissTokens;
     private LocalDateTime createdAt;
 
     public Long getId() { return id; }
@@ -73,6 +83,10 @@ public class LlmUsage {
     public void setLatencyMs(Integer latencyMs) { this.latencyMs = latencyMs; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public Integer getCacheHitTokens() { return cacheHitTokens; }
+    public void setCacheHitTokens(Integer cacheHitTokens) { this.cacheHitTokens = cacheHitTokens; }
+    public Integer getCacheMissTokens() { return cacheMissTokens; }
+    public void setCacheMissTokens(Integer cacheMissTokens) { this.cacheMissTokens = cacheMissTokens; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

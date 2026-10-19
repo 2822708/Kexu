@@ -37,6 +37,21 @@ public class LlmUsageRecorder {
     public void record(String apiKey, String scene, String provider, String model,
                        int promptTokens, int completionTokens,
                        boolean stream, int latencyMs, String status) {
+        record(apiKey, scene, provider, model, promptTokens, completionTokens,
+                stream, latencyMs, status, null, null);
+    }
+
+    /**
+     * 带前缀缓存命中的记录（成本治理 6.1 #4）。
+     *
+     * @param cacheHitTokens  命中缓存的输入 token；<b>null 表示上游未报这个字段</b>
+     *                        （该 provider 不支持缓存），与 0（报了但未命中）必须区分开
+     * @param cacheMissTokens 未命中缓存的输入 token；语义同上
+     */
+    public void record(String apiKey, String scene, String provider, String model,
+                       int promptTokens, int completionTokens,
+                       boolean stream, int latencyMs, String status,
+                       Integer cacheHitTokens, Integer cacheMissTokens) {
         if (apiKey == null || apiKey.isBlank()) {
             /*
              * 理论上不该发生（拦截器保证），但一旦发生就是静默丢数据：整个场景的
@@ -61,6 +76,8 @@ public class LlmUsageRecorder {
             usage.setStream(stream);
             usage.setLatencyMs(Math.max(0, latencyMs));
             usage.setStatus(status);
+            usage.setCacheHitTokens(cacheHitTokens);
+            usage.setCacheMissTokens(cacheMissTokens);
             usage.setCreatedAt(LocalDateTime.now());
             usageMapper.insert(usage);
         } catch (Exception e) {
@@ -74,9 +91,23 @@ public class LlmUsageRecorder {
                 LlmUsage.STATUS_SUCCESS);
     }
 
+    public void recordSuccess(String apiKey, String scene, String provider, String model,
+                              int promptTokens, int completionTokens, boolean stream, int latencyMs,
+                              Integer cacheHitTokens, Integer cacheMissTokens) {
+        record(apiKey, scene, provider, model, promptTokens, completionTokens, stream, latencyMs,
+                LlmUsage.STATUS_SUCCESS, cacheHitTokens, cacheMissTokens);
+    }
+
     public void recordError(String apiKey, String scene, String provider, String model,
                             int promptTokens, int completionTokens, boolean stream, int latencyMs) {
         record(apiKey, scene, provider, model, promptTokens, completionTokens, stream, latencyMs,
                 LlmUsage.STATUS_ERROR);
+    }
+
+    public void recordError(String apiKey, String scene, String provider, String model,
+                            int promptTokens, int completionTokens, boolean stream, int latencyMs,
+                            Integer cacheHitTokens, Integer cacheMissTokens) {
+        record(apiKey, scene, provider, model, promptTokens, completionTokens, stream, latencyMs,
+                LlmUsage.STATUS_ERROR, cacheHitTokens, cacheMissTokens);
     }
 }

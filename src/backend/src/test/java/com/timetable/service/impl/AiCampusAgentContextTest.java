@@ -232,7 +232,17 @@ class AiCampusAgentContextTest {
         ArgumentCaptor<List<LlmClient.Message>> prompt =
                 (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
         verify(provider, atLeastOnce()).chatJson(any(), prompt.capture());
-        return prompt.getAllValues().get(0).get(0).getContent();
+        // 成本治理 6.1 #4 起，system 被拆成两条：稳定前缀（人格+协议）+ 动态上下文（日期/课表/档案/任务/记忆）。
+        // 这里断言的是「模型实际看到的全部 system 内容」，所以要把连续的多条 system 拼回来——
+        // 只取 get(0) 会只剩协议段，看不到任何上下文数据。
+        StringBuilder all = new StringBuilder();
+        for (LlmClient.Message message : prompt.getAllValues().get(0)) {
+            if (!"system".equals(message.getRole())) {
+                break;
+            }
+            all.append(message.getContent());
+        }
+        return all.toString();
     }
 
     private Task task(String title, LocalDateTime deadline, String status) {

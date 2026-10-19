@@ -81,15 +81,26 @@ app:
     # 模型价格一定会变，所以做成配置而非硬编码；用环境变量覆盖便于不改代码调价：
     #   LLM_PRICE_INPUT / LLM_PRICE_OUTPUT / LLM_PRICE_INPUT_DEEPSEEK_FLASH
     # 取价顺序：models.<模型名> 精确匹配 → per-million 通用默认。
+    #
+    # cached-input（成本治理 6.1 #4 Prompt Caching）：命中前缀缓存的输入单价。
+    # **留空 = 回退到 input**，即「不算缓存折扣」。故意不默认填 0：填 0 等于宣称
+    # 缓存命中不要钱，会把成本算低，给出一份看起来省了钱、实际超支的账单。
+    # DeepSeek 的缓存命中价约为普通输入价的 1/10，按你手上的最新价目表填。
+    #
+    # ⚠️ models 下的条目**不要写带默认值的占位符**（如 `${X:0.5}`）：那样等于「显式配了 0.5」，
+    # 会挡住对全局值的继承，全局调价对它完全无效。想改某个模型就填真实价，
+    # 不想单独设定就整行留空/删掉——留空才是「没配，继承全局」。
     pricing:
       currency: CNY
       per-million:
         input: ${LLM_PRICE_INPUT:0.5}
         output: ${LLM_PRICE_OUTPUT:2.0}
+        cached-input: ${LLM_PRICE_CACHED_INPUT:}
       models:
         deepseek-flash:
-          input: ${LLM_PRICE_INPUT_DEEPSEEK_FLASH:0.5}
-          output: ${LLM_PRICE_OUTPUT_DEEPSEEK_FLASH:2.0}
+          input: ${LLM_PRICE_INPUT_DEEPSEEK_FLASH:}
+          output: ${LLM_PRICE_OUTPUT_DEEPSEEK_FLASH:}
+          cached-input: ${LLM_PRICE_CACHED_INPUT_DEEPSEEK_FLASH:}
     # 月度预算与超限熔断（成本治理 P0-2）。
     # **默认不限制**：下面两项都不配置时完全不拦截。要熔断必须显式配额度——
     # 默认打开会让没配预算的人某天突然用不了 AI 且不知道为什么。

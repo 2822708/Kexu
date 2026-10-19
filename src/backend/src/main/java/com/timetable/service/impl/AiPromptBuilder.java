@@ -11,6 +11,7 @@ import com.timetable.entity.StudentProfile;
 import com.timetable.entity.Task;
 import com.timetable.entity.Todo;
 import com.timetable.entity.AiMessage;
+import com.timetable.service.LlmClient;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -225,57 +226,62 @@ public final class AiPromptBuilder {
                 .append("- 修改/删除时必须使用下面\"已有课程\"里的真实 id\n")
                 .append("- 严禁编造不存在的 id；若找不到目标，actions 设为 [] 并在 text 中说明\n\n");
 
-        sb.append("## 当前时间上下文\n");
-        sb.append("今天是 ").append(today.format(DATE_FMT)).append(" ")
+        // ---- 稳定前缀到此为止。以下是每次调用都可能变的内容（日期、课表、档案、任务、记忆），
+        // ---- 必须排在稳定前缀之后，否则前缀缓存从第一处差异起就全部失配。
+        String stablePrefix = sb.toString();
+        StringBuilder ctx = new StringBuilder();
+
+        ctx.append("## 当前时间上下文\n");
+        ctx.append("今天是 ").append(today.format(DATE_FMT)).append(" ")
                 .append(weekDayName(today.getDayOfWeek().getValue())).append("。\n");
-        sb.append("明天是 ").append(today.plusDays(1).format(DATE_FMT)).append(" ")
+        ctx.append("明天是 ").append(today.plusDays(1).format(DATE_FMT)).append(" ")
                 .append(weekDayName(today.plusDays(1).getDayOfWeek().getValue())).append("。\n");
 
         if (schedule != null) {
             int currentWeek = weekOf(schedule.getPeriodStartDate(), today);
             int totalWeeks = weekOf(schedule.getPeriodStartDate(), schedule.getPeriodEndDate());
-            sb.append("当前课表：").append(brief(schedule.getName(), 200))
+            ctx.append("当前课表：").append(brief(schedule.getName(), 200))
                     .append("，学期范围 ").append(schedule.getPeriodStartDate().format(DATE_FMT))
                     .append(" ~ ").append(schedule.getPeriodEndDate().format(DATE_FMT))
                     .append("，共 ").append(totalWeeks).append(" 周。\n");
-            sb.append("今天属于第 ").append(currentWeek).append(" 周。\n");
-            sb.append("全学期周次范围：1 ~ ").append(totalWeeks).append("。\n\n");
+            ctx.append("今天属于第 ").append(currentWeek).append(" 周。\n");
+            ctx.append("全学期周次范围：1 ~ ").append(totalWeeks).append("。\n\n");
 
             sb.append("### 日期-周次对照表（本周及前后两周）\n");
             LocalDate monday = today.with(DayOfWeek.MONDAY).minusWeeks(1);
             for (int w = 0; w < 4; w++) {
                 for (int d = 0; d < 7; d++) {
                     LocalDate date = monday.plusWeeks(w).plusDays(d);
-                    sb.append(date.format(DATE_FMT)).append(" 第")
+                    ctx.append(date.format(DATE_FMT)).append(" 第")
                             .append(weekOf(schedule.getPeriodStartDate(), date)).append("周 ")
                             .append(weekDayName(d + 1));
                     if (date.equals(today)) {
-                        sb.append(" ← 今天");
+                        ctx.append(" ← 今天");
                     }
-                    sb.append("\n");
+                    ctx.append("\n");
                 }
             }
-            sb.append("\n");
+            ctx.append("\n");
         } else {
-            sb.append("当前没有选中课表，涉及课程的操作请提示用户先选择课表。\n\n");
+            ctx.append("当前没有选中课表，涉及课程的操作请提示用户先选择课表。\n\n");
         }
 
         if (periods != null && !periods.isEmpty()) {
-            sb.append("### 作息时间表\n");
+            ctx.append("### 作息时间表\n");
             for (PeriodConfig p : periods) {
-                sb.append("第").append(p.getPeriodNumber()).append("节 ")
+                ctx.append("第").append(p.getPeriodNumber()).append("节 ")
                         .append(p.getStartTime()).append("-").append(p.getEndTime()).append("\n");
             }
-            sb.append("\n");
+            ctx.append("\n");
         }
 
-        sb.append("### 已有课程\n");
-        int sectionStart = sb.length();
+        ctx.append("### 已有课程\n");
+        int sectionStart = ctx.length();
         if (courses == null || courses.isEmpty()) {
-            sb.append("（无）\n");
+            ctx.append("（无）\n");
         } else {
             if (courseCount > MAX_COURSES) {
-                sb.append("当前仅提供前 ").append(MAX_COURSES).append(" 条，共 ")
+                ctx.append("当前仅提供前 ").append(MAX_COURSES).append(" 条，共 ")
                         .append(courseCount).append(" 条。\n");
             }
             for (Course c : courses) {
@@ -287,16 +293,16 @@ public final class AiPromptBuilder {
                         .append(" 地点=").append(c.getLocation() == null ? "未指定" : c.getLocation())
                         .append(" 教师=").append(c.getTeacher() == null ? "未指定" : c.getTeacher())
                         .append("\n");
-                if (!appendContextRecord(sb, record, sectionStart)) break;
+                if (!appendContextRecord(ctx, record, sectionStart)) break;
             }
         }
-        sb.append("\n### 已有考试\n");
-        sectionStart = sb.length();
+        ctx.append("\n### 已有考试\n");
+        sectionStart = ctx.length();
         if (exams == null || exams.isEmpty()) {
-            sb.append("（无）\n");
+            ctx.append("（无）\n");
         } else {
             if (examCount > MAX_EXAMS) {
-                sb.append("当前仅提供前 ").append(MAX_EXAMS).append(" 条，共 ")
+                ctx.append("当前仅提供前 ").append(MAX_EXAMS).append(" 条，共 ")
                         .append(examCount).append(" 条。\n");
             }
             for (Exam e : exams) {
@@ -306,17 +312,17 @@ public final class AiPromptBuilder {
                         .append(" 时间=").append(e.getStartTime()).append("-").append(e.getEndTime())
                         .append(" 地点=").append(e.getLocation() == null ? "未指定" : e.getLocation())
                         .append("\n");
-                if (!appendContextRecord(sb, record, sectionStart)) break;
+                if (!appendContextRecord(ctx, record, sectionStart)) break;
             }
         }
 
-        sb.append("\n### 已有待办\n");
-        sectionStart = sb.length();
+        ctx.append("\n### 已有待办\n");
+        sectionStart = ctx.length();
         if (todos == null || todos.isEmpty()) {
-            sb.append("（无）\n");
+            ctx.append("（无）\n");
         } else {
             if (todoCount > MAX_TODOS) {
-                sb.append("当前仅提供前 ").append(MAX_TODOS).append(" 条，共 ")
+                ctx.append("当前仅提供前 ").append(MAX_TODOS).append(" 条，共 ")
                         .append(todoCount).append(" 条。\n");
             }
             for (Todo t : todos) {
@@ -328,17 +334,17 @@ public final class AiPromptBuilder {
                     record.append(" 来源=循环规则").append(t.getRecurringId());
                 }
                 record.append("\n");
-                if (!appendContextRecord(sb, record, sectionStart)) break;
+                if (!appendContextRecord(ctx, record, sectionStart)) break;
             }
         }
 
-        sb.append("\n### 已有循环待办规则\n");
-        sectionStart = sb.length();
+        ctx.append("\n### 已有循环待办规则\n");
+        sectionStart = ctx.length();
         if (recurringTodos == null || recurringTodos.isEmpty()) {
-            sb.append("（无）\n");
+            ctx.append("（无）\n");
         } else {
             if (recurringCount > MAX_RECURRING_RULES) {
-                sb.append("当前仅提供前 ").append(MAX_RECURRING_RULES).append(" 条，共 ")
+                ctx.append("当前仅提供前 ").append(MAX_RECURRING_RULES).append(" 条，共 ")
                         .append(recurringCount).append(" 条。\n");
             }
             for (RecurringTodo r : recurringTodos) {
@@ -361,16 +367,16 @@ public final class AiPromptBuilder {
                             ? r.getScript() : "[脚本过长已省略，请在循环任务页查看和修改]");
                 }
                 record.append("\n");
-                if (!appendContextRecord(sb, record, sectionStart)) break;
+                if (!appendContextRecord(ctx, record, sectionStart)) break;
             }
         }
 
         // ==================== 五段式上下文新增段（AI Campus Agent V1.0 Step 3） ====================
 
-        sb.append("\n### 学生档案\n");
+        ctx.append("\n### 学生档案\n");
         boolean profilePresent = profile != null && hasProfileContent(profile);
         if (!profilePresent) {
-            sb.append("（尚未填写。用户问到个人情况、目标或基础时，先询问或建议到设置页完善，不要假设其信息。）\n");
+            ctx.append("（尚未填写。用户问到个人情况、目标或基础时，先询问或建议到设置页完善，不要假设其信息。）\n");
         } else {
             StringBuilder fields = new StringBuilder();
             appendField(fields, "姓名", profile.getName());
@@ -381,18 +387,18 @@ public final class AiPromptBuilder {
             appendField(fields, "学习风格", profile.getLearningStyle());
             appendField(fields, "兴趣", joinTags(profile.getInterest()));
             appendField(fields, "技能", joinTags(profile.getSkills()));
-            sb.append(fields.length() == 0 ? "（尚未填写）" : fields.toString().strip()).append('\n');
+            ctx.append(fields.length() == 0 ? "（尚未填写）" : fields.toString().strip()).append('\n');
         }
 
-        sb.append("\n### 当前任务\n");
-        sb.append("（任务与待办是两个独立模块：待办来自对话指令与循环规则，任务来自文件解析、手动创建或待办迁移；")
+        ctx.append("\n### 当前任务\n");
+        ctx.append("（任务与待办是两个独立模块：待办来自对话指令与循环规则，任务来自文件解析、手动创建或待办迁移；")
                 .append("用户说「任务」时指本节，「待办」指上一节。列表含未完成且 14 天内截止、已逾期或未设置截止的任务。）\n");
-        sectionStart = sb.length();
+        sectionStart = ctx.length();
         if (tasks == null || tasks.isEmpty()) {
-            sb.append("（无）\n");
+            ctx.append("（无）\n");
         } else {
             if (taskTotal > MAX_TASKS) {
-                sb.append("当前仅提供前 ").append(MAX_TASKS).append(" 条，共 ").append(taskTotal).append(" 条。\n");
+                ctx.append("当前仅提供前 ").append(MAX_TASKS).append(" 条，共 ").append(taskTotal).append(" 条。\n");
             }
             for (Task task : tasks) {
                 StringBuilder record = new StringBuilder("id=").append(task.getId())
@@ -406,17 +412,17 @@ public final class AiPromptBuilder {
                     record.append(" 描述=").append(brief(task.getDescription(), 300));
                 }
                 record.append("\n");
-                if (!appendContextRecord(sb, record, sectionStart)) break;
+                if (!appendContextRecord(ctx, record, sectionStart)) break;
             }
         }
 
-        sb.append("\n### 长期记忆\n");
-        sectionStart = sb.length();
+        ctx.append("\n### 长期记忆\n");
+        sectionStart = ctx.length();
         if (memories == null || memories.isEmpty()) {
-            sb.append("（暂无）\n");
+            ctx.append("（暂无）\n");
         } else {
             if (memoryTotal > MAX_MEMORIES) {
-                sb.append("当前仅提供重要度前 ").append(MAX_MEMORIES).append(" 条，共 ")
+                ctx.append("当前仅提供重要度前 ").append(MAX_MEMORIES).append(" 条，共 ")
                         .append(memoryTotal).append(" 条。\n");
             }
             for (Memory memory : memories) {
@@ -424,13 +430,13 @@ public final class AiPromptBuilder {
                         .append(memoryTypeLabel(memory.getType())).append("·重要度")
                         .append(memory.getImportance()).append("] ")
                         .append(brief(memory.getContent(), 200)).append('\n');
-                if (!appendContextRecord(sb, record, sectionStart)) break;
+                if (!appendContextRecord(ctx, record, sectionStart)) break;
             }
         }
 
         // 摘要与注入内容同源同算：前端 chips 展示的就是模型这轮真实看到的条数
         AiContextSummary summary = summarizeContext(profile, courseCount, taskTotal, memoryTotal);
-        return new ChatPrompt(sb.toString(), summary);
+        return new ChatPrompt(stablePrefix + ctx, summary, stablePrefix, ctx.toString());
     }
 
     /**
@@ -455,8 +461,47 @@ public final class AiPromptBuilder {
         return summary;
     }
 
-    /** 聊天 system prompt 与同步算出的上下文摘要（单一数据源，避免 chips 与实际注入不一致）。 */
-    public record ChatPrompt(String prompt, AiContextSummary summary) {}
+    /**
+     * 聊天 system prompt 与同步算出的上下文摘要（单一数据源，避免 chips 与实际注入不一致）。
+     *
+     * <p>成本治理 6.1 #4 起拆成两段，见 {@link ChatPrompt#stablePrefix()} 与
+     * {@link ChatPrompt#dynamicContext()}。
+     */
+    public record ChatPrompt(String prompt, AiContextSummary summary,
+                             String stablePrefix, String dynamicContext) {
+
+        /**
+         * 稳定前缀：人格 + JSON 协议 + 诚实原则等「与本次会话数据无关」的全部内容。
+         *
+         * <p>同一个用户、同一版 persona 模板下，这段**逐字节相同**，是上游前缀缓存
+         * （DeepSeek 上下文缓存 / OpenAI automatic caching）的唯一可命中对象。
+         */
+        public String stablePrefix() { return stablePrefix == null ? "" : stablePrefix; }
+
+        /** 动态上下文：当前时间、课表、档案、任务、记忆。每次都可能变。 */
+        public String dynamicContext() { return dynamicContext == null ? "" : dynamicContext; }
+    }
+
+    /**
+     * 把聊天主 system prompt 拼成两条消息：稳定前缀 + 动态上下文。
+     *
+     * <p><b>为什么必须拆两条而不是一条</b>：上游的前缀缓存是「从第一个 token 起逐字节比对」，
+     * 一旦不匹配就整段未命中。原实现把「今天是 2026-10-19」塞在 system 中间，
+     * 用户第二天再聊天，前缀在日期那一行就断了，后面几千 token 的协议说明全部重新计费。
+     * 拆开后稳定前缀每天都不变，动态部分只占尾部。
+     *
+     * <p>动态段为空时返回单条 system，不塞一条空的 system 进 payload——
+     * 空的 system 消息会被某些网关当成非法输入，也会白白占一次 message 计数。
+     */
+    public static List<LlmClient.Message> chatSystemMessages(ChatPrompt prompt) {
+        String stable = prompt.stablePrefix();
+        String dynamic = prompt.dynamicContext();
+        if (dynamic.isBlank()) {
+            return List.of(new LlmClient.Message("system", stable));
+        }
+        return List.of(new LlmClient.Message("system", stable),
+                new LlmClient.Message("system", dynamic));
+    }
 
     /**
      * 每日计划的模型输入（AI Campus Agent V1.0 Step 6）。

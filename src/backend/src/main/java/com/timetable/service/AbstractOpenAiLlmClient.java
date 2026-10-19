@@ -166,6 +166,9 @@ public abstract class AbstractOpenAiLlmClient implements LlmClient {
     protected static final class Usage {
         private int promptTokens;
         private int completionTokens;
+        /** null = 上游未报缓存字段；0 = 报了但没命中。两者不可合并，详见 LlmUsage 字段注释。 */
+        private Integer cacheHitTokens;
+        private Integer cacheMissTokens;
 
         void setFrom(JsonNode usage) {
             if (usage == null || !usage.isObject()) {
@@ -173,10 +176,43 @@ public abstract class AbstractOpenAiLlmClient implements LlmClient {
             }
             promptTokens = usage.path("prompt_tokens").asInt(0);
             completionTokens = usage.path("completion_tokens").asInt(0);
+            readCacheFields(usage);
+        }
+
+        /**
+         * 读缓存命中字段（成本治理 6.1 #4）。
+         *
+         * <p><b>两家的字段名不一样，必须都认</b>：
+         * <ul>
+         *   <li>DeepSeek：{@code prompt_cache_hit_tokens} / {@code prompt_cache_miss_tokens}</li>
+         *   <li>OpenAI：{@code prompt_tokens_details.cached_tokens}（只给命中数，不给 miss）</li>
+         * </ul>
+         * 只认其中一家，另一家的缓存就等于白做了——而且不会报错，只是统计里永远 0 命中，
+         * 这正是「静默失效」的典型形态，所以两家都读，读不到才算 null。
+         *
+         * <p>OpenAI 只报 cached_tokens，miss 用 prompt_tokens - cached 反推；
+         * DeepSeek 两家都报，优先用它的值（反推在流式与重试场景下未必精确）。
+         */
+        private void readCacheFields(JsonNode usage) {
+            JsonNode hit = usage.path("prompt_cache_hit_tokens");
+            JsonNode miss = usage.path("prompt_cache_miss_tokens");
+            if (hit.isNumber() || miss.isNumber()) {
+                cacheHitTokens = hit.isNumber() ? hit.asInt() : null;
+                cacheMissTokens = miss.isNumber() ? miss.asInt() : null;
+                return;
+            }
+            JsonNode cached = usage.path("prompt_tokens_details").path("cached_tokens");
+            if (cached.isNumber()) {
+                int cachedTokens = Math.min(cached.asInt(), promptTokens);
+                cacheHitTokens = cachedTokens;
+                cacheMissTokens = Math.max(0, promptTokens - cachedTokens);
+            }
         }
 
         int promptTokens() { return promptTokens; }
         int completionTokens() { return completionTokens; }
+        Integer cacheHitTokens() { return cacheHitTokens; }
+        Integer cacheMissTokens() { return cacheMissTokens; }
     }
 
     /**
@@ -236,7 +272,7 @@ public abstract class AbstractOpenAiLlmClient implements LlmClient {
                     if (usageRecorder != null) {
                         usageRecorder.recordSuccess(apiKey, scene, providerId(), model(),
                                 usage.promptTokens(), usage.completionTokens(), stream,
-                                elapsedMs(startedAt));
+                                elapsedMs(startedAt), usage.cacheHitTokens(), usage.cacheMissTokens());
                     }
                     return result;
                 } catch (Exception failure) {
@@ -247,7 +283,7 @@ public abstract class AbstractOpenAiLlmClient implements LlmClient {
                     if (usageRecorder != null) {
                         usageRecorder.recordError(apiKey, scene, providerId(), model(),
                                 usage.promptTokens(), usage.completionTokens(), stream,
-                                elapsedMs(startedAt));
+                                elapsedMs(startedAt), usage.cacheHitTokens(), usage.cacheMissTokens());
                     }
                     throw failure;
                 }

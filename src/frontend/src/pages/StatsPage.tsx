@@ -268,6 +268,32 @@ export default function StatsPage() {
             </Col>
             <Col xs={12} sm={12} md={6}>
               <Card size="small" style={statCardStyle}>
+                <Tooltip title="System Prompt 的固定部分（人格 + 协议）被上游缓存复用，命中部分按更低的输入价计费。只统计上游确实上报了缓存字段的调用——不支持的 provider 不进分母。">
+                  <span style={{ fontSize: 14, color: 'var(--b-ink-soft)' }}>缓存命中</span>
+                </Tooltip>
+                <div style={{ marginTop: 6 }}>
+                  {usage.cacheHitRate == null ? (
+                    <Text type="secondary" style={{ fontSize: 13 }}>
+                      当前服务未上报缓存
+                    </Text>
+                  ) : (
+                    <Progress
+                      type="dashboard"
+                      percent={Math.round(usage.cacheHitRate * 100)}
+                      size={78}
+                      strokeColor="var(--b-blue)"
+                    />
+                  )}
+                </div>
+                {usage.cacheSavedCny > 0 && (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    省 {formatCost(usage.cacheSavedCny, usage.currency)}
+                  </Text>
+                )}
+              </Card>
+            </Col>
+            <Col xs={12} sm={12} md={6}>
+              <Card size="small" style={statCardStyle}>
                 <Tooltip
                   title="已落库口径：读消息时的失效复核（STALE）不落库，所以这里的确认率是上界，真实值只会更低。"
                 >

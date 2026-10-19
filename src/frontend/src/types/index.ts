@@ -470,6 +470,16 @@ export interface UsageStats {
   totalTokens: number
   estimatedCost: number
   avgLatencyMs: number | null
+  /**
+   * 前缀缓存命中率 0~1（成本治理 6.1 #4）。
+   * 全部 provider 都不支持缓存时为 null —— 与「0%」含义不同：
+   * null 是无从命中，0% 是有机会但没中。后者才说明缓存配置有问题。
+   */
+  cacheHitRate: number | null
+  cacheHitTokens: number
+  cacheMissTokens: number
+  /** 相比全按普通输入价省下的钱；没配缓存单价时为 0。 */
+  cacheSavedCny: number
   scenes: UsageSceneBreakdown[]
   daily: UsageDailyPoint[]
   /** 成本治理 P0-2：未配预算时为 null */

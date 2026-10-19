@@ -766,7 +766,9 @@ public class AiServiceImpl implements AiService {
                 personaTemplate == null ? null : personaTemplate.body(),
                 profile, openTasks, memories);
         List<LlmClient.Message> payload = new ArrayList<>();
-        payload.add(new LlmClient.Message("system", chatPrompt.prompt()));
+        // 两条 system：稳定前缀（人格+协议）+ 动态上下文（日期/课表/档案/任务/记忆）。
+        // 拆开是为了让上游前缀缓存能命中——把易变内容夹在 system 中间会让整个前缀失配。
+        payload.addAll(AiPromptBuilder.chatSystemMessages(chatPrompt));
 
         List<AiMessage> window = loadRecentMessages(conversationId, HISTORY_LIMIT);
         Map<Long, List<AiAction>> historyActions = loadActionsGrouped(

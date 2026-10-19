@@ -25,6 +25,26 @@ public class UsageStatsDto {
     /** 平均延迟毫秒，无数据时为 null。 */
     private Integer avgLatencyMs;
 
+    /**
+     * 前缀缓存命中率（成本治理 6.1 #4），0~1。
+     *
+     * <p>分母只统计「上游报了缓存字段」的调用。全部 provider 都不支持缓存时为
+     * null 而不是 0——「没有可命中的机会」和「有机会但一次没中」是两回事，
+     * 前者显示 0% 会让人误以为缓存配置写错了。
+     */
+    private Double cacheHitRate;
+    /** 命中缓存的输入 token 合计。 */
+    private long cacheHitTokens;
+    /** 未命中缓存的输入 token 合计。 */
+    private long cacheMissTokens;
+    /**
+     * 相比「全部按普通输入价」省下的钱（元）。单价未配缓存价时为 0。
+     *
+     * <p>展示这个数字而不是只给个百分比，是因为百分比看着漂亮但不等于省钱：
+     * 命中率 90% 但输入只占成本的 10%，实际省下的可能是零头。
+     */
+    private double cacheSavedCny;
+
     private List<SceneBreakdown> scenes;
     private List<DailyPoint> daily;
     /** 月度预算与已用额度（成本治理 P0-2）。未配预算时为 null。 */
@@ -129,6 +149,14 @@ public class UsageStatsDto {
     public void setEstimatedCost(double estimatedCost) { this.estimatedCost = estimatedCost; }
     public Integer getAvgLatencyMs() { return avgLatencyMs; }
     public void setAvgLatencyMs(Integer avgLatencyMs) { this.avgLatencyMs = avgLatencyMs; }
+    public Double getCacheHitRate() { return cacheHitRate; }
+    public void setCacheHitRate(Double cacheHitRate) { this.cacheHitRate = cacheHitRate; }
+    public long getCacheHitTokens() { return cacheHitTokens; }
+    public void setCacheHitTokens(long cacheHitTokens) { this.cacheHitTokens = cacheHitTokens; }
+    public long getCacheMissTokens() { return cacheMissTokens; }
+    public void setCacheMissTokens(long cacheMissTokens) { this.cacheMissTokens = cacheMissTokens; }
+    public double getCacheSavedCny() { return cacheSavedCny; }
+    public void setCacheSavedCny(double cacheSavedCny) { this.cacheSavedCny = cacheSavedCny; }
     public List<SceneBreakdown> getScenes() { return scenes; }
     public void setScenes(List<SceneBreakdown> scenes) { this.scenes = scenes; }
     public List<DailyPoint> getDaily() { return daily; }
