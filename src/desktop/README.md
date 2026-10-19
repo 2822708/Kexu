@@ -85,3 +85,14 @@ Fixed Runtime 目录里要有 `msedgewebview2.exe`，且版本必须精确等于
 - 新增 `SpaErrorViewResolver`：`/info`、`/todos` 等前端路由 404 时兜底转发 `index.html`（`/api` 与 非 GET 不兜底）
 - `build-desktop.ps1` 在 `npm run build` 之后、`mvnw verify` 之前插入了同步步骤
 - 已验证：standalone jar 起服务后 `/`、`/info`、`/assets/*.js` 均 200，`/api/*` 鉴权链路原样
+
+## 2026-10-19 增量：jar 资产确定性与 SW 毒化防护
+
+同一台机器上构建第二次时暴露的两个问题，均已修复并加门：
+
+1. **maven 必须带 `clean`**。前端 chunk 是内容哈希名，不带 clean 时 `target/classes` 会残留上一轮（乃至上上轮）的旧 chunk。实测污染严重：连续几轮构建后 jar 里躺了 **5 个世代的 entry chunk**（约 1.2MB 死重），index.html 只指向最新那份。用户全新 clone 首次构建碰不到，但「改代码后重打」「先打开发包再打发布包」必踩。
+2. **新增硬门**：jar 内所有 entry chunk（`assets/index-*`）必须被 jar 内的 `index.html` 引用，否则构建直接失败。vite 每次构建只产出一份 entry chunk，出现第二份只可能是没 clean。注意：**chunk 名在重建间不保证稳定**（实测同源两次构建名一致，但跨会话可能漂移），所以「缓存 HTML 引用旧 chunk 名」是真实升级路径，不是边缘情况。
+3. **`sw.js` 不再缓存 HTML 兜底响应**。SPA 兜底会把服务端不存在的路径返回 `index.html`（200 + `text/html`），而 SW 的 stale-while-revalidate 分支照单全收任何 200——HTML 会以 `.js` 之名毒化缓存条目，之后每次加载都拿 HTML 当脚本执行，且要等 bump `CACHE` 才清得掉。现在只缓存非 `text/html` 响应。**未 bump CACHE**：该改动只过滤缓存写入，不改变 served 内容与 SHELL，无撕裂风险。
+4. **`resources/static` 入库产物已刷新**：此前的入库版停留在「去旧名」提交，不含 Prompt Caching 的统计页缓存卡片。直接 `mvnw package -Pstandalone` 的人拿到的是旧 UI；走 `build-desktop.ps1` 的人不受影响（脚本会重新构建）。
+
+**验证方式**（沙箱可复现的部分）：`npm ci --dry-run`（lockfile 同步）→ typecheck → lint（0 错误 / 9 既有警告）→ build → sync → `mvnw clean verify -Pstandalone`（281/281）→ 按壳的完全相同参数起 jar → 路由/鉴权/PWA 资产/缓存字段全验。SW 毒化防护用 Playwright 端到端实证，并做过变异验证（去掉守卫后毒化条目 0→1，测试判定 FAIL）。**Playwright 在沙箱需要 `--no-sandbox --disable-dev-shm-usage`**（root 身份）。

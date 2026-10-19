@@ -87,7 +87,11 @@ self.addEventListener('fetch', function (event) {
     caches.match(req).then(function (hit) {
       var network = fetch(req)
         .then(function (res) {
-          if (res && res.status === 200) {
+          // 只把真正的静态资源写进缓存。SPA 兜底（SpaErrorViewResolver）会把服务端
+          // 不存在的路径返回 index.html（200 + text/html）——若照单全收，HTML 就会
+          // 以 .js 之名毒化缓存条目，之后每次加载都拿到 HTML 当脚本执行，且要等到
+          // bump CACHE 才清得掉。升级换 chunk 名时这条防护是必需的。
+          if (res && res.status === 200 && !isHtmlResponse(res)) {
             var copy = res.clone()
             caches.open(CACHE).then(function (cache) {
               cache.put(req, copy)
@@ -102,3 +106,8 @@ self.addEventListener('fetch', function (event) {
     }),
   )
 })
+
+function isHtmlResponse(res) {
+  var type = res.headers.get('content-type') || ''
+  return type.indexOf('text/html') !== -1
+}

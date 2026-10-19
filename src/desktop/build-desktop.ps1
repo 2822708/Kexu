@@ -149,12 +149,37 @@ Write-Host 'Syncing frontend dist into backend static resources...'
 Write-Host 'Verifying and packaging standalone backend...'
 Push-Location $backendDir
 try {
-    & .\mvnw.cmd -B -ntp verify -Pstandalone
+    # 必须带 clean：resources/static 里的前端 chunk 是内容哈希名，不带 clean 时
+    # target/classes 会残留上一轮（乃至上上轮）的旧 chunk，jar 里出现双份 assets。
+    # index.html 只指向新的那份，旧的纯属死重，且随每次构建无限累积。
+    & .\mvnw.cmd -B -ntp clean verify -Pstandalone
     Assert-Exit 'Backend verify'
 } finally { Pop-Location }
 $jar = Join-Path $backendDir 'target\timetable-backend-1.0.0.jar'
 if (-not (Test-Path -LiteralPath $jar)) { throw 'Standalone backend JAR missing.' }
 Copy-Item -LiteralPath $jar -Destination (Join-Path $staging 'app\timetable-backend.jar')
+
+# 兜底硬门：jar 里的 entry chunk（index-*.js / index-*.css）必须全部被 index.html 引用。
+# vite 每次构建只产出一份 entry chunk，出现第二份只可能是没 clean 导致的陈旧残留。
+Write-Host 'Checking packaged frontend assets for stale chunks...'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$jarArchive = [IO.Compression.ZipFile]::OpenRead([IO.Path]::GetFullPath($jar))
+try {
+    $entryChunks = @($jarArchive.Entries |
+        Where-Object { $_.FullName -like 'BOOT-INF/classes/static/assets/index-*' -and $_.Length -gt 0 } |
+        ForEach-Object { Split-Path $_.FullName -Leaf })
+    $indexEntry = $jarArchive.Entries |
+        Where-Object { $_.FullName -eq 'BOOT-INF/classes/static/index.html' } |
+        Select-Object -First 1
+    if (-not $indexEntry) { throw 'Packaged jar is missing static/index.html.' }
+    $reader = New-Object IO.StreamReader($indexEntry.Open(), [Text.Encoding]::UTF8)
+    try { $indexHtml = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    $stale = @($entryChunks | Where-Object { $indexHtml -notlike "*$_*" })
+    if ($stale.Count -gt 0) {
+        throw ("Packaged jar contains entry chunks not referenced by index.html (stale build residue): " + ($stale -join ', '))
+    }
+    Write-Host ("Packaged frontend assets OK: " + $entryChunks.Count + " entry chunks, all referenced.")
+} finally { $jarArchive.Dispose() }
 
 Write-Host 'Creating trimmed Java runtime...'
 $modules = 'java.base,java.compiler,java.desktop,java.instrument,java.management,java.naming,java.net.http,java.prefs,java.rmi,java.scripting,java.security.jgss,java.sql,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.unsupported,jdk.jfr,jdk.zipfs'
@@ -173,7 +198,6 @@ if (-not $SdkPackage) {
 }
 if ((Hash-File $SdkPackage) -ne $lock.webView2Sdk.sha256) { throw 'WebView2 SDK SHA256 mismatch. Do not use this package.' }
 $sdkExtract = Join-Path $buildRoot 'sdk'
-Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [IO.Compression.ZipFile]::OpenRead([IO.Path]::GetFullPath($SdkPackage))
 try {
     foreach ($entry in $archive.Entries) { Assert-ChildPath (Join-Path $sdkExtract $entry.FullName) $sdkExtract }
