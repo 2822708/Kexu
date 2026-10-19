@@ -92,6 +92,18 @@ public class LlmClientRegistry {
             log.warn("app.llm.active-provider={} 未注册，已注册的 provider：{}；将按可用性回退",
                     configuredActive, this.clients.keySet());
         }
+        // 已注册但未配置（Key 为空）的 provider 不会真正参与调用，日志里区分开，便于排查
+        // 「我明明配了第二个 provider 为什么没生效」这类问题
+        List<String> ready = new ArrayList<>();
+        for (Map.Entry<String, LlmClient> entry : this.clients.entrySet()) {
+            if (entry.getValue().isConfigured()) {
+                ready.add(entry.getKey());
+            }
+        }
+        log.info("LLM providers registered={} ready={} routes={} fallback={}",
+                this.clients.keySet(), ready,
+                properties.getRoutes() == null ? Map.of() : properties.getRoutes(),
+                properties.getFallback() == null ? List.of() : properties.getFallback());
     }
 
     /** 默认客户端；全部未配置时抛 503（AI 功能不可用）。 */
