@@ -10,8 +10,8 @@ import com.timetable.config.LlmProviderConfig;
  * chat/completions，所以不需要为每家写一个类——填 {@code app.llm.providers.<id>}
  * 即可挂上来，providerId 就是配置里的键名。
  *
- * <p>本类不由 Spring 直接管理（数量由配置决定），由 {@link LlmProviderFactory}
- * 创建并在容器关闭时统一释放看门狗线程。
+ * <p>本类不由 Spring 直接管理（数量由配置决定），由 {@link LlmClientRegistry} 创建并在
+ * 配置变化时重建、容器关闭时统一释放看门狗线程。
  */
 public class OpenAiCompatibleLlmClient extends AbstractOpenAiLlmClient {
 

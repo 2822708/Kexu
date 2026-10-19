@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * LLM 提供方注册表（AI Campus Agent V1.0）。
@@ -51,57 +52,133 @@ public class LlmClientRegistry {
     private final LlmBudgetService budget;
     /** 配置驱动的 provider，容器关闭时统一释放其看门狗线程。 */
     private final List<AbstractOpenAiLlmClient> dynamicClients;
+    /** 界面配置的 provider（本地设置），保存后无需重启即可生效。 */
+    private final LlmProviderSettings providerSettings;
+    private final ObjectMapper objectMapper;
+    private final LlmUsageRecorder usageRecorder;
+    /** 当前动态客户端对应的配置指纹；变化时重建。 */
+    private volatile String dynamicVersion;
+    /** 重建动态客户端期间的互斥，避免并发请求重复建客户端 + 泄漏看门狗线程。 */
+    private final Object rebuildLock = new Object();
 
     public LlmClientRegistry(List<LlmClient> clients, LlmProperties properties,
                              LlmBudgetService budget,
+                             ObjectProvider<LlmProviderSettings> providerSettingsProvider,
                              ObjectProvider<ObjectMapper> objectMapperProvider,
                              ObjectProvider<LlmUsageRecorder> usageRecorderProvider) {
         Map<String, LlmClient> collected = new LinkedHashMap<>();
         for (LlmClient client : clients) {
-            collected.put(client.providerId(), client);
+            String id = client == null ? null : client.providerId();
+            if (id == null || id.isBlank()) {
+                // providerId 是实现类的契约，正常实现不会为空。但**不能因此丢掉这个 client**：
+                // 丢掉等于「AI 突然不可用」，比 id 难看严重得多。给个稳定的占位 id 继续用，
+                // 同时告警——注意 null 也不能进 map，后面 List.copyOf(keys) 会直接 NPE。
+                if (client == null) {
+                    continue;
+                }
+                id = DEEPSEEK;
+                log.warn("LlmClient {} 未返回 providerId，按 {} 处理（请检查实现）",
+                        client.getClass().getName(), id);
+            }
+            collected.putIfAbsent(id, client);
         }
         this.dynamicClients = new ArrayList<>();
-        Map<String, LlmProviderConfig> configured = properties.getProviders();
+        this.properties = properties;
+        this.budget = budget;
+        // 用 ObjectProvider 取：精简的测试上下文（12 个）只 Import 了 LlmClientRegistry，
+        // 没有本地设置也照样要能起容器。硬依赖会让整个测试套件一次挂掉 81 个用例。
+        this.providerSettings = providerSettingsProvider.getIfAvailable();
+        // 只有真的配了 provider 才去取这两个 bean：精简的测试上下文里没有
+        // LlmUsageMapper，硬依赖会让整个容器起不来（既有 12 个测试就是这么挂的）。
+        this.objectMapper = objectMapperProvider.getIfAvailable();
+        this.usageRecorder = usageRecorderProvider.getIfAvailable();
+        this.clients = Collections.unmodifiableMap(collected);
+        rebuildDynamicClients();
+
+        String configuredActive = normalize(properties.getActiveProvider());
+        if (!this.clients.containsKey(configuredActive)) {
+            log.warn("app.llm.active-provider={} 未注册，已注册的 provider：{}；将按可用性回退",
+                    configuredActive, this.clients.keySet());
+        }
+        logProviders("启动");
+    }
+
+    /**
+     * 按当前配置重建动态 provider，并返回可用的 providerId 集合。
+     *
+     * <p>并发保护：多个请求同时发现配置变了，只让一个真建，其余直接用结果——
+     * 否则每次重建都会创建新的 HTTP 客户端与看门狗线程，旧的没人关，越跑线程越多。
+     */
+    private Map<String, LlmClient> refreshDynamicClients() {
+        String version = providerSettings == null ? "" : providerSettings.version();
+        if (Objects.equals(version, dynamicVersion)) {
+            return mergedClients();
+        }
+        synchronized (rebuildLock) {
+            if (Objects.equals(version, dynamicVersion)) {
+                return mergedClients(); // 别人已经重建过了
+            }
+            rebuildDynamicClients();
+            return mergedClients();
+        }
+    }
+
+    private void rebuildDynamicClients() {
+        Map<String, LlmProviderConfig> configured =
+                providerSettings == null ? properties.getProviders() : providerSettings.snapshot();
+        String version = providerSettings == null ? "" : providerSettings.version();
+
+        // 先关旧的再建新的：配置改一次就换一批线程，不关会一直累积
+        for (AbstractOpenAiLlmClient stale : dynamicClients) {
+            stale.shutdownWatchdog();
+        }
+        dynamicClients.clear();
+
         if (configured != null && !configured.isEmpty()) {
-            // 只有真的配了 provider 才去取这两个 bean：精简的测试上下文里没有
-            // LlmUsageMapper，硬依赖会让整个容器起不来（既有 12 个测试就是这么挂的）。
-            ObjectMapper objectMapper = objectMapperProvider.getIfAvailable();
-            LlmUsageRecorder usageRecorder = usageRecorderProvider.getIfAvailable();
             if (objectMapper == null || usageRecorder == null) {
                 log.warn("已配置 {} 个 provider，但 ObjectMapper / LlmUsageRecorder 不可用，跳过动态 provider",
                         configured.size());
             } else {
                 for (Map.Entry<String, LlmProviderConfig> entry : configured.entrySet()) {
                     String id = normalize(entry.getKey());
-                    if (collected.containsKey(id)) {
-                        log.warn("app.llm.providers.{} 与内置 provider 重名，已忽略配置项", id);
+                    if (clients.containsKey(id)) {
+                        log.warn("provider {} 与内置 provider 重名，已忽略配置项", id);
                         continue;
                     }
                     OpenAiCompatibleLlmClient created =
                             new OpenAiCompatibleLlmClient(id, entry.getValue(), objectMapper, usageRecorder);
-                    collected.put(id, created);
-                    this.dynamicClients.add(created);
+                    dynamicClients.add(created);
                 }
             }
         }
-        this.clients = Collections.unmodifiableMap(collected);
-        this.properties = properties;
-        this.budget = budget;
-        String configuredActive = normalize(properties.getActiveProvider());
-        if (!this.clients.containsKey(configuredActive)) {
-            log.warn("app.llm.active-provider={} 未注册，已注册的 provider：{}；将按可用性回退",
-                    configuredActive, this.clients.keySet());
+        this.dynamicVersion = version;
+        if (version.isEmpty()) {
+            this.dynamicVersion = "";
         }
-        // 已注册但未配置（Key 为空）的 provider 不会真正参与调用，日志里区分开，便于排查
-        // 「我明明配了第二个 provider 为什么没生效」这类问题
+    }
+
+    /** 内置 + 动态的合并视图（每次读都取当前状态，不在构造时冻结）。 */
+    private Map<String, LlmClient> mergedClients() {
+        if (dynamicClients.isEmpty()) {
+            return clients;
+        }
+        Map<String, LlmClient> merged = new LinkedHashMap<>(clients);
+        for (AbstractOpenAiLlmClient dynamic : dynamicClients) {
+            merged.put(dynamic.providerId(), dynamic);
+        }
+        return Collections.unmodifiableMap(merged);
+    }
+
+    private void logProviders(String phase) {
+        Map<String, LlmClient> view = mergedClients();
         List<String> ready = new ArrayList<>();
-        for (Map.Entry<String, LlmClient> entry : this.clients.entrySet()) {
+        for (Map.Entry<String, LlmClient> entry : view.entrySet()) {
             if (entry.getValue().isConfigured()) {
                 ready.add(entry.getKey());
             }
         }
-        log.info("LLM providers registered={} ready={} routes={} fallback={}",
-                this.clients.keySet(), ready,
+        log.info("LLM providers [{}] registered={} ready={} routes={} fallback={}",
+                phase, view.keySet(), ready,
                 properties.getRoutes() == null ? Map.of() : properties.getRoutes(),
                 properties.getFallback() == null ? List.of() : properties.getFallback());
     }
@@ -126,7 +203,7 @@ public class LlmClientRegistry {
 
     /** AI 功能是否可用（任一已注册的客户端已配置）。 */
     public boolean isActiveConfigured() {
-        for (LlmClient client : clients.values()) {
+        for (LlmClient client : refreshDynamicClients().values()) {
             if (client.isConfigured()) {
                 return true;
             }
@@ -145,7 +222,7 @@ public class LlmClientRegistry {
 
     /** 已注册的 providerId（供设置页/排查用）。 */
     public List<String> registeredProviders() {
-        return List.copyOf(clients.keySet());
+        return List.copyOf(refreshDynamicClients().keySet());
     }
 
     private String resolveRoute(String scene) {
@@ -168,8 +245,10 @@ public class LlmClientRegistry {
     }
 
     private LlmClient wrap(String primaryId) {
+        // 在这里刷新而不是在构造时冻结：用户在设置页刚填的 provider 要能立刻用上
+        Map<String, LlmClient> available = refreshDynamicClients();
         List<LlmClient> chain = new ArrayList<>();
-        LlmClient primary = clients.get(normalize(primaryId));
+        LlmClient primary = available.get(normalize(primaryId));
         if (primary != null && primary.isConfigured()) {
             chain.add(primary);
         }
@@ -177,7 +256,7 @@ public class LlmClientRegistry {
             List<String> backups = properties.getFallback();
             if (backups != null) {
                 for (String id : backups) {
-                    LlmClient candidate = clients.get(normalize(id));
+                    LlmClient candidate = available.get(normalize(id));
                     if (candidate != null && candidate.isConfigured() && !chain.contains(candidate)) {
                         chain.add(candidate);
                     }
@@ -186,7 +265,7 @@ public class LlmClientRegistry {
         }
         if (chain.isEmpty()) {
             // 指定的 provider 不可用：回退到任一已配置的，避免「改了配置就全站 503」
-            for (LlmClient candidate : clients.values()) {
+            for (LlmClient candidate : available.values()) {
                 if (candidate.isConfigured()) {
                     chain.add(candidate);
                     break;

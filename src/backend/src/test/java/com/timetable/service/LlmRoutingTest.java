@@ -162,11 +162,13 @@ class LlmRoutingTest {
 
     private LlmClientRegistry registry(LlmProperties properties, LlmClient... clients) {
         @SuppressWarnings("unchecked")
+        ObjectProvider<LlmProviderSettings> providerSettings = mock(ObjectProvider.class);
+        @SuppressWarnings("unchecked")
         ObjectProvider<ObjectMapper> objectMapperProvider = mock(ObjectProvider.class);
         @SuppressWarnings("unchecked")
         ObjectProvider<LlmUsageRecorder> usageRecorderProvider = mock(ObjectProvider.class);
         return new LlmClientRegistry(List.of(clients), properties, mock(LlmBudgetService.class),
-                objectMapperProvider, usageRecorderProvider);
+                providerSettings, objectMapperProvider, usageRecorderProvider);
     }
 
     @Test
