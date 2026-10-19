@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "target": "windows-x64-net48",
+  "minimumDotNetRelease": 528040,
+  "webView2Sdk": {
+    "version": "1.0.4191.47",
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4191.47/microsoft.web.webview2.1.0.4191.47.nupkg",
+    "sha256": "f492bbf547d0da329553b6727435b677579b1e9f91cc9e4a1ad029366d5f23d0"
+  },
+  "origin": "https://appassets.androidplatform.net",
+  "profileRelativeDirectory": "Data/WebView2"
+}

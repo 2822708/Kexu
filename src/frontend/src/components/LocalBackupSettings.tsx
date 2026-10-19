@@ -14,6 +14,7 @@ import {
   message,
 } from 'antd'
 import { readLocalState, subscribeLocalChanges } from '../local/db'
+import { saveJsonFile } from '../platform/saveJson'
 import {
   createLogicalSnapshot,
   parseLogicalSnapshot,
@@ -44,16 +45,6 @@ import {
   type RestorePointMetadata,
 } from '../backup/storage'
 
-const downloadJson = (value: unknown, filename: string) => {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }),
-  )
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
-}
 const time = (value: string | null) => (value ? new Date(value).toLocaleString() : '尚无成功备份')
 const countLabels = {
   schedules: '课表',
@@ -145,8 +136,13 @@ export default function LocalBackupSettings() {
             onClick={() =>
               void execute(async () => {
                 const snapshot = createLogicalSnapshot(await readLocalState())
-                downloadJson(snapshot, `Tangent-core-${new Date().toISOString().slice(0, 10)}.json`)
-                message.success('已生成本地数据文件，请确认文件已保存')
+                if (
+                  await saveJsonFile(
+                    snapshot,
+                    `Tangent-core-${new Date().toISOString().slice(0, 10)}.json`,
+                  )
+                )
+                  message.success('已生成本地数据文件，请确认文件已保存')
               })
             }
           >
@@ -290,8 +286,13 @@ export default function LocalBackupSettings() {
                 disabled={busy}
                 onClick={() =>
                   void execute(async () => {
-                    downloadJson(await exportRecoveryCredential(), 'Tangent-private-recovery.json')
-                    setCredentialExported(true)
+                    if (
+                      await saveJsonFile(
+                        await exportRecoveryCredential(),
+                        'Tangent-private-recovery.json',
+                      )
+                    )
+                      setCredentialExported(true)
                   })
                 }
               >

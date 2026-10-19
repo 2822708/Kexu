@@ -49,9 +49,13 @@ function setup(overrides = {}) {
     }).outputText
     vm.runInContext(`(function(module,exports,require){${compiled}\n})`, context, {
       filename: url.pathname,
-    })(module, module.exports, (name) =>
-      name.startsWith('.') ? loadSource(new URL(`${name}.ts`, url)) : nativeRequire(name),
-    )
+    })(module, module.exports, (name) => {
+      if (!name.startsWith('.')) return nativeRequire(name)
+      const target = new URL(`${name}.ts`, url)
+      if (target.pathname.endsWith('/local/mode.ts'))
+        return { NATIVE_SHELL: true, LOCAL_MODE: true }
+      return loadSource(target)
+    })
     return module.exports
   }
   const load = (path) => loadSource(new URL(`../src/${path}.ts`, import.meta.url))
@@ -824,7 +828,18 @@ test('restoring the same dataset invalidates previously captured daily complete,
 })
 
 test('daily history near the 7 MB limit remains intact, and oversized snapshots stop without silently dropping events', async () => {
-  const x = setup(),
+  let exportRequest
+  const nativePort = {
+    postMessage: (text) => {
+      exportRequest = JSON.parse(text)
+    },
+  }
+  const x = setup({
+      window: {
+        location: { origin: 'https://appassets.androidplatform.net' },
+        KexuNative: nativePort,
+      },
+    }),
     daily = await populatedDaily(x),
     snapshot = x.createLogicalSnapshot(daily.state)
   const sample = {
@@ -845,6 +860,14 @@ test('daily history near the 7 MB limit remains intact, and oversized snapshots 
   const valid = x.validateLogicalSnapshot(snapshot)
   const state = x.materializeSnapshot(valid, x.createEmptyLocalState())
   assert.equal(x.createLogicalSnapshot(state).data.dailyEvents.length, count)
+  assert.ok(Buffer.byteLength(JSON.stringify(valid, null, 2)) > x.SNAPSHOT_MAX_BYTES)
+  const exported = x.load('platform/saveJson').saveJsonFile(valid, 'near-limit.json')
+  assert.equal(exportRequest.text, JSON.stringify(valid))
+  assert.equal(x.parseLogicalSnapshot(exportRequest.text).data.dailyEvents.length, count)
+  nativePort.onmessage({
+    data: JSON.stringify({ type: 'save-json-result', id: exportRequest.id, ok: true }),
+  })
+  assert.equal(await exported, true)
   snapshot.data.dailyEvents.push(
     ...Array.from({ length: Math.ceil(32_768 / rowBytes) + 20 }, makeEvent),
   )
