@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.timetable.config.LlmProperties;
 import com.timetable.dto.DailyPlanDto;
 import com.timetable.entity.Course;
+import com.timetable.entity.AiEvent;
 import com.timetable.entity.LlmUsage;
 import com.timetable.entity.DailyPlan;
 import com.timetable.entity.PeriodConfig;
@@ -16,6 +17,7 @@ import com.timetable.entity.StudentProfile;
 import com.timetable.entity.Task;
 import com.timetable.exception.BusinessException;
 import com.timetable.mapper.DailyPlanMapper;
+import com.timetable.service.AiEventRecorder;
 import com.timetable.service.CourseService;
 import com.timetable.service.DailyPlanService;
 import com.timetable.service.LlmClient;
@@ -86,6 +88,7 @@ public class DailyPlanServiceImpl implements DailyPlanService {
     private final Clock clock;
     private final JdbcTemplate jdbc;
     private final LlmProperties llmProperties;
+    private final AiEventRecorder aiEventRecorder;
 
     public DailyPlanServiceImpl(DailyPlanMapper mapper, ScheduleService scheduleService,
                                 CourseService courseService, TaskService taskService,
@@ -93,7 +96,7 @@ public class DailyPlanServiceImpl implements DailyPlanService {
                                 StudentProfileService studentProfileService,
                                 LlmClientRegistry llmClients, PromptTemplateRegistry promptTemplates,
                                 ObjectMapper objectMapper, Clock clock, JdbcTemplate jdbc,
-                                LlmProperties llmProperties) {
+                                LlmProperties llmProperties, AiEventRecorder aiEventRecorder) {
         this.mapper = mapper;
         this.scheduleService = scheduleService;
         this.courseService = courseService;
@@ -106,6 +109,7 @@ public class DailyPlanServiceImpl implements DailyPlanService {
         this.clock = clock;
         this.jdbc = jdbc;
         this.llmProperties = llmProperties;
+        this.aiEventRecorder = aiEventRecorder;
     }
 
     @Override
@@ -248,6 +252,11 @@ public class DailyPlanServiceImpl implements DailyPlanService {
         plan.setSummary(generated.getSummary());
         plan.setCreatedAt(LocalDateTime.now(clock));
         replaceCached(cached, plan);
+
+        // 只有走到这里才是「真的调了模型、落了库」。缓存命中在上面就 return 了，
+        // 那种情况用户没花 token，也不构成一次新的「让学长排一天」，不能计入采纳率分母。
+        aiEventRecorder.record(apiKey, AiEvent.TYPE_PLAN_GENERATED, LlmUsage.SCENE_PLAN,
+                null, plan.getId());
 
         DailyPlanDto dto = new DailyPlanDto();
         dto.setDate(planDate);

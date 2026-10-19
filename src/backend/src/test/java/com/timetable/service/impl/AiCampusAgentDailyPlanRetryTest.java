@@ -9,6 +9,7 @@ import com.timetable.dto.ScheduleRequest;
 import com.timetable.entity.Schedule;
 import com.timetable.exception.BusinessException;
 import com.timetable.security.AdminAuthorizationService;
+import com.timetable.service.AiEventRecorder;
 import com.timetable.service.DailyPlanService;
 import com.timetable.service.LlmBudgetService;
 import com.timetable.service.LlmClient;
@@ -88,7 +89,7 @@ class AiCampusAgentDailyPlanRetryTest {
             RequestValidationService.class, ScheduleServiceImpl.class, CourseServiceImpl.class, ExamServiceImpl.class,
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, TaskServiceImpl.class, StudentProfileServiceImpl.class,
-            MemoryServiceImpl.class, DailyPlanServiceImpl.class,
+            MemoryServiceImpl.class, DailyPlanServiceImpl.class, AiEventRecorder.class,
             LlmClientRegistry.class, LlmProperties.class, LlmBudgetService.class, LlmBudgetProperties.class,
             LlmPricingProperties.class, PromptTemplateRegistry.class})
     static class TestApplication {

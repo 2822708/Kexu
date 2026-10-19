@@ -3,6 +3,7 @@ package com.timetable.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 
@@ -36,6 +37,14 @@ public class Task {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+    /**
+     * 凭据本身，绝不返回给前端。
+     *
+     * <p>同项目的其它实体（Task/AiEvent/ApiKey 等）都标了 @JsonIgnore，这里属于遗漏补齐。
+     * 泄露的后果不是「别人能看到」，而是**它会被写进浏览器缓存、日志、截图、
+     * 以及任何一次「把接口响应贴给别人看」** —— 那等于把整个工作区的钥匙递出去。
+     */
+    @JsonIgnore
     private String apiKey;
     private String title;
     private String type;

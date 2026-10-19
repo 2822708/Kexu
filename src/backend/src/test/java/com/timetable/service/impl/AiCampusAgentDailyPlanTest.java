@@ -2,6 +2,7 @@ package com.timetable.service.impl;
 
 import com.timetable.config.LlmBudgetProperties;
 import com.timetable.config.LlmPricingProperties;
+import com.timetable.service.AiEventRecorder;
 import com.timetable.service.LlmBudgetService;
 import com.timetable.config.LlmProperties;
 import com.timetable.config.ValidatedFlywayMigration;
@@ -73,7 +74,7 @@ class AiCampusAgentDailyPlanTest {
             RequestValidationService.class, ScheduleServiceImpl.class, CourseServiceImpl.class, ExamServiceImpl.class,
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
             PeriodConfigServiceImpl.class, TaskServiceImpl.class, StudentProfileServiceImpl.class,
-            MemoryServiceImpl.class, DailyPlanServiceImpl.class,
+            MemoryServiceImpl.class, DailyPlanServiceImpl.class, AiEventRecorder.class,
             LlmClientRegistry.class, LlmProperties.class, LlmBudgetService.class, LlmBudgetProperties.class, LlmPricingProperties.class, PromptTemplateRegistry.class})
     static class TestApplication {
         @Bean

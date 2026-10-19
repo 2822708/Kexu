@@ -22,6 +22,23 @@ public class AiEvent {
     /** 用户拒绝了一条 AI 提案。 */
     public static final String TYPE_PROPOSAL_REJECTED = "PROPOSAL_REJECTED";
 
+    /**
+     * 每日计划生成成功（真的调了模型、落了库）。
+     *
+     * <p>缓存命中<b>不算</b>：那不是一次新的「让学长排一天」，用户也没花 token。
+     * 把它算进分母会把采纳率拉低——用户看同一份计划十次，难道算十次没采用？
+     */
+    public static final String TYPE_PLAN_GENERATED = "PLAN_GENERATED";
+    /**
+     * 每日计划被采用：计划里安排的任务，当天真的被推进/完成了。
+     *
+     * <p>{@code refId} = {@code daily_plan.id}。只在「本计划是该用户该日最好一份」时落一次，
+     * 见 {@code DailyPlanAdoptionService} 的去重说明。
+     */
+    public static final String TYPE_PLAN_ADOPTED = "PLAN_ADOPTED";
+    /** 登录/使用活跃（任一需要鉴权的请求即可，按天去重）。用于 7 日留存。 */
+    public static final String TYPE_APP_ACTIVE = "APP_ACTIVE";
+
     @TableId(type = IdType.AUTO)
     private Long id;
     @JsonIgnore

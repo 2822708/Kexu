@@ -1,6 +1,7 @@
 package com.timetable.interceptor;
 
 import com.timetable.mapper.ApiKeyMapper;
+import com.timetable.service.DailyActiveRecorder;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;
@@ -10,9 +11,11 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class ApiKeyInterceptor implements HandlerInterceptor {
 
     private final ApiKeyMapper apiKeyMapper;
+    private final DailyActiveRecorder activeRecorder;
 
-    public ApiKeyInterceptor(ApiKeyMapper apiKeyMapper) {
+    public ApiKeyInterceptor(ApiKeyMapper apiKeyMapper, DailyActiveRecorder activeRecorder) {
         this.apiKeyMapper = apiKeyMapper;
+        this.activeRecorder = activeRecorder;
     }
 
     @Override
@@ -40,6 +43,8 @@ public class ApiKeyInterceptor implements HandlerInterceptor {
             return false;
         }
         RequestContext.setApiKey(apiKey);
+        // 留存口径：这个人今天来过没有。同一天只写一条，不产生额外查询（见 DailyActiveRecorder）。
+        activeRecorder.touch(apiKey);
         return true;
     }
 
