@@ -4,7 +4,7 @@
 >
 > **已同步到项目网盘**（tdrive 根目录，2026-10-16）：`Timetable-HANDOVER-交接主文件.md`（本文件）、`Timetable-交接总览-20261015.md`（自包含精简版，可整份粘给新 Agent）、`下一步方向调研报告.md`（**下一步方向决策依据，接手必读**）、`REA-逆向验证报告.md`、`ai-campus-agent-源码快照-ec2ec62.zip`（**免 git 的源码通道**）、`ai-campus-agent-git-bundle.bundle`（免凭证的 git 通道），操作细节见 `/workspace/Git同步操作指引.md`。
 >
-> 最近更新：2026-10-19 ｜ 更新者：WorkBuddy ｜ 对应提交：`c59c2db`（Prompt Caching：稳定前缀拆分 + 命中计量 + 命中价计费）
+> 最近更新：2026-10-19 ｜ 更新者：WorkBuddy ｜ 对应提交：`e89b68c`（桌面链路三修复：maven clean + jar 陈旧 chunk 硬门 + SW 毒化防护；回归测试 `scripts/test-sw-cache-guard.mjs`）
 >
 > ⚠️ **下一步做什么，请直接读 `/workspace/下一步方向调研报告.md` 第 8 节。**本文件第 6 节已按其结论重排待办。
 > 🆕 **跨环境同步现已有正式通道**：主分支 `main`，远端为 GitHub **私有仓库 `2552555/timetable-ai`**（2026-10-16 推送，CI 全绿）。有 GitHub 凭证的机器直接 `git clone`；无凭证的机器用网盘 zip 快照（已验证解压即 134/134）。两种方式都有效，网盘通道继续保留。
@@ -62,7 +62,7 @@ npm run build
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效）；**信息处理中心 `/info` 落地**（信息收纳盒 + AI 查询中心 + 最近解析预览，两处边界适配见 3.9） |
 | 后端测试 | **281/281 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、provider 配置 `LlmProviderSettingsTest` 9 个、provider 端点 `LlmProviderEndpointTest` 6 个、本地设置加密 `LocalSettingsEncryptionTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个、产品健康 `ProductHealthEndpointTest` 9 个 + 采纳判定 `DailyPlanAdoptionServiceTest` 5 个 + 凭据泄露 `CredentialLeakTest` 5 个、**前缀缓存 `AiPromptCachingTest` 6 个 + 缓存字段解析 `LlmCacheUsageParsingTest` 8 个 + 命中计价 `CachePricingStatsTest` 14 个**） |
 | 前端 | typecheck 通过；lint **0 错误 / 9 警告**（9 个全在存量文件：AiChatPage 3、TodosPage 1、5 个 Context/theme 各 1，属基线，不得新增）；build 通过 |
-| 工作区 | 见 `git status`。**当前分支 `feature/duolingo-style-ui`，与 `main` 已对齐到 `c59c2db`**，四个远端 ref（`origin:main` / `origin:feature/duolingo-style-ui` / `friend:feature/ai-campus-agent-v1` / `friend:feature/duolingo-style-ui`）同步推送。**⚠️ 双远端待用户决策**：`origin`（2552555/timetable-ai）与 `friend`（2822708/Timetable）两边都在推，属双份维护，见 6.5 |
+| 工作区 | 见 `git status`。**当前分支 `feature/duolingo-style-ui`，与 `main` 已对齐到 `52b1f63`**，四个远端 ref（`origin:main` / `origin:feature/duolingo-style-ui` / `friend:feature/ai-campus-agent-v1` / `friend:feature/duolingo-style-ui`）同步推送。**⚠️ 双远端待用户决策**：`origin`（2552555/timetable-ai）与 `friend`（2822708/Timetable，GitHub 提示已迁移至 `2822708/Kexu`）两边都在推，属双份维护，见 6.5 |
 | 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》两轮均已完成**。**2026-10-18 用真实 DeepSeek Key 完成了首次端到端验收**，并修复了一个只有真实调用才能暴露的 P0（流式对话工作线程丢失调用方身份，详见第 5 节当日条目）。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **网盘同步产物** | 根目录 `MTOwZfixfiEX`。`ai-campus-agent-git-bundle.bundle`（949,805 B，md5 `7b509d010dd527aaa6905c6186d91f2c`）+ `ai-campus-agent-源码快照-<HEAD>.zip`（md5 见《Git同步操作指引》§7）+ 三份文档，均已刷新到当前 HEAD 并经 **ETag == 本地 md5** 验证。上传/下载通道的坑见 3.7 与第 5 节当日收尾条目 |
@@ -289,6 +289,25 @@ npm run build
 - 教训：批量替换后必须 `grep` 一遍旧名字的**不带点形式**（`grep "sb,"`、`grep "(sb"`），不能只 `grep "sb\."`。
 - 这次是全量测试抓出来的（两个既有测试断言「任务/记忆出现在 prompt 里」）。**改 prompt 装配这类「输出是一大段字符串」的代码，一定要有内容断言，不能只测不抛异常。**
 
+### 3.17 桌面链路的两条硬约束（2026-10-19 用户要求「封装到桌面」时查出并修复）
+
+1. **`build-desktop.ps1` 的 maven 必须带 `clean`**。前端 chunk 是内容哈希名，不带 clean 时 `target/classes` 残留上一轮旧 chunk。实测同一工作区连续构建后 jar 里躺了 **5 个世代的 entry chunk**（约 1.2MB 死重，index.html 只指向最新那份）。全新 clone 首次构建碰不到；**同一台机器上构建第二次必踩**（改代码重打、先打开发包再打发布包）。已在脚本里加 `clean`，并加了硬门：jar 内 entry chunk（`assets/index-*`）必须被 jar 内 `index.html` 引用，否则构建失败——vite 每次构建只产出一份 entry chunk，出现第二份只可能是没 clean。
+2. **SW 的 stale-while-revalidate 绝不能缓存 `text/html`**。`SpaErrorViewResolver` 会把服务端不存在的路径返回 `index.html`（200 + text/html），SW 旧实现照单全收任何 200 → HTML 以 `.js` 之名毒化缓存条目 → 之后每次加载都拿 HTML 当脚本执行，且要等 bump `CACHE` 才清掉。现在只缓存非 HTML 响应，**刻意不 bump CACHE**（只过滤缓存写入，不改 served 内容与 SHELL，无撕裂风险）。
+
+配套事实（续写前必读）：
+
+- **chunk 名在重建间不保证稳定**。同源连续两次构建名一致（vite 确定性），但跨会话/跨缓存状态可能漂移（本轮实测过一次）。所以「缓存里的旧 index.html 引用的 chunk 名在新 jar 里不存在」是**真实升级路径**，第 2 条守卫是承重的，不是边缘防护。
+- **沙箱 Playwright 必须带 `--no-sandbox --disable-dev-shm-usage`**（root 身份），否则启动挂住无输出。
+- **SW 类改动必须 `node --check` + 真实浏览器加载**。本轮曾把 `addEventListener('fetch', ...)` 的右括号改丢，curl 路由验证全绿但 SW 直接「script evaluation failed」——**PWA 整体瘫痪而所有 HTTP 探针都发现不了**。
+- 壳的 `DesktopSecurity.cs` / `Program.cs` 自 baseline 起未动，凭据边界（top-level + loopback origin）无新风险；`test-desktop-security.ps1`（csc 编译 + DPAPI + login-script 夹具）只能在 Windows 跑，沙箱无 .NET 无法等价复现。
+- 桌面壳里 PWA 安装卡**不会出现**（无 `beforeinstallprompt`、非 iOS UA、非 standalone），无误导 UX；`sw.js` 的 `skipWaiting` + `clients.claim` 让升级自愈（导航 network-first 拿新 HTML → 新 chunk 名 → SWR 补缓存）。
+
+### 3.18 工具链三个坑（2026-10-19 桌面轮实测）
+
+1. **Edit 工具的子串匹配会咬人**：`old_string` 末尾写 `}` 而文件里实际是 `})` 时，替换会匹配 `}` 并留下孤儿 `)`——本次差点把 `addEventListener('fetch', ...)` 的闭合结构拆坏。**改完密集收尾字符（`})`/`)]`/`};`）的文件后，必须 `git diff` 通读 + `node --check`**，不能只看工具返回的成功。
+2. **`grep -rn "pattern" src/frontend/public/sw.js` 写错成 `public/sw.js` 不会报错**，只是静默不搜——本次因此得出过「sw.js 没有 skipWaiting」的**错误结论**（实际有）。相对仓库根的路径写错时 bash grep 静默跳过，Grep 工具则会报错。**搜文件前先确认路径存在。**
+3. **`git checkout <file>` 会静默丢弃未提交的修复**：本次在探针实验后顺手 checkout 回 HEAD，把刚写的 sw.js 守卫整个删了，靠备份才恢复。**任何实验性改动前先 `cp` 备份；`checkout` 前想清楚要丢什么。**
+
 ## 4. 关键文件地图
 
 **后端**
@@ -349,6 +368,26 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-19 · WorkBuddy · 「封装到桌面」链路核查与三个修复（提交 `e89b68c`）
+
+**动机**：用户要求「封装到桌面」。桌面包链路（C# 壳 + jar 托管前端）2026-10-18 修过一轮，此后又合入了 Prompt Caching、PWA、V7 迁移——需要确认这些增量没有把链路搞失效，并尽量在沙箱内把能验的验掉。
+
+**沙箱验过的半边**（Windows 专属的 csc 编译/冒烟/DPAPI 验不了，见 3.17）：`npm ci --dry-run`（lockfile 同步）→ typecheck → lint（0 错误 / 9 既有警告）→ build → `sync-frontend-dist.mjs` → `mvnw clean verify -Pstandalone`（**281/281**）→ 按壳的完全相同参数起 jar（`--spring.profiles.active=standalone --app.data-dir --server.address=127.0.0.1 --server.port=17817` + 两个 `TANGENT_*` 环境变量）→ 路由/鉴权/PWA 资产/usage 缓存字段全验。壳的就绪判定 `/api/auth/verify` 返回 `"valid":true`，冒烟依赖的 `timetable.apiKey` 键名与 `/api/auth/verify` 端点均未动。
+
+**查出的三个问题（都不报错，全部静默）**：
+
+1. **入库 static 过期**：停留在「去旧名」提交，不含统计页缓存卡片。直接 `mvnw package` 的人拿到旧 UI（走 build 脚本的人不受影响，脚本会重建）。
+2. **`build-desktop.ps1` 的 maven 没带 `clean`**：同一工作区连续构建后 jar 里累积 5 个世代 entry chunk（约 1.2MB 死重）。已修并加「entry chunk 必须被 index.html 引用」硬门。
+3. **`sw.js` 会把 SPA 兜底的 HTML 毒化进 `.js` 缓存条目**：SPA 兜底返回 200 text/html，SWR 分支照单全收。已加 content-type 守卫，**刻意不 bump CACHE**。
+
+**端到端实证（Playwright，沙箱需 `--no-sandbox`）**：SW activated；真实资产 4 个进缓存（正对照）；对不存在的 chunk 名发起页面内 fetch → 服务端 200 text/html（毒化向量确认）→ 缓存中毒化条目 **0**。**变异验证**：临时移除守卫重打包，毒化条目 0→1、测试判定 FAIL——测试确实测到了守卫。
+
+**过程中自己踩的三个工具坑**（详见 3.18）：Edit 子串匹配把 `})` 拆出孤儿 `)` 导致 SW 语法错误（curl 全绿但 SW 瘫痪，靠浏览器实测才发现）；grep 路径写错静默不搜导致错误结论；`git checkout` 误删未提交修复靠备份恢复。
+
+**给用户的交付**：Windows 上 `cd src\desktop; .\build-desktop.ps1 -AllowEvergreenRuntime`（版本锁见 `toolchain.json`：Microsoft OpenJDK 21.0.7 + Node 22.23.2 + .NET 4.8 + WebView2 Evergreen），产物 `src\desktop\app-image\TangentTimetable\` 双击 `TangentTimetable.exe`。沙箱侧能验的已全绿，剩余只有 Windows 专属编译/冒烟。
+
+---
 
 ### 2026-10-19 · WorkBuddy · Prompt Caching 落地（成本治理 6.1 #4），281/281 绿
 
@@ -1033,7 +1072,7 @@ Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings`
 
 | # | 事项 | 说明 |
 |---|---|---|
-| — | **人工走查（浏览器 / 桌面端）** | V1.0 功能已全部收口，唯一未验证项是 UI 交互与桌面端打包；**需用户在本机执行**：`npm run dev` 走一遍首页/聊天/设置，再做桌面冒烟（沙箱无法做人工走查） |
+| — | **人工走查（浏览器 / 桌面端）** | V1.0 功能已全部收口，唯一未验证项是 UI 交互与桌面端打包；**需用户在本机执行**：`npm run dev` 走一遍首页/聊天/设置，再做桌面冒烟（沙箱无法做人工走查）。**桌面包构建**：`cd src\desktop; .\build-desktop.ps1 -AllowEvergreenRuntime`（版本锁与前置条件见 `src/desktop/README.md` 与 `toolchain.json`），产物 `src\desktop\app-image\TangentTimetable\` 双击 exe；链路约束与 2026-10-19 三修复见 3.17 |
 | — | **用 REA 核对线上部署版** | `compare_application_versions` 可对比 `timetable.zozovip.work` 与本地 build。工具已验证可用（见第 5 节 / `/workspace/REA-逆向验证报告.md`），待用户决定是否接入 MCP 常驻 |
 | — | ~~**推送本地全部提交到 GitHub**~~ | ✅ **已完成**（2026-10-19）。SSH 公钥注册生效，`feature/duolingo-style-ui` 36 个提交全部上远端（HEAD `c110ac9`），`main` 已对齐 `129e721`。**遗留**：feature 合并回 main 的 PR 未建；标签 v1.0 未强推。注意 git 的 ssh 不认非默认命名密钥，`core.sshCommand` 已配置 |
 | — | **轮换 DeepSeek API Key** | 该 Key 已在本轮对话中明文出现。验收已完成，建议用户在 DeepSeek 控制台作废旧 Key 换新，避免泄露风险 |
