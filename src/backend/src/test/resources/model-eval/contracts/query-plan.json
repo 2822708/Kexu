@@ -1,0 +1,322 @@
+{
+  "scenario": "query-plan",
+  "note": "模型原始输出 → 服务端清洗后的查询计划。重点是「不伪造公告」这条产品边界在清洗层不被削弱。",
+  "today": "2026-10-19",
+  "cases": [
+    {
+      "id": "QP-01-happy-path",
+      "desc": "标准输出：目标/渠道/注意点/四阶段齐全，服务端不得改动",
+      "raw": {
+        "goal": "查到本校电子设计竞赛的报名时间与要求",
+        "channels": [
+          "全国大学生电子设计竞赛官网",
+          "学院教务处通知栏",
+          "辅导员群"
+        ],
+        "watchouts": [
+          "报名是否要求组队",
+          "是否限定年级",
+          "是否需要学院审核"
+        ],
+        "phases": [
+          {
+            "name": "关注通知",
+            "hint": "留意学院教务处与官网的报名开启公告",
+            "leadDays": 30
+          },
+          {
+            "name": "组队报名",
+            "hint": "确定队友并在系统内提交报名",
+            "leadDays": 15
+          },
+          {
+            "name": "备赛训练",
+            "hint": "按题目方向分工练习",
+            "leadDays": 7
+          },
+          {
+            "name": "参赛提交",
+            "hint": "按时提交设计报告与作品",
+            "leadDays": 0
+          }
+        ],
+        "note": "具体时间以官方渠道当期公告为准"
+      },
+      "expect": {
+        "goal": "查到本校电子设计竞赛的报名时间与要求",
+        "channelCount": 3,
+        "watchoutCount": 3,
+        "phaseCount": 4,
+        "phaseNames": [
+          "关注通知",
+          "组队报名",
+          "备赛训练",
+          "参赛提交"
+        ],
+        "leadDays": [
+          30,
+          15,
+          7,
+          0
+        ],
+        "note": "具体时间以官方渠道当期公告为准"
+      }
+    },
+    {
+      "id": "QP-02-phases-capped-at-six",
+      "desc": "模型给出 9 个阶段 → 只保留 6 个。阶段太多用户在界面上读不完",
+      "raw": {
+        "goal": "准备校招",
+        "channels": [
+          "学校就业网"
+        ],
+        "watchouts": [
+          "简历真实"
+        ],
+        "phases": [
+          {
+            "name": "阶段1",
+            "hint": "a",
+            "leadDays": 60
+          },
+          {
+            "name": "阶段2",
+            "hint": "b",
+            "leadDays": 50
+          },
+          {
+            "name": "阶段3",
+            "hint": "c",
+            "leadDays": 40
+          },
+          {
+            "name": "阶段4",
+            "hint": "d",
+            "leadDays": 30
+          },
+          {
+            "name": "阶段5",
+            "hint": "e",
+            "leadDays": 20
+          },
+          {
+            "name": "阶段6",
+            "hint": "f",
+            "leadDays": 10
+          },
+          {
+            "name": "阶段7",
+            "hint": "g",
+            "leadDays": 5
+          },
+          {
+            "name": "阶段8",
+            "hint": "h",
+            "leadDays": 2
+          },
+          {
+            "name": "阶段9",
+            "hint": "i",
+            "leadDays": 0
+          }
+        ],
+        "note": ""
+      },
+      "expect": {
+        "goal": "准备校招",
+        "phaseCount": 6,
+        "phaseNames": [
+          "阶段1",
+          "阶段2",
+          "阶段3",
+          "阶段4",
+          "阶段5",
+          "阶段6"
+        ]
+      }
+    },
+    {
+      "id": "QP-03-lead-days-clamped",
+      "desc": "leadDays 超出 [-30,365]（给了 -999 和 9999）→ 钳到边界，不能让前端倒推出「明年今日」的锚点",
+      "raw": {
+        "goal": "查讲座",
+        "channels": [
+          "学院官网"
+        ],
+        "watchouts": [],
+        "phases": [
+          {
+            "name": "太早",
+            "hint": "提前太久",
+            "leadDays": -999
+          },
+          {
+            "name": "太晚",
+            "hint": "提前太晚",
+            "leadDays": 9999
+          }
+        ],
+        "note": ""
+      },
+      "expect": {
+        "phaseCount": 2,
+        "leadDays": [
+          -30,
+          365
+        ]
+      }
+    },
+    {
+      "id": "QP-04-channels-capped-at-six",
+      "desc": "渠道超过 6 个 → 只留前 6 个（渠道列表是行动建议，不是清单堆砌）",
+      "raw": {
+        "goal": "查教务政策",
+        "channels": [
+          "渠道1",
+          "渠道2",
+          "渠道3",
+          "渠道4",
+          "渠道5",
+          "渠道6",
+          "渠道7",
+          "渠道8"
+        ],
+        "watchouts": [],
+        "phases": [
+          {
+            "name": "通知",
+            "hint": "看通知",
+            "leadDays": 0
+          }
+        ],
+        "note": ""
+      },
+      "expect": {
+        "channelCount": 6,
+        "channels": [
+          "渠道1",
+          "渠道2",
+          "渠道3",
+          "渠道4",
+          "渠道5",
+          "渠道6"
+        ]
+      }
+    },
+    {
+      "id": "QP-05-watchouts-capped-at-five",
+      "desc": "注意点超过 5 条 → 只留前 5 条，并各自截到 80 字",
+      "raw": {
+        "goal": "查竞赛",
+        "channels": [
+          "官网"
+        ],
+        "watchouts": [
+          "点1",
+          "点2",
+          "点3",
+          "点4",
+          "点5",
+          "点6",
+          "点7"
+        ],
+        "phases": [
+          {
+            "name": "报名",
+            "hint": "报名",
+            "leadDays": 10
+          }
+        ],
+        "note": ""
+      },
+      "expect": {
+        "watchoutCount": 5,
+        "watchouts": [
+          "点1",
+          "点2",
+          "点3",
+          "点4",
+          "点5"
+        ]
+      }
+    },
+    {
+      "id": "QP-06-oversized-fields-truncated",
+      "desc": "goal 超 50、channel 超 40、hint 超 60、note 超 80 → 四处截断",
+      "raw": {
+        "goal": "这是一个被刻意写得非常长的查询目标用来验证目标字段的截断逻辑是否真的把超出五十个字的部分切掉了以及切的位置是否正确总共应该切成五十个字",
+        "channels": [
+          "这是一个被刻意写得非常长的渠道名称用来验证渠道字段的截断逻辑是否真的把超出四十个字的部分切掉"
+        ],
+        "watchouts": [
+          "这是一条被刻意写得非常长的注意点用来验证注意点字段的截断逻辑是否真的把超出八十个字的部分切掉以及切的位置是否正确总共应该切成八十个字长度"
+        ],
+        "phases": [
+          {
+            "name": "阶段名称超过十二个字",
+            "hint": "这是一段被刻意写得非常长的阶段提示用来验证提示字段的截断逻辑是否真的把超出六十个字的部分切掉以及切的位置是否正确总共应该切成六十个字长度",
+            "leadDays": 5
+          }
+        ],
+        "note": "这是一段被刻意写得非常长的备注用来验证备注字段的截断逻辑是否真的把超出八十个字的部分切掉以及切的位置是否正确总共应该切成八十个字长度"
+      },
+      "expect": {
+        "goalLengthAtMost": 50,
+        "channelLengthsAtMost": 40,
+        "watchoutLengthsAtMost": 80,
+        "phaseNameLengthsAtMost": 12,
+        "phaseHintLengthsAtMost": 60,
+        "noteLengthAtMost": 80
+      }
+    },
+    {
+      "id": "QP-10-blank-strings-stripped",
+      "desc": "渠道/注意点里的空白串必须剔除，不能占掉名额导致真实渠道被截掉",
+      "raw": {
+        "goal": "查竞赛",
+        "channels": [
+          "",
+          "   ",
+          "官网",
+          "",
+          "学院通知"
+        ],
+        "watchouts": [
+          "  ",
+          "组队限制"
+        ],
+        "phases": [
+          {
+            "name": "报名",
+            "hint": "报名",
+            "leadDays": 5
+          }
+        ],
+        "note": ""
+      },
+      "expect": {
+        "channelCount": 2,
+        "channels": [
+          "官网",
+          "学院通知"
+        ],
+        "watchoutCount": 1,
+        "watchouts": [
+          "组队限制"
+        ]
+      }
+    },
+    {
+      "id": "QP-11-empty-output-degrades-gracefully",
+      "desc": "模型返回空对象 → 得到空计划而不是异常（能力故障不阻断页面）",
+      "raw": {},
+      "expect": {
+        "goal": "",
+        "channelCount": 0,
+        "watchoutCount": 0,
+        "phaseCount": 0,
+        "note": ""
+      }
+    }
+  ]
+}

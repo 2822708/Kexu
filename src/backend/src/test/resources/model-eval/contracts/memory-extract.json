@@ -1,0 +1,264 @@
+{
+  "scenario": "memory-extract",
+  "note": "模型原始输出 → 服务端清洗并落库后的记忆。注意这条路径与其他四条不同：类型非法或内容过长是直接拒绝（400），而不是钳制降级。契约层要把这个差异锁住。",
+  "existingMemories": [
+    {
+      "id": 11,
+      "type": "GOAL",
+      "content": "准备考研",
+      "importance": 3
+    },
+    {
+      "id": 12,
+      "type": "HABIT",
+      "content": "习惯在晚上整理笔记",
+      "importance": 2
+    }
+  ],
+  "cases": [
+    {
+      "id": "ME-01-add-normal",
+      "desc": "全新事实 ADD → 落一条 ACTIVE 记忆，source=AI，内容与类型原样保留",
+      "raw": {
+        "memories": [
+          {
+            "action": "ADD",
+            "type": "INTEREST",
+            "content": "喜欢用番茄钟专注",
+            "importance": 3
+          }
+        ],
+        "profile": {}
+      },
+      "expect": {
+        "createdCount": 1,
+        "created": [
+          {
+            "type": "INTEREST",
+            "content": "喜欢用番茄钟专注",
+            "importance": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "ME-02-add-normalizes-punctuation-duplicate",
+      "desc": "内容与已有记忆只差标点与空格（「准备考研！」vs「准备考研」）→ 服务端归一化后识别为重复，不新增第二条",
+      "raw": {
+        "memories": [
+          {
+            "action": "ADD",
+            "type": "GOAL",
+            "content": "准备考研！",
+            "importance": 5
+          }
+        ],
+        "profile": {}
+      },
+      "expect": {
+        "createdCount": 0,
+        "importanceRaisedFor": 1,
+        "expectedImportance": 5
+      }
+    },
+    {
+      "id": "ME-03-add-different-type-same-content-is-not-duplicate",
+      "desc": "同内容但类型不同（INTEREST 的「准备考研」）→ 去重键含 type，所以这是新记忆",
+      "raw": {
+        "memories": [
+          {
+            "action": "ADD",
+            "type": "INTEREST",
+            "content": "准备考研",
+            "importance": 3
+          }
+        ],
+        "profile": {}
+      },
+      "expect": {
+        "createdCount": 1,
+        "created": [
+          {
+            "type": "INTEREST",
+            "content": "准备考研",
+            "importance": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "ME-04-update-rewrites-existing",
+      "desc": "UPDATE + target_id → 改写已有记忆内容，不新增（这是「同一事实只存一条」的关键路径）",
+      "raw": {
+        "memories": [
+          {
+            "action": "UPDATE",
+            "target_id": 1,
+            "type": "GOAL",
+            "content": "准备 2026 年 12 月考研",
+            "importance": 5
+          }
+        ],
+        "profile": {}
+      },
+      "expect": {
+        "createdCount": 0,
+        "updatedId": 1,
+        "updatedContent": "准备 2026 年 12 月考研",
+        "updatedImportance": 5
+      }
+    },
+    {
+      "id": "ME-05-update-without-target-id-becomes-add",
+      "desc": "模型写了 UPDATE 但漏了 target_id → 服务端降级为新增（而不是抛错让整批提案失败）",
+      "raw": {
+        "memories": [
+          {
+            "action": "UPDATE",
+            "type": "ABILITY",
+            "content": "能独立写数据分析报告",
+            "importance": 3
+          }
+        ],
+        "profile": {}
+      },
+      "expect": {
+        "createdCount": 1,
+        "created": [
+          {
+            "type": "ABILITY",
+            "content": "能独立写数据分析报告",
+            "importance": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "ME-06-importance-clamped",
+      "desc": "importance 越界（0 与 99）→ 钳到 1..5。与任务优先级同样处理，但这里是落库前钳",
+      "raw": {
+        "memories": [
+          {
+            "action": "ADD",
+            "type": "HABIT",
+            "content": "每天早上跑步",
+            "importance": 0
+          },
+          {
+            "action": "ADD",
+            "type": "PREFERENCE",
+            "content": "偏好上午做困难任务",
+            "importance": 99
+          }
+        ],
+        "profile": {}
+      },
+      "expect": {
+        "createdCount": 2,
+        "created": [
+          {
+            "type": "HABIT",
+            "content": "每天早上跑步",
+            "importance": 1
+          },
+          {
+            "type": "PREFERENCE",
+            "content": "偏好上午做困难任务",
+            "importance": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "ME-07-invalid-type-rejected-not-fallback",
+      "desc": "类型不在白名单（MEMORY）→ 直接拒绝 400，绝不像任务抽取那样降级成 OTHER（记忆类型错了会污染检索）",
+      "raw": {
+        "memories": [
+          {
+            "action": "ADD",
+            "type": "MEMORY",
+            "content": "某条类型非法的记忆",
+            "importance": 3
+          }
+        ],
+        "profile": {}
+      },
+      "expectRejected": "不支持的记忆类型"
+    },
+    {
+      "id": "ME-08-blank-content-rejected",
+      "desc": "内容为空 → 拒绝 400，不能落一条空白记忆占着 50 条配额",
+      "raw": {
+        "memories": [
+          {
+            "action": "ADD",
+            "type": "GOAL",
+            "content": "   ",
+            "importance": 3
+          }
+        ],
+        "profile": {}
+      },
+      "expectRejected": "记忆内容不能为空"
+    },
+    {
+      "id": "ME-09-oversized-content-rejected",
+      "desc": "内容超 200 字 → 拒绝 400（不是截断！截断会把一整段话砍成半句话存进长期记忆）",
+      "raw": {
+        "memories": [
+          {
+            "action": "ADD",
+            "type": "GOAL",
+            "content": "这是一条被刻意写得非常长的记忆内容用来验证记忆服务是否会拒绝超长内容而不是把它截断存进去填充内容用于凑足长度以便稳定越过截断门槛填充内容用于凑足长度以便稳定越过截断门槛填充内容用于凑足长度以便稳定越过截断门槛填充内容用于凑足长度以便稳定越过截断门槛填充内容用于凑足长度以便稳定越过截断门槛填充内容用于凑足长度以便稳定越过截断门槛填充内容用于凑足长度以便稳定越过截断门槛填充内容用于凑足长度以便稳定越过截断门槛填充内容用于凑足长度以",
+            "importance": 3
+          }
+        ],
+        "profile": {}
+      },
+      "expectRejected": "记忆内容过长"
+    },
+    {
+      "id": "ME-10-empty-memories-and-profile-produces-nothing",
+      "desc": "模型判断无值得记录的内容 → 不产生任何提案（不落库、不打扰用户）",
+      "raw": {
+        "memories": [],
+        "profile": {}
+      },
+      "expect": {
+        "createdCount": 0,
+        "proposalCount": 0
+      }
+    },
+    {
+      "id": "ME-12-memories-and-profile-both-proposed",
+      "desc": "记忆与档案同时变化 → 两条独立提案（记忆域与档案域分开确认）",
+      "raw": {
+        "memories": [
+          {
+            "action": "ADD",
+            "type": "GOAL",
+            "content": "计划暑假找一份后端实习",
+            "importance": 4
+          }
+        ],
+        "profile": {
+          "goal": "后端实习"
+        }
+      },
+      "expect": {
+        "createdCount": 1,
+        "created": [
+          {
+            "type": "GOAL",
+            "content": "计划暑假找一份后端实习",
+            "importance": 4
+          }
+        ],
+        "proposalTypes": [
+          "SAVE_MEMORY",
+          "UPDATE_PROFILE"
+        ]
+      }
+    }
+  ]
+}

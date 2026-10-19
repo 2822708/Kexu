@@ -60,7 +60,7 @@ npm run build
 |---|---|
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效）；**信息处理中心 `/info` 落地**（信息收纳盒 + AI 查询中心 + 最近解析预览，两处边界适配见 3.9） |
-| 后端测试 | **281/281 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、provider 配置 `LlmProviderSettingsTest` 9 个、provider 端点 `LlmProviderEndpointTest` 6 个、本地设置加密 `LocalSettingsEncryptionTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个、产品健康 `ProductHealthEndpointTest` 9 个 + 采纳判定 `DailyPlanAdoptionServiceTest` 5 个 + 凭据泄露 `CredentialLeakTest` 5 个、**前缀缓存 `AiPromptCachingTest` 6 个 + 缓存字段解析 `LlmCacheUsageParsingTest` 8 个 + 命中计价 `CachePricingStatsTest` 14 个**） |
+| 后端测试 | **338/338 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、provider 配置 `LlmProviderSettingsTest` 9 个、provider 端点 `LlmProviderEndpointTest` 6 个、本地设置加密 `LocalSettingsEncryptionTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个、产品健康 `ProductHealthEndpointTest` 9 个 + 采纳判定 `DailyPlanAdoptionServiceTest` 5 个 + 凭据泄露 `CredentialLeakTest` 5 个、**前缀缓存 `AiPromptCachingTest` 6 个 + 缓存字段解析 `LlmCacheUsageParsingTest` 8 个 + 命中计价 `CachePricingStatsTest` 14 个** + 模型输出评估契约层 `eval/*ContractEvalTest` 49 条用例 57 项 + 评估集结构自检 `ModelEvalFixtureTest` 7 项） |
 | 前端 | typecheck 通过；lint **0 错误 / 9 警告**（9 个全在存量文件：AiChatPage 3、TodosPage 1、5 个 Context/theme 各 1，属基线，不得新增）；build 通过 |
 | 工作区 | 见 `git status`。**当前分支 `feature/duolingo-style-ui`，与 `main` 已对齐到 `52b1f63`**，四个远端 ref（`origin:main` / `origin:feature/duolingo-style-ui` / `friend:feature/ai-campus-agent-v1` / `friend:feature/duolingo-style-ui`）同步推送。**⚠️ 双远端待用户决策**：`origin`（2552555/timetable-ai）与 `friend`（2822708/Timetable，GitHub 提示已迁移至 `2822708/Kexu`）两边都在推，属双份维护，见 6.5 |
 | 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》两轮均已完成**。**2026-10-18 用真实 DeepSeek Key 完成了首次端到端验收**，并修复了一个只有真实调用才能暴露的 P0（流式对话工作线程丢失调用方身份，详见第 5 节当日条目）。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
@@ -302,6 +302,29 @@ npm run build
 - 壳的 `DesktopSecurity.cs` / `Program.cs` 自 baseline 起未动，凭据边界（top-level + loopback origin）无新风险；`test-desktop-security.ps1`（csc 编译 + DPAPI + login-script 夹具）只能在 Windows 跑，沙箱无 .NET 无法等价复现。
 - 桌面壳里 PWA 安装卡**不会出现**（无 `beforeinstallprompt`、非 iOS UA、非 standalone），无误导 UX；`sw.js` 的 `skipWaiting` + `clients.claim` 让升级自愈（导航 network-first 拿新 HTML → 新 chunk 名 → SWR 补缓存）。
 
+### 3.19 模型输出评估集（6.2 #7，2026-10-19 落地）的两层划分与三个坑
+
+**为什么是两层**：起初想做「录真实输出当期望值跑回归」，但这有个硬伤——**历史输出只能锁住「和上次一样」，锁不住「上次本来就是错的」**。模型把「10月20日交」解析成 11-20，你把错输出录进基线，回归从此永远绿。所以拆开：
+
+| 层 | 验证什么 | 需 Key | 状态 |
+|---|---|---|---|
+| 契约层 `contracts/*.json` | 服务端把模型输出翻成交付字段的**确定性归约** | 否 | ✅ 已落地，49 条用例 / 57 项断言，进全量 338 |
+| 提示词层 `prompts/*.json` | 给定材料，**模型实际产出**是否守规矩 | 是 | 设计已定，未实现（等 #8/#9 真要改 prompt 时再写） |
+
+完整说明见 `docs/model-eval.md`。
+
+**契约层的三个坑（改评估集前必读）**：
+
+1. **`@Configuration` 落在扫描范围内会污染整个测试套**。评估集的 Spring 切片在 `com.timetable.eval`，正落在 `TimetableApplication` 的 `@SpringBootApplication` 扫描范围内。不挂 `@Profile` 时，那些用完整应用上下文的集成测试（journey、notice 端点）会把切片的 `Clock.fixed(2026-10-19)` 装进去，系统时钟被悄悄换成固定时刻，于是 snooze 到期判定、计划缓存失效判定莫名失败。**症状极具误导性**：报错出现在完全无关的测试里，且单独跑那些测试又是绿的。修法是 `@Profile(ModelEvalSupport.PROFILE)` + 五类统一 `@ActiveProfiles`——既有 AI 测试早就这么做了（`@Profile("campus-agent-xxx")`）。
+2. **自增 id 不能写进用例**。课程/任务 id 由数据库生成，用例里写 `ref_id: 101` 会在换库或换执行顺序后全红。改用序号占位 `course#1` / `task#2` / `course#missing`，执行器在喂 mock 前映射成真实 id。`DP-14` 刻意保留驼峰 `refId`——那条用例就是验两种写法都要认，映射时不能归一化掉。
+3. **「超长」用例的输入必须真的超长**。这是本轮实际踩到的：`ME-09`（内容超 200 字必须拒绝）输入只有 166 字、`TE-11` 的描述只有 4 字、`NE-06` 的 requirement 只有 129 字——三条用例**必然通过但什么都没验**。这种假绿比红危险。已加 `ModelEvalFixtureTest.oversizedCasesActuallyExceedTheirLimit` 把「输入必须越界」本身变成断言。
+
+**变异验证记录**（证明测试真的测到了东西，不是空跑）：
+- 去掉 `draft.setPriority` 的钳制 → `TE-10` 红（期望 1 实际 0）
+- 去掉 `DailyPlanServiceImpl` 的 BREAK 强制检查 → `DP-03` 红（期望抛异常但没抛）
+
+**记忆场景的被测入口与其他四个不同**：其余四个的断言落在 `AiServiceImpl` / `NoticeServiceImpl` / `DailyPlanServiceImpl`（JSON→DTO 清洗），记忆没有 DTO 往返，模型输出直接进 `MemoryService.create/update`，所以断言落在服务层。背后是两种失败哲学——任务/通知/计划是**钳制或降级后照常展示**，记忆是**直接拒绝**（一条错误记忆会留在库里、之后每次对话都被注入，污染长期复利）。用例专门锁住这个差异，防止某次「统一清洗逻辑」的重构把它悄悄改掉。
+
 ### 3.18 工具链三个坑（2026-10-19 桌面轮实测）
 
 1. **Edit 工具的子串匹配会咬人**：`old_string` 末尾写 `}` 而文件里实际是 `})` 时，替换会匹配 `}` 并留下孤儿 `)`——本次差点把 `addEventListener('fetch', ...)` 的闭合结构拆坏。**改完密集收尾字符（`})`/`)]`/`};`）的文件后，必须 `git diff` 通读 + `node --check`**，不能只看工具返回的成功。
@@ -330,6 +353,9 @@ npm run build
 | `service/BudgetAwareLlmClient.java` | P0-2 拦截装饰器，由 `LlmClientRegistry.active()` 包装。**不是 Spring bean**（否则被 `List<LlmClient>` 收集进去自己包自己） |
 | `config/LlmBudgetProperties.java` | 预算配置。**默认不限制**；Map key 在 setter 里转大写 |
 | `service/impl/PromptTemplateRegistry.java` | `resources/prompts/*.md` + front matter `version:N`；缺失返回 null 降级 |
+| `src/test/java/com/timetable/eval/ModelEvalSupport.java` | **模型输出评估集**的共享装配。⚠️ 切片必须挂 `@Profile(ModelEvalSupport.PROFILE)`，否则被 `TimetableApplication` 扫描进生产上下文、把系统时钟换成固定时刻（见 3.19 坑 1） |
+| `src/test/resources/model-eval/contracts/*.json` | 契约层 49 条用例（五场景）。**ref_id 用序号占位** `course#1`/`task#2`/`course#missing`，不写死自增 id（见 3.19 坑 2） |
+| `src/test/java/com/timetable/eval/*ContractEvalTest.java` | 五个场景的执行器。改任何清洗逻辑前先跑这组 |
 | `controller/` | `AiController`（聊天/提案执行；**流式任务必须经 `RequestContext.callWithApiKey` 携带身份进工作线程**）、`TaskController`、`DailyPlanController`、`DashboardController`、`MemoryController`、`StudentProfileController`、`UsageStatsController`（`/api/stats/*`） |
 | `interceptor/RequestContext.java` | ThreadLocal 身份。**异步派发一律走 `callWithApiKey(apiKey, task)`**（set → 执行 → finally 恢复调用前状态）；空身份时 `LlmUsageRecorder` / `LlmBudgetService` 会打 warn 日志 |
 | `service/StudentProfileService` | 档案读写：`applyPatch`（AI 提案，null=保持）与 `replace`（表单，null=清空）**语义相反，别用错** |
@@ -386,6 +412,41 @@ npm run build
 **过程中自己踩的三个工具坑**（详见 3.18）：Edit 子串匹配把 `})` 拆出孤儿 `)` 导致 SW 语法错误（curl 全绿但 SW 瘫痪，靠浏览器实测才发现）；grep 路径写错静默不搜导致错误结论；`git checkout` 误删未提交修复靠备份恢复。
 
 **给用户的交付**：Windows 上 `cd src\desktop; .\build-desktop.ps1 -AllowEvergreenRuntime`（版本锁见 `toolchain.json`：Microsoft OpenJDK 21.0.7 + Node 22.23.2 + .NET 4.8 + WebView2 Evergreen），产物 `src\desktop\app-image\TangentTimetable\` 双击 `TangentTimetable.exe`。沙箱侧能验的已全绿，剩余只有 Windows 专属编译/冒烟。
+
+---
+
+### 2026-10-19 · WorkBuddy · 模型输出评估集（6.2 #7 契约层），338/338 绿
+
+**动机**：6.1 六项收口后的下一入口是 #7「建模型输出评估集」——它独立、无依赖，且是 #8 记忆三层拆分、#9 混合检索的前置。HANDOVER 原文写得很直白：「没有这个，记忆升级就是盲改」。
+
+**动手前想清楚的一件事**：最初的方案是「录真实输出当期望值跑回归」。这个方案有硬伤——**历史输出只能锁住「和上次一样」，锁不住「上次本来就是错的」**。模型把「10月20日交」解析成 2026-11-20，你把错输出录进基线，回归从此永远绿；它测的是「模型又犯了同样的错没有」，不是「模型做对了没有」。所以拆成两层：
+
+| 层 | 验证什么 | 需 Key | 状态 |
+|---|---|---|---|
+| 契约层 | 服务端把模型输出翻成交付字段的**确定性归约** | 否 | ✅ 49 条用例 / 57 项断言 |
+| 提示词层 | 给定材料，**模型实际产出**是否守规矩 | 是 | 设计已定，代码未写 |
+
+**契约层为什么先做**：不需要 Key、确定性、能进 CI，抓的是「服务端把模型本来对的输出改坏了」这类事故——一旦发生就是全量用户受影响，优先级高于提示词微调。完整说明见 `docs/model-eval.md`。
+
+**做了什么**
+
+| 文件 | 说明 |
+|---|---|
+| `test/resources/model-eval/contracts/*.json` | 五场景 49 条用例：task-extract 11 / notice-extract 8 / daily-plan 11 / query-plan 8 / memory-extract 11 |
+| `test/java/com/timetable/eval/ModelEvalSupport.java` | 共享装配（H2 + Flyway + mock LLM，时钟固定 2026-10-19） |
+| `.../TaskExtractContractEvalTest` 等 5 个 | 每场景一个执行器，用例数据驱动（`@ParameterizedTest` + `@MethodSource`） |
+| `.../ModelEvalFixtureTest` | 结构自检 7 项：文件齐全、id 唯一、结果声明二选一、期望字段白名单、**超长用例必须真超长** |
+| `docs/model-eval.md` | 完整说明（含三个坑与脱敏规则） |
+
+**三个实现坑（详见 3.19）**
+
+1. **`@Configuration` 落在扫描范围内污染整个测试套**。这是本轮最耗时的排查：加完评估集后，`AiCampusAgentJourneyIntegrationTest` 和 `NoticeEndpointIntegrationTest` 莫名失败（计划缓存不命中、snooze 不到期），而**单独跑它们又是绿的**。根因是评估集的 Spring 切片在 `com.timetable.eval`、正落在 `TimetableApplication` 的扫描范围内，把 `Clock.fixed(2026-10-19)` 塞进了那些用完整上下文的测试。修法：切片挂 `@Profile`，五类统一 `@ActiveProfiles`——既有 AI 测试早就这么做（`@Profile("campus-agent-xxx")`），我漏了。
+2. **自增 id 写进用例会让测试换环境就红**。改成序号占位 `course#1` / `task#2` / `course#missing`，执行前映射成真实 id。`DP-14` 刻意保留驼峰 `refId`（那条就是验两种写法都要认）。
+3. **「超长」用例的输入必须真的超长**。`ME-09`（内容超 200 必须拒绝）输入只有 166 字、`TE-11` 的描述只有 4 字、`NE-06` 的 requirement 只有 129 字——三条**必然通过但什么都没验**。这种假绿比红危险。已把「输入必须越界」本身变成断言。
+
+**验证**：全量 **338/338 绿**（原 281 + 新增 57）。变异验证 2 次全部被抓：去掉 `setPriority` 钳制 → `TE-10` 红（期望 1 实际 0）；去掉计划的 BREAK 强制检查 → `DP-03` 红（期望抛异常但没抛）。
+
+**刻意没做的**：提示词层（需 Key、非确定性、要在 CI 外手工跑）。它不是不重要，而是**等 #8/#9 真开始改 prompt 时才需要**；现在写了也只会在没人跑的情况下腐烂。HANDOVER 6.2 里已把「动 #8 之前先补提示词层」写成硬前置，避免这条被忘掉。
 
 ---
 
@@ -1035,7 +1096,11 @@ Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings`
 | 5 | **token 计量与预算** | ✅ **P0-1 + P0-2 均已完成**（`llm_usage` + `/api/stats/usage` + 统计页用量与预算卡片 + `LlmBudgetService` 两级额度熔断，详见 3.8）。**默认不限制**，要熔断必须显式配 `app.llm.budget.*` |
 | 6 | **降级与重试** | ✅ **已完成**。两半都齐了：(a) provider 故障切备用（`FallbackLlmClient` + `app.llm.fallback`，流式吐过正文不切换、499 不重试）；(b) **计划生成失败重试退避**（`app.llm.plan-retry.*`，只重试 502/503/504，指数退避 + 抖动，`enabled=false` 可回滚）+ **同账号同日并发去重**（见 3.3） |
 
-**6.1 六项已全部收口**（2026-10-19）。下一阶段是 6.2 记忆系统升级，入口项是 **#7 建模型输出评估集**——它独立、无依赖，且是后面 #8/#9 盲改的前置条件。**注意 6.2 会显著增加每次注入的上下文，先把 #4 的缓存与计价用起来再动记忆**，否则成本先涨。
+**6.1 六项已全部收口**（2026-10-19）。**6.2 #7 评估集契约层也已完成**（2026-10-19，见 3.19）。下一入口是 **#8 记忆三层拆分**（瞬时 / 工作 / 长期）——它是 #9 混合检索的前置，改动面在 `Memory` 表与 `AiPromptBuilder` 的记忆注入段。
+
+动 #8 之前的两条前置：
+1. **提示词层评估集要先补上**。契约层只能保证「服务端没改坏模型输出」，保证不了「改了记忆注入策略后模型输出还对不对」。没有提示词层，改 #8 就是盲改——这正是 #7 存在的理由，别只做了一半就开动。
+2. **先把 #4 的缓存与计价用起来**。记忆升级会显著增加每次注入的上下文，成本先涨。
 
 ### 6.2 第二阶段：记忆系统升级（调研报告 §5 方向 A，约 2–3 周）
 
@@ -1043,7 +1108,7 @@ Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings`
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 7 | **建模型输出评估集** | 30–50 条固定脱敏用例（真实课表/任务/对话样本），每次改 prompt 或检索策略跑回归。没有这个，记忆升级就是盲改 |
+| 7 | **建模型输出评估集** | ✅ **契约层已完成**（2026-10-19）。49 条脱敏用例覆盖五个场景（task-extract 11 / notice-extract 8 / daily-plan 11 / query-plan 8 / memory-extract 11），57 项断言并入全量 338。**分两层**：契约层锁「服务端把模型输出改坏」（进 CI，确定性，无需 Key）；提示词层锁「模型守不守规矩」（需 Key，手工跑，**尚未实现**——等 #8/#9 真要改 prompt 时再落地，设计已定）。为什么不能只做一层：历史输出只能锁住「和上次一样」，锁不住「上次本来就是错的」。三个实现坑见 3.19，完整说明见 `docs/model-eval.md` |
 | 8 | **记忆三层拆分** | 瞬时（当前会话）/ 工作（近 7 天高频事实）/ 长期（稳定偏好作息目标）。现为单层 `Memory` 表 |
 | 9 | **混合检索 + k=3 起步** | MySQL 全文索引关键词召回 + 时间衰减排序；**top-k 从 3 开始测，不要"越多越安全"**（行业共识：注入无关记忆反而降质） |
 | 10 | **写入前脱敏** | 落库前正则过滤 API key / 学号 / 身份证号。行业共识是"写入时 redact，不是事后补" |

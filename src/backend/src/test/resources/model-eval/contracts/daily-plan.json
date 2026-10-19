@@ -1,0 +1,529 @@
+{
+  "scenario": "daily-plan",
+  "note": "模型原始输出 → 服务端校验后的时间线。校验失败必须抛 502（宁可让用户重试，也不给出与课表矛盾的时间线）。",
+  "today": "2026-09-28",
+  "periods": [
+    {
+      "number": 1,
+      "start": "08:00",
+      "end": "08:45"
+    },
+    {
+      "number": 2,
+      "start": "08:55",
+      "end": "09:40"
+    },
+    {
+      "number": 3,
+      "start": "10:00",
+      "end": "10:45"
+    },
+    {
+      "number": 4,
+      "start": "10:55",
+      "end": "11:40"
+    },
+    {
+      "number": 5,
+      "start": "14:00",
+      "end": "14:45"
+    },
+    {
+      "number": 6,
+      "start": "14:55",
+      "end": "15:40"
+    }
+  ],
+  "courses": [
+    {
+      "id": 101,
+      "name": "高等数学",
+      "dayOfWeek": 1,
+      "startPeriod": 1,
+      "endPeriod": 2,
+      "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "location": "教三-201"
+    },
+    {
+      "id": 102,
+      "name": "线性代数",
+      "dayOfWeek": 1,
+      "startPeriod": 5,
+      "endPeriod": 6,
+      "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "location": "教二-105"
+    }
+  ],
+  "tasks": [
+    {
+      "id": 201,
+      "title": "提交高数第三次作业",
+      "type": "COURSE_WORK",
+      "priority": 1,
+      "status": "PENDING",
+      "deadline": "2026-09-28 23:59"
+    },
+    {
+      "id": 202,
+      "title": "整理线代笔记",
+      "type": "COURSE_WORK",
+      "priority": 2,
+      "status": "PENDING",
+      "deadline": null
+    }
+  ],
+  "cases": [
+    {
+      "id": "DP-01-happy-path",
+      "desc": "标准时间线：两门课 + 一个任务 + 一个休息 + 一条建议，顺序正确，服务端按 start 升序输出",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "08:00",
+            "end": "09:40",
+            "type": "COURSE",
+            "title": "高等数学",
+            "ref_id": "course#1",
+            "note": "带教材"
+          },
+          {
+            "start": "10:00",
+            "end": "11:00",
+            "type": "TASK",
+            "title": "高数作业",
+            "ref_id": "task#1",
+            "note": "先做第一题"
+          },
+          {
+            "start": "12:00",
+            "end": "13:00",
+            "type": "BREAK",
+            "title": "午休",
+            "ref_id": null,
+            "note": ""
+          },
+          {
+            "start": "14:00",
+            "end": "15:40",
+            "type": "COURSE",
+            "title": "线性代数",
+            "ref_id": "course#2",
+            "note": ""
+          },
+          {
+            "start": "20:00",
+            "end": "20:30",
+            "type": "SUGGESTION",
+            "title": "复习笔记",
+            "ref_id": null,
+            "note": ""
+          }
+        ],
+        "summary": "今天最关键的是把高数作业推进一题"
+      },
+      "expect": {
+        "itemCount": 5,
+        "summary": "今天最关键的是把高数作业推进一题",
+        "types": [
+          "COURSE",
+          "TASK",
+          "BREAK",
+          "COURSE",
+          "SUGGESTION"
+        ],
+        "starts": [
+          "08:00",
+          "10:00",
+          "12:00",
+          "14:00",
+          "20:00"
+        ]
+      }
+    },
+    {
+      "id": "DP-02-items-sorted-by-start",
+      "desc": "模型乱序输出（建议块排在最前）→ 服务端必须按 start 重排，否则前端时间线会跳",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "20:00",
+            "end": "20:30",
+            "type": "SUGGESTION",
+            "title": "复习笔记",
+            "ref_id": null,
+            "note": ""
+          },
+          {
+            "start": "08:00",
+            "end": "09:40",
+            "type": "COURSE",
+            "title": "高等数学",
+            "ref_id": "course#1",
+            "note": ""
+          },
+          {
+            "start": "12:00",
+            "end": "13:00",
+            "type": "BREAK",
+            "title": "午休",
+            "ref_id": null,
+            "note": ""
+          },
+          {
+            "start": "14:00",
+            "end": "15:40",
+            "type": "COURSE",
+            "title": "线性代数",
+            "ref_id": "course#2",
+            "note": ""
+          }
+        ],
+        "summary": "按课表走，空档复习"
+      },
+      "expect": {
+        "itemCount": 4,
+        "summary": "按课表走，空档复习",
+        "types": [
+          "COURSE",
+          "BREAK",
+          "COURSE",
+          "SUGGESTION"
+        ],
+        "starts": [
+          "08:00",
+          "12:00",
+          "14:00",
+          "20:00"
+        ]
+      }
+    },
+    {
+      "id": "DP-03-missing-break-rejected",
+      "desc": "全天没有任何 BREAK → 必须 502 重试。塞满时间线是产品明令禁止的（「不制造焦虑」）",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "08:00",
+            "end": "09:40",
+            "type": "COURSE",
+            "title": "高等数学",
+            "ref_id": "course#1",
+            "note": ""
+          },
+          {
+            "start": "10:00",
+            "end": "11:00",
+            "type": "TASK",
+            "title": "高数作业",
+            "ref_id": "task#1",
+            "note": ""
+          },
+          {
+            "start": "14:00",
+            "end": "15:40",
+            "type": "COURSE",
+            "title": "线性代数",
+            "ref_id": "course#2",
+            "note": ""
+          }
+        ],
+        "summary": "今天安排得很满"
+      },
+      "expectError": "没有安排休息"
+    },
+    {
+      "id": "DP-04-missing-course-rejected",
+      "desc": "漏掉一门今日课程 → 必须 502。课程块漏了等于给出一条与真实课表矛盾的时间线",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "08:00",
+            "end": "09:40",
+            "type": "COURSE",
+            "title": "高等数学",
+            "ref_id": "course#1",
+            "note": ""
+          },
+          {
+            "start": "12:00",
+            "end": "13:00",
+            "type": "BREAK",
+            "title": "午休",
+            "ref_id": null,
+            "note": ""
+          }
+        ],
+        "summary": "只排了上午的课"
+      },
+      "expectError": "遗漏了今天的课程"
+    },
+    {
+      "id": "DP-05-wrong-course-time-rejected",
+      "desc": "课程块时刻与作息表不符（写成 08:00-09:45）→ 必须 502。差 5 分钟也是错的时间线",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "08:00",
+            "end": "09:45",
+            "type": "COURSE",
+            "title": "高等数学",
+            "ref_id": "course#1",
+            "note": ""
+          },
+          {
+            "start": "12:00",
+            "end": "13:00",
+            "type": "BREAK",
+            "title": "午休",
+            "ref_id": null,
+            "note": ""
+          },
+          {
+            "start": "14:00",
+            "end": "15:40",
+            "type": "COURSE",
+            "title": "线性代数",
+            "ref_id": "course#2",
+            "note": ""
+          }
+        ],
+        "summary": "按课表来"
+      },
+      "expectError": "课程时间与课表不一致"
+    },
+    {
+      "id": "DP-07-unknown-task-rejected",
+      "desc": "任务块引用不存在的任务 id（888）→ 必须 502，不能排一件不存在的事",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "08:00",
+            "end": "09:40",
+            "type": "COURSE",
+            "title": "高等数学",
+            "ref_id": "course#1",
+            "note": ""
+          },
+          {
+            "start": "10:00",
+            "end": "11:00",
+            "type": "TASK",
+            "title": "写论文",
+            "ref_id": "task#missing",
+            "note": ""
+          },
+          {
+            "start": "12:00",
+            "end": "13:00",
+            "type": "BREAK",
+            "title": "午休",
+            "ref_id": null,
+            "note": ""
+          },
+          {
+            "start": "14:00",
+            "end": "15:40",
+            "type": "COURSE",
+            "title": "线性代数",
+            "ref_id": "course#2",
+            "note": ""
+          }
+        ],
+        "summary": "排一篇不存在的论文"
+      },
+      "expectError": "引用了不存在或已完成的任务"
+    },
+    {
+      "id": "DP-10-malformed-time-rejected",
+      "desc": "时间格式不对（「8点」）→ 必须 502，不能靠猜测补全",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "8点",
+            "end": "9点40",
+            "type": "COURSE",
+            "title": "高等数学",
+            "ref_id": "course#1",
+            "note": ""
+          },
+          {
+            "start": "12:00",
+            "end": "13:00",
+            "type": "BREAK",
+            "title": "午休",
+            "ref_id": null,
+            "note": ""
+          },
+          {
+            "start": "14:00",
+            "end": "15:40",
+            "type": "COURSE",
+            "title": "线性代数",
+            "ref_id": "course#2",
+            "note": ""
+          }
+        ],
+        "summary": "时间格式不对"
+      },
+      "expectError": "时间格式不正确"
+    },
+    {
+      "id": "DP-11-empty-items-rejected",
+      "desc": "items 为空数组 → 必须 502。模板明写「items 不能为空」，空时间线对用户是无」。",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [],
+        "summary": "今天没什么安排"
+      },
+      "expectError": "缺少时间线"
+    },
+    {
+      "id": "DP-13-blank-title-gets-default",
+      "desc": "块标题为空 → 按类型补默认标题，而不是丢掉整块（丢掉会连带触发「漏课」误判）",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "08:00",
+            "end": "09:40",
+            "type": "COURSE",
+            "title": "",
+            "ref_id": "course#1",
+            "note": ""
+          },
+          {
+            "start": "12:00",
+            "end": "13:00",
+            "type": "BREAK",
+            "title": "",
+            "ref_id": null,
+            "note": ""
+          },
+          {
+            "start": "14:00",
+            "end": "15:40",
+            "type": "COURSE",
+            "title": "",
+            "ref_id": "course#2",
+            "note": ""
+          }
+        ],
+        "summary": "空标题也要能渲染"
+      },
+      "expect": {
+        "itemCount": 3,
+        "titlesNotEmpty": true,
+        "types": [
+          "COURSE",
+          "BREAK",
+          "COURSE"
+        ]
+      }
+    },
+    {
+      "id": "DP-14-refid-camelcase-accepted",
+      "desc": "模型把 ref_id 写成 refId（驼峰）→ 也必须识别，否则任务块全军覆没判 502",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "08:00",
+            "end": "09:40",
+            "type": "COURSE",
+            "title": "高等数学",
+            "note": "",
+            "refId": "course#1"
+          },
+          {
+            "start": "12:00",
+            "end": "13:00",
+            "type": "BREAK",
+            "title": "午休",
+            "note": ""
+          },
+          {
+            "start": "14:00",
+            "end": "15:40",
+            "type": "COURSE",
+            "title": "线性代数",
+            "note": "",
+            "refId": "course#2"
+          }
+        ],
+        "summary": "驼峰写法"
+      },
+      "expect": {
+        "itemCount": 3,
+        "types": [
+          "COURSE",
+          "BREAK",
+          "COURSE"
+        ],
+        "refIds": [
+          "course#1",
+          null,
+          "course#2"
+        ]
+      }
+    },
+    {
+      "id": "DP-16-oversized-fields-truncated",
+      "desc": "块标题超 50、note 超 50、summary 超 50 → 三处截断（模型时常写长）",
+      "raw": {
+        "date": "2026-09-28",
+        "items": [
+          {
+            "start": "08:00",
+            "end": "09:40",
+            "type": "COURSE",
+            "title": "这是一门标题被刻意写得非常长的高等数学课程用来验证标题截断逻辑是否真的把超出五十个字的部分切掉了以及切的位置对不对总共应该切成五十个字",
+            "ref_id": "course#1",
+            "note": "这条备注也被刻意写得非常长用来验证备注字段的截断逻辑是否真的把超出五十个字的部分切掉了总共应该切成五十个字长度"
+          },
+          {
+            "start": "12:00",
+            "end": "13:00",
+            "type": "BREAK",
+            "title": "午休",
+            "ref_id": null,
+            "note": ""
+          },
+          {
+            "start": "14:00",
+            "end": "15:40",
+            "type": "COURSE",
+            "title": "线性代数",
+            "ref_id": "course#2",
+            "note": ""
+          }
+        ],
+        "summary": "这是一句被刻意写得非常长的总评用来验证摘要字段的截断逻辑是否真的把超出五十个字的部分切掉了总共应该切成五十个字"
+      },
+      "expect": {
+        "itemCount": 3,
+        "titleLengthsAtMost": 50,
+        "noteLengthsAtMost": 50,
+        "summaryLengthAtMost": 50
+      }
+    }
+  ]
+}
