@@ -1,4 +1,3 @@
-import { LOCAL_MODE } from '../local/mode'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
@@ -48,7 +47,6 @@ interface FormValues {
 }
 
 const TIME_FORMAT = 'HH:mm'
-const LOCAL_SCRIPT_TEXT = '// 此处仅保存脚本文本；本地版本不会运行此脚本，也不会据此生成待办。\n'
 const DEFAULT_SCRIPT = `// 返回 true 表示此刻应该触发，生成一条待办
 // 系统按分钟检查，延迟时最多补查最近 10 分钟；同一分钟只触发一次
 function shouldTrigger(ctx) {
@@ -92,7 +90,7 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
         offsetHours: Math.floor((m % 1440) / 60),
         offsetMinutes: m % 60,
         chainAfterComplete: rule.chainAfterComplete,
-        script: rule.script ?? (LOCAL_MODE ? LOCAL_SCRIPT_TEXT : DEFAULT_SCRIPT),
+        script: rule.script ?? DEFAULT_SCRIPT,
       })
       setFrequency(rule.frequency)
     } else {
@@ -105,7 +103,7 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
         offsetHours: 0,
         offsetMinutes: 0,
         chainAfterComplete: false,
-        script: LOCAL_MODE ? LOCAL_SCRIPT_TEXT : DEFAULT_SCRIPT,
+        script: DEFAULT_SCRIPT,
       })
       setFrequency('WEEKLY')
     }
@@ -133,17 +131,13 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
     return `触发于 ${t.format(TIME_FORMAT)}，截止于 ${suffix} ${end.format(TIME_FORMAT)}（共 ${describeOffset(preview.total)}）`
   }, [preview, frequency])
 
-  // Local CUSTOM is archival text; the legacy Java adapter retains its script editor.
+  // 首次切到 CUSTOM 时拉取后端模板预填（若脚本仍为空）
   const handleFrequencyChange = async (freq: RecurringFrequency) => {
     setFrequency(freq)
     setTestResult(null)
     if (freq === 'CUSTOM') {
       const current = form.getFieldValue('script')
       if (!current) {
-        if (LOCAL_MODE) {
-          form.setFieldValue('script', LOCAL_SCRIPT_TEXT)
-          return
-        }
         try {
           const tpl = await recurringApi.scriptTemplate()
           form.setFieldValue('script', tpl.template)
@@ -155,7 +149,6 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
   }
 
   const runTestScript = async () => {
-    if (LOCAL_MODE) return
     const script = form.getFieldValue('script')
     if (!script || !script.trim()) {
       message.warning('请先填写脚本')
@@ -180,18 +173,12 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
 
   const handleOk = async () => {
     const v = await form.validateFields()
-    const isCustom = v.frequency === 'CUSTOM'
-    const offsets = LOCAL_MODE && isCustom ? form.getFieldsValue(true) : v
-    const rawOffset =
-      (offsets.offsetDays ?? 0) * 1440 +
-      (offsets.offsetHours ?? 0) * 60 +
-      (offsets.offsetMinutes ?? 0)
-    // Keep a valid archival field without asking for a trigger/deadline that never runs.
-    const total = LOCAL_MODE && isCustom ? Math.max(1, rawOffset) : rawOffset
+    const total = (v.offsetDays ?? 0) * 1440 + (v.offsetHours ?? 0) * 60 + (v.offsetMinutes ?? 0)
     if (total <= 0) {
       form.setFields([{ name: 'offsetDays', errors: ['截止时间必须晚于触发时间'] }])
       return
     }
+    const isCustom = v.frequency === 'CUSTOM'
     if (isCustom && (!v.script || !v.script.trim())) {
       form.setFields([{ name: 'script', errors: ['自定义规则必须填写脚本'] }])
       return
@@ -205,10 +192,7 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
       script: isCustom ? v.script! : null,
       ddlOffsetMinutes: total,
       enabled: rule ? rule.enabled : true,
-      chainAfterComplete:
-        LOCAL_MODE && isCustom
-          ? Boolean(form.getFieldValue('chainAfterComplete'))
-          : v.chainAfterComplete,
+      chainAfterComplete: v.chainAfterComplete,
     })
   }
 
@@ -225,14 +209,6 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
       width={680}
       destroyOnHidden
     >
-      {LOCAL_MODE && frequency === 'CUSTOM' && (
-        <Alert
-          type="info"
-          showIcon
-          message="自定义脚本仅保留文本，当前本地版不会执行；可使用每日、每周或每月规则。"
-          style={{ marginBottom: 12 }}
-        />
-      )}
       <Form form={form} layout="vertical" requiredMark={false} onValuesChange={refreshPreview}>
         <Form.Item
           name="title"
@@ -249,7 +225,7 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
               { value: 'DAILY', label: '每天' },
               { value: 'WEEKLY', label: '每周' },
               { value: 'MONTHLY', label: '每月' },
-              { value: 'CUSTOM', label: LOCAL_MODE ? '脚本文本' : '自定义' },
+              { value: 'CUSTOM', label: '自定义' },
             ]}
             optionType="button"
           />
@@ -273,7 +249,7 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
             name="dayOfMonth"
             label="每月几号"
             rules={[{ required: true, message: '请选择日期' }]}
-            extra="若当月没有该日期（如 31 号遇到 2 月），使用当月最后一天"
+            extra="若当月没有该日期（如 31 号遇到 2 月），自动顺延到当月最后一天"
           >
             <InputNumber min={1} max={31} style={{ width: 140 }} addonAfter="号" />
           </Form.Item>
@@ -282,28 +258,26 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
         {frequency !== 'CUSTOM' && (
           <Form.Item
             name="triggerTime"
-            label={LOCAL_MODE ? '触发时刻（北京时间）' : '触发时刻'}
+            label="触发时刻"
             rules={[{ required: true, message: '请选择触发时刻' }]}
           >
             <TimePicker format={TIME_FORMAT} minuteStep={5} allowClear={false} />
           </Form.Item>
         )}
 
-        {!(LOCAL_MODE && frequency === 'CUSTOM') && (
-          <Form.Item label="截止时间（从触发时刻往后推算）" required>
-            <Space wrap>
-              <Form.Item name="offsetDays" noStyle>
-                <InputNumber min={0} max={60} addonAfter="天" style={{ width: 100 }} />
-              </Form.Item>
-              <Form.Item name="offsetHours" noStyle>
-                <InputNumber min={0} max={23} addonAfter="时" style={{ width: 100 }} />
-              </Form.Item>
-              <Form.Item name="offsetMinutes" noStyle>
-                <InputNumber min={0} max={59} addonAfter="分" style={{ width: 100 }} />
-              </Form.Item>
-            </Space>
-          </Form.Item>
-        )}
+        <Form.Item label="截止时间（从触发时刻往后推算）" required>
+          <Space>
+            <Form.Item name="offsetDays" noStyle>
+              <InputNumber min={0} max={60} addonAfter="天" style={{ width: 100 }} />
+            </Form.Item>
+            <Form.Item name="offsetHours" noStyle>
+              <InputNumber min={0} max={23} addonAfter="时" style={{ width: 100 }} />
+            </Form.Item>
+            <Form.Item name="offsetMinutes" noStyle>
+              <InputNumber min={0} max={59} addonAfter="分" style={{ width: 100 }} />
+            </Form.Item>
+          </Space>
+        </Form.Item>
 
         {previewText && (
           <Alert type="info" showIcon message={previewText} style={{ marginBottom: 16 }} />
@@ -312,38 +286,29 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
         {frequency === 'CUSTOM' && (
           <Form.Item
             name="script"
-            label={LOCAL_MODE ? '脚本文本（只保存）' : '触发脚本'}
-            rules={[
-              { required: true, message: '请填写脚本文本' },
-              { max: 4000, message: '脚本文本不能超过 4000 字' },
-            ]}
+            label="触发脚本"
+            rules={[{ required: true, message: '请填写脚本' }]}
             extra={
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {LOCAL_MODE ? (
-                  '仅保存为文本，可随核心数据导出和备份。不会测试语法、执行脚本或生成待办；需要自动待办请选择每日、每周或每月规则。'
-                ) : (
-                  <>
-                    用 JavaScript 编写 <code>shouldTrigger(ctx)</code> 函数，返回 <code>true</code>{' '}
-                    表示触发。系统使用上海时间，延迟或重启时最多补查最近 10 分钟。 weekOfYear 是 ISO
-                    年内周数，不是学期教学周。只能用纯 JS，不能访问 Java / IO。
-                    下方「测试脚本」可校验语法并查看此刻是否会触发。
-                  </>
-                )}
+                用 JavaScript 编写 <code>shouldTrigger(ctx)</code> 函数，返回 <code>true</code>{' '}
+                表示触发。系统使用上海时间，延迟或重启时最多补查最近 10 分钟。
+                weekOfYear 是 ISO 年内周数，不是学期教学周。只能用纯 JS，不能访问 Java / IO。
+                下方「测试脚本」可校验语法并查看此刻是否会触发。
               </Typography.Text>
             }
           >
             <Input.TextArea
-              rows={LOCAL_MODE ? 8 : 14}
+              rows={14}
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                fontSize: LOCAL_MODE ? 16 : 13,
+                fontSize: 13,
               }}
               spellCheck={false}
             />
           </Form.Item>
         )}
 
-        {!LOCAL_MODE && frequency === 'CUSTOM' && (
+        {frequency === 'CUSTOM' && (
           <Space direction="vertical" size={8} style={{ marginBottom: 16, width: '100%' }}>
             <Space>
               <Button loading={testing} onClick={runTestScript}>
@@ -368,21 +333,19 @@ export default function RecurringFormModal({ open, rule, saving, onCancel, onSub
           </Space>
         )}
 
-        {!(LOCAL_MODE && frequency === 'CUSTOM') && (
-          <Form.Item
-            name="chainAfterComplete"
-            label="完成后立即生成下一期"
-            valuePropName="checked"
-            extra={
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                关闭时只按触发时刻生成（推荐）；开启后你一完成当期，下一期立刻出现，
-                适合「做完就接着做下一个」的任务。
-              </Typography.Text>
-            }
-          >
-            <Switch />
-          </Form.Item>
-        )}
+        <Form.Item
+          name="chainAfterComplete"
+          label="完成后立即生成下一期"
+          valuePropName="checked"
+          extra={
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              关闭时只按触发时刻生成（推荐）；开启后你一完成当期，下一期立刻出现，
+              适合「做完就接着做下一个」的任务。
+            </Typography.Text>
+          }
+        >
+          <Switch />
+        </Form.Item>
       </Form>
     </Modal>
   )

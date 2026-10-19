@@ -3,7 +3,6 @@ import type { ColumnsType } from 'antd/es/table'
 import type { AiAction } from '../types'
 import { formatWeeks, weekDayName } from '../utils/schedule'
 import { describeOffset } from '../utils/recurring'
-import { LOCAL_MODE } from '../local/mode'
 
 const ACTION_LABELS: Record<string, string> = {
   CREATE_COURSE: '添加课程',
@@ -41,29 +40,12 @@ interface DiffRow {
   changed: boolean
 }
 
-export default function AiActionCard({
-  action,
-  executing,
-  onExecute,
-  onReject,
-  disabled,
-  scheduleName,
-}: Props) {
+export default function AiActionCard({ action, executing, onExecute, onReject, disabled, scheduleName }: Props) {
   const data = (action.data ?? {}) as Dict
   const pending = action.status === 'PENDING'
   const stale = action.status === 'STALE'
-  const affected = [
-    'courses',
-    'todos',
-    'rules',
-    'exams',
-    'courseIds',
-    'todoIds',
-    'recurringIds',
-    'examIds',
-  ]
-    .map((key) => data[key])
-    .find(Array.isArray) as unknown[] | undefined
+  const affected = ['courses', 'todos', 'rules', 'exams', 'courseIds', 'todoIds', 'recurringIds', 'examIds']
+    .map((key) => data[key]).find(Array.isArray) as unknown[] | undefined
 
   const statusTag =
     action.status === 'EXECUTED' ? (
@@ -82,13 +64,13 @@ export default function AiActionCard({
 
   return (
     <Card
-      className={`chat-action-card${pending ? ' is-pending' : ''}`}
+      className="chat-action-card"
       size="small"
       style={stale ? { opacity: 0.6 } : undefined}
       title={
-        <Space wrap size={6}>
+        <Space>
           <span>{ACTION_LABELS[action.type] ?? action.type}</span>
-          <Tag color={action.scope === 'COURSE' ? 'blue' : 'cyan'}>
+          <Tag color={action.scope === 'COURSE' ? 'geekblue' : 'purple'}>
             {action.scope === 'COURSE'
               ? '课表'
               : action.type.includes('RECURRING')
@@ -98,25 +80,11 @@ export default function AiActionCard({
           {statusTag}
         </Space>
       }
-    >
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
-        {action.scope === 'COURSE'
-          ? `目标课表：${scheduleName ?? (action.scheduleId ? `课表 #${action.scheduleId}（已删除或不可用）` : '未绑定')}`
-          : LOCAL_MODE
-            ? '作用范围：本机待办（各课表共用）'
-            : '作用范围：当前账号的待办（所有课表共用）'}
-        {' · '}影响 {affected?.length ?? 0} 条记录
-        {action.type === 'DELETE_EXAM' && '；对应考试待办也会删除'}
-      </Typography.Paragraph>
-      {renderBody(action.type, data)}
-      {pending && (
-        <div className="assistant-action-footer">
-          <Typography.Text type="secondary">核对目标与内容后，再确认这一项。</Typography.Text>
-          <Space wrap>
-            <Button disabled={disabled || executing} onClick={onReject}>
-              取消
-            </Button>
+      extra={
+        pending && (
+          <Space>
             <Button
+              size="small"
               type="primary"
               loading={executing}
               disabled={disabled || executing}
@@ -124,9 +92,21 @@ export default function AiActionCard({
             >
               确认执行
             </Button>
+            <Button size="small" disabled={disabled || executing} onClick={onReject}>
+              取消
+            </Button>
           </Space>
-        </div>
-      )}
+        )
+      }
+    >
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
+        {action.scope === 'COURSE'
+          ? `目标课表：${scheduleName ?? (action.scheduleId ? `课表 #${action.scheduleId}（已删除或不可用）` : '未绑定')}`
+          : '作用范围：当前账号的待办（所有课表共用）'}
+        {' · '}影响 {affected?.length ?? 0} 条记录
+        {action.type === 'DELETE_EXAM' && '；对应考试待办也会删除'}
+      </Typography.Paragraph>
+      {renderBody(action.type, data)}
       {stale && (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           数据已变动，请重新向 AI 提问以获得最新提案。
@@ -162,7 +142,6 @@ function recurringLine(r: Dict): string {
   const offset = describeOffset(Number(r.ddlOffsetMinutes))
   const chain = r.chainAfterComplete ? '，完成后接下一期' : ''
   if (r.frequency === 'CUSTOM') {
-    if (LOCAL_MODE) return '脚本文本归档（不执行、不生成待办）'
     return `自定义脚本判断触发，触发后 ${offset} 截止${chain}`
   }
   const time = String(r.triggerTime ?? '').slice(0, 5) || '--:--'

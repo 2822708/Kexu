@@ -7,7 +7,6 @@ import { AppProvider } from './store/AppContext'
 import { FontProvider } from './store/FontContext'
 import { ThemeProvider } from './theme'
 import './index.css'
-import './mobile.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

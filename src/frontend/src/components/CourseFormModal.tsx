@@ -193,8 +193,6 @@ export default function CourseFormModal({
             onPressEnter={applyWeeksText}
           />
           <Button onClick={applyWeeksText}>应用</Button>
-        </Space.Compact>
-        <Space wrap style={{ marginTop: 8, marginBottom: 8 }}>
           <Button onClick={() => form.setFieldValue('weeks', allWeeks)}>全选</Button>
           <Button
             onClick={() =>
@@ -217,7 +215,7 @@ export default function CourseFormModal({
             双周
           </Button>
           <Button onClick={() => form.setFieldValue('weeks', [currentWeek])}>仅本周</Button>
-        </Space>
+        </Space.Compact>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           带 * 的周次为当前周
         </Typography.Text>

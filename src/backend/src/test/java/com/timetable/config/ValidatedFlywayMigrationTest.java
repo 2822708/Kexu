@@ -22,8 +22,6 @@ class ValidatedFlywayMigrationTest {
         db.sql.update("INSERT INTO api_key(api_key,label) VALUES ('test-key','Fresh user')");
         assertThat(db.sql.queryForObject("SELECT account_role FROM api_key", String.class)).isEqualTo("USER");
         assertThat(db.sql.queryForObject("SELECT COUNT(*) FROM period_config", Integer.class)).isEqualTo(12);
-        assertThat(db.sql.queryForObject("SELECT COUNT(*) FROM information_schema.tables "
-                + "WHERE LOWER(table_name)='focus_course_completion'", Integer.class)).isEqualTo(1);
         db.migrate();
         assertThat(db.sql.queryForObject("SELECT COUNT(*) FROM api_key", Integer.class)).isEqualTo(1);
         assertThat(db.flyway.info().pending()).isEmpty();

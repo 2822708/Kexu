@@ -1,5 +1,3 @@
-import LocalAppProvider from './LocalAppProvider'
-import { LOCAL_MODE } from '../local/mode'
 import {
   createContext,
   useCallback,
@@ -19,7 +17,7 @@ import type { Course, Exam, PeriodConfig, RecurringTodo, Schedule, Todo } from '
 const ACTIVE_SCHEDULE_STORAGE = 'timetable.activeScheduleId'
 const SYNC_INTERVAL_MS = 30_000
 
-export interface AppState {
+interface AppState {
   ready: boolean
   authed: boolean
   connectionError: string | null
@@ -58,7 +56,7 @@ function readActiveSchedule(): number | null {
   }
 }
 
-function ServerAppProvider({ children }: { children: ReactNode }) {
+export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [authed, setAuthed] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
@@ -336,14 +334,6 @@ function ServerAppProvider({ children }: { children: ReactNode }) {
     refreshAll,
   }
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
-}
-
-export function AppProvider({ children }: { children: ReactNode }) {
-  return LOCAL_MODE ? (
-    <LocalAppProvider context={AppContext}>{children}</LocalAppProvider>
-  ) : (
-    <ServerAppProvider>{children}</ServerAppProvider>
-  )
 }
 
 export function useApp(): AppState {
