@@ -30,6 +30,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -190,7 +191,45 @@ class LlmProviderEndpointTest {
                 .andExpect(status().isBadRequest());
     }
 
+
+    @Test
+    void testEndpointRejectsUnknownProvider() throws Exception {
+        // 不存在的 provider 应当 404，而不是拿空配置去发请求
+        mvc.perform(post("/api/ai/providers/nope/test").header("X-API-Key", ADMIN))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testEndpointOnlyUsesSavedConfigNeverClientSuppliedUrl() throws Exception {
+        // 关键安全断言：请求体里塞什么地址都不该被采用，否则这就是 SSRF 跳板
+        mvc.perform(post("/api/ai/providers/glm/test").header("X-API-Key", ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsBytes(Map.of(
+                                "baseUrl", "http://169.254.169.254/latest/meta-data/"))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testEndpointRequiresAdmin() throws Exception {
+        register(USER);
+        save("glm", "https://a.example.com", "m", "sk-testing-key-1234");
+        mvc.perform(post("/api/ai/providers/glm/test").header("X-API-Key", USER))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void testEndpointReportsConnectionFailureForUnreachableHost() throws Exception {
+        // 地址语法合法但连不上：应当 200 + ok=false（这是「测试结果」，不是接口错误）
+        save("glm", "http://127.0.0.1:1/v1", "m", "sk-testing-key-1234");
+        mvc.perform(post("/api/ai/providers/glm/test").header("X-API-Key", ADMIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ok").value(false))
+                .andExpect(jsonPath("$.data.error").isNotEmpty())
+                .andExpect(jsonPath("$.data.providerId").value("glm"));
+    }
+
     // ==================== 辅助 ====================
+
 
     private void save(String id, String baseUrl, String model, String apiKey) throws Exception {
         Map<String, Object> body = new java.util.HashMap<>();

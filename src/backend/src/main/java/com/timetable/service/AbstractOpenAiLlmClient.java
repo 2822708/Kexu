@@ -233,16 +233,22 @@ public abstract class AbstractOpenAiLlmClient implements LlmClient {
                             ? readStream(guard, listener, usage)
                             : readJsonResponse(guard, usage);
                     guard.check();
-                    usageRecorder.recordSuccess(apiKey, scene, providerId(), model(),
-                            usage.promptTokens(), usage.completionTokens(), stream,
-                            elapsedMs(startedAt));
+                    if (usageRecorder != null) {
+                        usageRecorder.recordSuccess(apiKey, scene, providerId(), model(),
+                                usage.promptTokens(), usage.completionTokens(), stream,
+                                elapsedMs(startedAt));
+                    }
                     return result;
                 } catch (Exception failure) {
                     guard.check();
                     // 失败也记录：token 已经花掉是真实成本，只记成功会低估开销。
-                    usageRecorder.recordError(apiKey, scene, providerId(), model(),
-                            usage.promptTokens(), usage.completionTokens(), stream,
-                            elapsedMs(startedAt));
+                    // usageRecorder 可为 null（连通性测试用的一次性客户端不参与成本统计，
+                    // 否则成本看板会多出查不到来源的支出）
+                    if (usageRecorder != null) {
+                        usageRecorder.recordError(apiKey, scene, providerId(), model(),
+                                usage.promptTokens(), usage.completionTokens(), stream,
+                                elapsedMs(startedAt));
+                    }
                     throw failure;
                 }
             }

@@ -227,6 +227,19 @@ export interface LlmProviderInput {
   temperature?: number
 }
 
+/** 连通性测试结果。失败时 ok=false，error 已经翻译成人话并且擦掉了 Key。 */
+export interface LlmProbeResult {
+  ok: boolean
+  providerId: string
+  model: string
+  /** 耗时（毫秒）。失败时也有值：0.1 秒失败和被拒 vs 3 秒超时是不同的病因 */
+  latencyMs: number
+  /** 模型的原样回复，仅成功时有 */
+  reply?: string
+  /** 失败原因，仅失败时有 */
+  error?: string
+}
+
 export interface ParsedCourse {
   name: string | null
   location: string | null

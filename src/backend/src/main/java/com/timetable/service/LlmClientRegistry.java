@@ -183,6 +183,16 @@ public class LlmClientRegistry {
                 properties.getFallback() == null ? List.of() : properties.getFallback());
     }
 
+    /**
+     * 按给定配置造一个一次性客户端，不注册、不参与路由。
+     *
+     * <p>给连通性测试用：想验证「这份配置到底能不能用」，最准的办法就是拿它真发一次请求，
+     * 而不是读一堆状态位猜。
+     */
+    public static LlmClient simple(LlmProviderConfig config) {
+        return new OpenAiCompatibleLlmClient("probe", config, new ObjectMapper(), null);
+    }
+
     /** 默认客户端；全部未配置时抛 503（AI 功能不可用）。 */
     public LlmClient active() {
         return forScene(null);

@@ -194,6 +194,9 @@ npm run build
 | **mock 忘了 stub `isConfigured()` → 503 走「无声」分支** | `LlmClientRegistry.active()` 在没有任何客户端 `isConfigured()` 时抛 503 `BusinessException`。流式链路里这个异常只 `emit("error")` + `complete()`，**不调 `SseEmitter.onError`、不打 error 日志**。排查指纹：mock 从未被调用 + 无任何异常日志 + `onError` 未触发 = 任务在到达 LLM 之前就抛了 `BusinessException`。所有 stub `chatJson*` 的测试都要先 `when(provider.isConfigured()).thenReturn(true)` |
 | **网盘上传成功的判据是 PUT 响应，不是下载** | COS 对成功的单部 PUT 返回 **HTTP 200 + 空 body + `ETag` = 文件 MD5**；失败一定带 XML 错误体（如 `InvalidAccessKeyId`，542 字节）。**下载失败 ≠ 上传失败**：`file_download` 签发的 URL 自身出过两次故障（10-16 presign 的 AK 无效；10-17 晚间 URL 干脆缺 presign 签名参数），都报 `InvalidAccessKeyId`，但当时的上传其实是好的。曾因此**误删过已上传成功的 bundle 条目**又重传一遍。正确做法：PUT 后核对 `ETag == 本地 md5` 即完成内容级验证，比下载回传更硬；下载只作端到端抽验 |
 | **网盘 COS 临时凭证偶尔「签发即无效」** | `file_upload` 返回的预签名 URL 有小概率直接不可用（首次 PUT 即 `InvalidAccessKeyId`）。处理：**原样重发一次 `file_upload` 拿新凭证**，不要改代码也不要怀疑密钥——重签后同样方法立刻成功。凭证有效期约 2 小时（`q-key-time`），过期重签即可 |
+| **standalone 真机验证必须 `-Pstandalone` 打包** | H2 驱动只在该 profile 里是 `runtime` scope，不带就 `Cannot load driver class: org.h2.Driver`，而且报错会伪装成 `courseMapper` → `sqlSessionFactory` → `dataSource` 一长串 bean 创建失败，看着像代码问题。同一 profile 还负责把 `frontend/dist` 复制进 jar。真机验证前先 `unzip -l target/*.jar \| grep -c "BOOT-INF/lib/h2"` 自查 |
+| **真机验证要 `--app.bootstrap-key=`** | 否则 `ApiKeyBootstrap` 走「无初始账号」分支，所有写接口 401（连注册都要 Key，形成死锁）。日志特征：`No bootstrap account configured` |
+| **「把错误原文附在翻译后面」的清洗顺序** | 我曾用「滤掉非字母数字后看剩下什么」判断原文是否只有状态码，结果把中文（「账户余额不足」）也滤成空，差点吃掉用户唯一能查文档的线索。**正确顺序：先剥掉自己的模板词（中文，会干扰判断）→ 见非 ASCII 就一律保留 → 最后才清洗做判断**。并且这个判断要配一正一反两条测试，只测「不显示冗余」会掩盖「误吃信息」 |
 
 ### 3.8 预算熔断（成本治理 P0-2）
 
@@ -304,6 +307,57 @@ npm run build
 
 ## 5. 会话日志（倒序，最新在最上）
 
+### 2026-10-19 · WorkBuddy · provider 连通性测试（成本治理 6.1 #2 收尾）
+
+**动机**：上一轮做完界面配置后，用户填完 Key 只能靠「生成一次计划」间接验证。
+既慢，又把「配置问题」和「内容问题」混在一起——报错了不知道该改 Key 还是改 prompt。
+
+**做了什么**：
+1. `LlmProviderProbe`：真发一次最小请求（`回复两个字：可用`），15 秒总时限，
+   独立单线程池（不抢公共池），`scene=null` 走无埋点路径，**不写 `llm_usage`**
+2. `POST /api/ai/providers/{id}/test`：**只测已保存的配置，绝不接受前端传 baseUrl**
+   —— 否则这端点就是现成的 SSRF 跳板
+3. 错误翻译：401→Key 无效 / 404→地址或模型名不对 / 429→额度问题 / 连接失败→查网络
+4. 前端：表格每行「测试」按钮（逐行 loading）+ 表格下方**常驻结果区**
+
+**为什么不用 toast 就够了**：失败原因常有五六十字（要告诉用户去改哪一项），
+toast 三秒就没了。结果区能停着看、能对照着改，还带可关闭。
+
+**三个设计取舍**：
+- **失败也返回 `latencyMs`**：0.1 秒失败是被拒（Key/地址错），3 秒失败是网络慢，
+  这是用户唯一能自己判断的线索。为此专门补了
+  `everyFailureCarriesLatencySoUiCanTellFastRejectFromSlowNetwork`
+- **原文只有状态码时不附「（原文：…）」**：`（原文：AI 服务调用失败: HTTP 401）`
+  对用户零价值，状态码的信息已经在翻译句里了。但**上游真带了额外说明就必须保留**
+  （「账户余额不足」是用户唯一能拿去查文档的线索）。两条测试一正一反钉住
+- **保存或删除后清掉该 provider 的测试结论**：配置都改了，上次的「可用」已经过期，
+  留着会让用户以为还在用这个服务
+
+**验证**：
+- `LlmProviderProbeTest` 8 项（真实 `HttpServer` 当上游，不 mock HTTP 层——
+  要测的就是「状态码怎么翻译成人话」）、`LlmProviderEndpointTest` 10 项
+- **全量 221/221 绿**；前端 tsc 干净、eslint 9 warnings（与基线一致，0 error）、build 通过
+- **变异验证**：删掉所有 `latencyMs` 赋值，新用例立刻失败
+- **真机点击验证**（standalone jar + H2 + Chromium，两个假上游分别返回 200 和 401）：
+  - 点 good 行「测试」→ 绿色 toast「good 可用（41 ms）」+ 结果区
+    「good 可用 · fake-ok · 41 ms / 模型返回：「可用」」，按钮变「重新测试」
+  - 点 leaky 行「测试」→ 红色结果区「API Key 无效或已过期，请检查 Key 是否填对、
+    是否属于这个服务」，无多余原文
+  - 页面上 grep 明文 Key：0 次。截图存 `docs/assets/llm-provider-probe-ok.png`、
+    `llm-provider-probe-fail.png`
+
+**踩到的坑（已记入 3.7）**：
+- **`standalone` 打包必须带 `-Pstandalone`**：H2 驱动只在该 profile 里是 runtime
+  scope，不带就 `Cannot load driver class: org.h2.Driver`；前端 dist 也是这个 profile
+  才复制进 jar
+- **`ApiKeyBootstrap` 要 `--app.bootstrap-key=`** 才能有 ADMIN 账号，否则所有写接口 401
+- **错误翻译的误判方向**：我先用「滤掉非字母数字后看剩下什么」判断原文有没有额外信息，
+  结果把中文「账户余额不足」也滤成空，差点吃掉关键线索。正确顺序是
+  **先剥自己的模板词 → 见非 ASCII 就保留 → 再清洗判断**
+
+**未做**：「设为默认 provider」按钮（要改 `active-provider`，涉及运行时改 yml 语义，
+需先加本地覆盖层，否则可能把默认设成未配置的 provider 导致全站 503）。
+
 ### 2026-10-19 · WorkBuddy · 设置页配置 AI 服务提供方（成本治理 6.1 #2 收尾）
 
 **动机**：`app.llm.providers.*` 只能改 yml / 环境变量。桌面单机版用户没有运维，
@@ -339,8 +393,8 @@ npm run build
   整个丢了，AI 变成「未配置」，又挂 57 个。**正确做法是给稳定占位 id 继续用，
   而不是丢弃 client**——丢掉等于功能突然不可用，比 id 难看严重得多。
 
-**未做**：连通性测试按钮（填完只能靠「生成一次计划」验证，体验不够直接，已列入待办）；
-「设为默认 provider」按钮（要改 `active-provider`，涉及运行时改 yml 语义，需单独设计）。
+**未做**：「设为默认 provider」按钮（要改 `active-provider`，涉及运行时改 yml 语义，
+需先加本地覆盖层，否则可能把默认设成未配置的 provider 导致全站 503）。
 
 ### 2026-10-19 · WorkBuddy · 计划生成失败重试退避 + 并发去重（成本治理 6.1 #6 收尾）
 

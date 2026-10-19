@@ -8,6 +8,7 @@ import com.timetable.exception.BusinessException;
 import com.timetable.interceptor.RequestContext;
 import com.timetable.security.AdminAuthorizationService;
 import com.timetable.service.LlmClientRegistry;
+import com.timetable.service.LlmProviderProbe;
 import com.timetable.service.LlmProviderSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,16 +42,16 @@ public class LlmProviderController {
     private static final int MAX_ID_LENGTH = 32;
 
     private final LlmProviderSettings providerSettings;
-    private final LlmClientRegistry registry;
     private final LlmProperties llmProperties;
+    private final LlmProviderProbe probe;
     private final AdminAuthorizationService adminAuthorizationService;
 
-    public LlmProviderController(LlmProviderSettings providerSettings, LlmClientRegistry registry,
-                                 LlmProperties llmProperties,
+    public LlmProviderController(LlmProviderSettings providerSettings, LlmProperties llmProperties,
+                                 LlmProviderProbe probe,
                                  AdminAuthorizationService adminAuthorizationService) {
         this.providerSettings = providerSettings;
-        this.registry = registry;
         this.llmProperties = llmProperties;
+        this.probe = probe;
         this.adminAuthorizationService = adminAuthorizationService;
     }
 
@@ -149,6 +150,27 @@ public class LlmProviderController {
         providerSettings.clear(id);
         log.info("provider {} 的本地配置已删除（ready={}）", id, readyProviders());
         return list();
+    }
+
+    /**
+     * 用已保存的配置真发一次最小请求，验证是否可用。
+     *
+     * <p><b>只测已保存的配置，不接受前端传 baseUrl</b>：否则这个端点就成了现成的 SSRF
+     * 跳板——任何人都能让服务器去访问指定地址。测「服务端已有配置能不能用」是正当需求，
+     * 测「任意地址通不通」不是。
+     *
+     * <p>不加 {@code requireLocalSettings()}：服务器部署下运维也想验证配置对不对，
+     * 但这个端点不写任何状态（也不消耗埋点），风险等同于读接口。
+     */
+    @PostMapping("/{id}/test")
+    public ApiResponse<Map<String, Object>> test(@PathVariable String id) {
+        requireAdmin();
+        String providerId = id == null ? "" : id.trim().toLowerCase(java.util.Locale.ROOT);
+        LlmProviderConfig config = providerSettings.snapshot().get(providerId);
+        if (config == null) {
+            throw new BusinessException(404, "没有找到 provider「" + providerId + "」，请先保存配置");
+        }
+        return ApiResponse.success(probe.probe(providerId, config));
     }
 
     // ==================== 辅助 ====================

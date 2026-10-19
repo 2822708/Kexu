@@ -14,7 +14,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { aiApi } from '../api'
-import type { LlmProvider, LlmProvidersPayload } from '../types'
+import type { LlmProbeResult, LlmProvider, LlmProvidersPayload } from '../types'
 
 /** 卡片质感与设置页其它分区一致（白底 + 柔影 + 大圆角） */
 const cardStyle = {
@@ -51,6 +51,14 @@ const SOURCE_LABEL: Record<LlmProvider['source'], string> = {
   both: '界面覆盖配置',
 }
 
+/** 耗时显示：不到 1 秒给毫秒，超过就给秒，避免「12345ms」这种要数位数的写法 */
+function formatLatency(ms: number): string {
+  if (!ms || ms < 0) {
+    return '—'
+  }
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`
+}
+
 /**
  * 多 AI 服务提供方配置（成本治理 6.1 #2）。
  *
@@ -60,6 +68,16 @@ const SOURCE_LABEL: Record<LlmProvider['source'], string> = {
 export default function LlmProviderSettings() {
   const [data, setData] = useState<LlmProvidersPayload | null>(null)
   const [saving, setSaving] = useState(false)
+  /**
+   * 每行一个测试状态：正在测的 id 进 testing，最近一次结果留在 probeResults 里。
+   *
+   * <p>为什么不用 toast 就完事：失败原因常有六七十个字（要告诉用户是地址错、Key 错还是
+   * 模型名错），toast 一闪就没了。表格下面留一块结果区，用户能慢慢看、能对照着改。
+   */
+  const [testing, setTesting] = useState<string | null>(null)
+  const [probeResults, setProbeResults] = useState<Record<string, LlmProbeResult>>({})
+  /** 结果区只展示最近测的那一条，全都铺开会显得页面很吵 */
+  const [lastProbed, setLastProbed] = useState<string | null>(null)
   const [form] = Form.useForm<{
     id: string
     baseUrl: string
@@ -85,6 +103,19 @@ export default function LlmProviderSettings() {
 
   const editable = data?.editable ?? false
 
+  /** 丢掉某个 provider 的测试结论（删除配置、或保存了新配置后都要丢） */
+  const forgetProbe = (id: string) => {
+    setProbeResults((prev) => {
+      if (!(id in prev)) {
+        return prev
+      }
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    setLastProbed((current) => (current === id ? null : current))
+  }
+
   const save = async () => {
     const values = await form.validateFields()
     setSaving(true)
@@ -102,6 +133,8 @@ export default function LlmProviderSettings() {
         }),
       )
       message.success('已保存，立即生效（无需重启）')
+      // 改了地址/模型/Key 之后，上次的「可用」结论就过期了，留着会让人误判
+      forgetProbe(values.id.trim())
       form.resetFields()
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存失败')
@@ -113,11 +146,41 @@ export default function LlmProviderSettings() {
   const remove = async (id: string) => {
     try {
       setData(await aiApi.removeProvider(id))
+      // 配置都没了，留着「上次测试可用」会误导：用户可能以为还在用这个服务
+      forgetProbe(id)
       message.success(`已删除 ${id} 的界面配置`)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '删除失败')
     }
   }
+
+  /**
+   * 测一次连通性。
+   *
+   * <p>成功和失败都不弹 error toast——失败原因要能停留着看。只有「请求本身没发出去」
+   * （网络断了、403 之类）才用 message.error，因为那种情况没有结果对象可展示。
+   */
+  const probe = async (id: string) => {
+    setTesting(id)
+    try {
+      const result = await aiApi.testProvider(id)
+      setProbeResults((prev) => ({ ...prev, [id]: result }))
+      setLastProbed(id)
+      if (result.ok) {
+        message.success(`${id} 可用（${formatLatency(result.latencyMs)}）`)
+      } else {
+        // 原因已经在结果区展示了，这里只提醒去看
+        message.warning(`${id} 测试未通过，原因见下方`)
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '测试请求失败')
+    } finally {
+      setTesting(null)
+    }
+  }
+
+  /** 结果区要展示的那一条；没有就渲染空 */
+  const probeShown = lastProbed ? probeResults[lastProbed] : undefined
 
   const columns: ColumnsType<LlmProvider> = [
     {
@@ -197,25 +260,41 @@ export default function LlmProviderSettings() {
               {
                 title: '',
                 key: 'actions',
-                width: 90,
-                render: (_: unknown, row) =>
-                  row.source === 'config' ? (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      只读
-                    </Typography.Text>
-                  ) : (
-                    <Popconfirm
-                      title={`删除 ${row.id} 的界面配置？`}
-                      description="删除后回退到配置文件里的值（如果有）。"
-                      okText="删除"
-                      cancelText="取消"
-                      onConfirm={() => void remove(row.id)}
-                    >
-                      <Button size="small" danger type="text">
-                        删除
+                width: 150,
+                render: (_: unknown, row) => {
+                  const result = probeResults[row.id]
+                  return (
+                    <Space size={2}>
+                      <Button
+                        size="small"
+                        type="link"
+                        loading={testing === row.id}
+                        /* 配置不全就不必浪费一次往返，直接告诉用户缺什么 */
+                        disabled={!row.configured || (testing !== null && testing !== row.id)}
+                        onClick={() => void probe(row.id)}
+                      >
+                        {result?.ok ? '重新测试' : '测试'}
                       </Button>
-                    </Popconfirm>
-                  ),
+                      {row.source === 'config' ? (
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          只读
+                        </Typography.Text>
+                      ) : (
+                        <Popconfirm
+                          title={`删除 ${row.id} 的界面配置？`}
+                          description="删除后回退到配置文件里的值（如果有）。"
+                          okText="删除"
+                          cancelText="取消"
+                          onConfirm={() => void remove(row.id)}
+                        >
+                          <Button size="small" danger type="text">
+                            删除
+                          </Button>
+                        </Popconfirm>
+                      )}
+                    </Space>
+                  )
+                },
               },
             ]}
             dataSource={data.providers}
@@ -223,6 +302,39 @@ export default function LlmProviderSettings() {
         ) : (
           <Typography.Text type="secondary">还没有配置任何服务提供方。</Typography.Text>
         )}
+
+        {probeShown ? (
+          <Alert
+            key={lastProbed ?? ''}
+            type={probeShown.ok ? 'success' : 'error'}
+            showIcon
+            closable
+            message={
+              probeShown.ok
+                ? `${probeShown.providerId} 可用 · ${probeShown.model} · ${formatLatency(probeShown.latencyMs)}`
+                : `${probeShown.providerId} 测试未通过`
+            }
+            description={
+              probeShown.ok ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  模型返回：「{probeShown.reply || '（空）'}」
+                </Typography.Text>
+              ) : (
+                <Typography.Text style={{ fontSize: 12 }}>{probeShown.error}</Typography.Text>
+              )
+            }
+            onClose={() => {
+              setProbeResults((prev) => {
+                const next = { ...prev }
+                if (lastProbed) {
+                  delete next[lastProbed]
+                }
+                return next
+              })
+              setLastProbed(null)
+            }}
+          />
+        ) : null}
 
         {data?.ready.length ? (
           <Alert

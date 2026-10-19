@@ -13,6 +13,7 @@ import type {
   DashboardData,
   Exam,
   ExamPayload,
+  LlmProbeResult,
   LlmProviderInput,
   LlmProvidersPayload,
   Memory,
@@ -259,6 +260,14 @@ export const aiApi = {
   /** 删除界面里的配置，回退到 yml/环境变量 */
   removeProvider: (id: string) =>
     request<LlmProvidersPayload>(`/ai/providers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  /**
+   * 真发一次最小请求验证配置能不能用。
+   *
+   * <p>只测**已保存**的配置，不接受前端传地址——否则这端点就是现成的 SSRF 跳板。
+   * 所以必须「先保存，再测试」。
+   */
+  testProvider: (id: string) =>
+    request<LlmProbeResult>(`/ai/providers/${encodeURIComponent(id)}/test`, { method: 'POST' }),
   listConversations: () => request<AiConversation[]>('/ai/conversations'),
   pageConversations: (cursor: string | null = null) =>
     request<CursorPage<AiConversation>>(
