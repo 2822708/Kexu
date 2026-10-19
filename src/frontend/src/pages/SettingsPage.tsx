@@ -22,6 +22,7 @@ import { useFont } from '../store/FontContext'
 import type { AiConfig, PeriodCategory, PeriodConfig } from '../types'
 import { dayjs } from '../utils/schedule'
 import BackupSettings from '../components/BackupSettings'
+import LlmProviderSettings from '../components/LlmProviderSettings'
 import MemoryManager from '../components/MemoryManager'
 import ProfileForm from '../components/ProfileForm'
 
@@ -360,6 +361,8 @@ export default function SettingsPage() {
           </Typography.Text>
         </Space>
       </Card>
+
+      <LlmProviderSettings />
 
       <ProfileForm />
 

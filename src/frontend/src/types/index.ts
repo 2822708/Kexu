@@ -186,6 +186,47 @@ export interface AiConfig {
   keyMasked: string
 }
 
+/**
+ * 一个 OpenAI 兼容服务（智谱 GLM / 通义 / 豆包 / 自建网关）。
+ *
+ * Key 永远只有掩码：后端不回显完整 Key，前端也别想拿到。
+ */
+export interface LlmProvider {
+  id: string
+  baseUrl: string
+  model: string
+  keyMasked: string
+  /** 地址 + 模型 + Key 都齐了才会参与调用 */
+  configured: boolean
+  timeoutSeconds: number
+  maxTokens: number
+  temperature: number
+  /** local=界面填的 / config=yml 或环境变量 / both=两边都有，界面赢 */
+  source: 'local' | 'config' | 'both'
+}
+
+/** provider 配置页的数据。editable=false 表示服务器部署，配置由运维管理。 */
+export interface LlmProvidersPayload {
+  editable: boolean
+  providers: LlmProvider[]
+  activeProvider: string
+  routes: Record<string, string>
+  fallback: string[]
+  /** 当前真正可用的 providerId，用来回答「填完了到底生效没有」 */
+  ready: string[]
+}
+
+/** 保存 provider 的入参。apiKey 传 undefined 表示不改动现有 Key。 */
+export interface LlmProviderInput {
+  id: string
+  baseUrl: string
+  model: string
+  apiKey?: string
+  timeoutSeconds?: number
+  maxTokens?: number
+  temperature?: number
+}
+
 export interface ParsedCourse {
   name: string | null
   location: string | null

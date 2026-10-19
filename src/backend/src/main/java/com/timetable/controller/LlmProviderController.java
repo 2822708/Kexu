@@ -110,7 +110,7 @@ public class LlmProviderController {
         }
         if (LlmClientRegistry.DEEPSEEK.equals(id)) {
             // deepseek 走既有 deepseek.api.* 与本机 Key 设置，从这里改会出现两个入口互相打架
-            throw new BusinessException(400, "deepseek 请在下方「AI 助手」区域配置，这里用于新增其它 OpenAI 兼容服务");
+            throw new BusinessException(400, "deepseek 请在「AI 助手」卡片中配置，这里用于新增其它 OpenAI 兼容服务");
         }
         String baseUrl = request.getBaseUrl() == null ? "" : request.getBaseUrl().trim();
         if (!baseUrl.isEmpty()) {

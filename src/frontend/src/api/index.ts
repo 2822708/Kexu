@@ -13,6 +13,8 @@ import type {
   DashboardData,
   Exam,
   ExamPayload,
+  LlmProviderInput,
+  LlmProvidersPayload,
   Memory,
   MemoryList,
   MemoryPayload,
@@ -249,6 +251,14 @@ export const aiApi = {
   saveConfig: (key: string) => request<AiConfig>('/ai/config', { method: 'PUT', body: { key } }),
   /** 清除本机保存的 Key，回退到环境变量/配置文件 */
   clearConfig: () => request<AiConfig>('/ai/config', { method: 'DELETE' }),
+  /** 列出所有 AI 服务提供方（配置文件 + 界面配置合并后的结果） */
+  listProviders: () => request<LlmProvidersPayload>('/ai/providers'),
+  /** 新增/更新一个 OpenAI 兼容服务；apiKey 省略表示不改动现有 Key */
+  saveProvider: (input: LlmProviderInput) =>
+    request<LlmProvidersPayload>('/ai/providers', { method: 'PUT', body: input }),
+  /** 删除界面里的配置，回退到 yml/环境变量 */
+  removeProvider: (id: string) =>
+    request<LlmProvidersPayload>(`/ai/providers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   listConversations: () => request<AiConversation[]>('/ai/conversations'),
   pageConversations: (cursor: string | null = null) =>
     request<CursorPage<AiConversation>>(

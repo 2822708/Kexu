@@ -60,8 +60,8 @@ npm run build
 |---|---|
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效）；**信息处理中心 `/info` 落地**（信息收纳盒 + AI 查询中心 + 最近解析预览，两处边界适配见 3.9） |
-| 后端测试 | **188/188 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个） |
-| 前端 | typecheck 通过；lint **0 错误 / 8 警告**（8 个警告全在存量文件，属基线，不得新增）；build 通过 |
+| 后端测试 | **209/209 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、provider 配置 `LlmProviderSettingsTest` 9 个、provider 端点 `LlmProviderEndpointTest` 6 个、本地设置加密 `LocalSettingsEncryptionTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个） |
+| 前端 | typecheck 通过；lint **0 错误 / 9 警告**（9 个全在存量文件：AiChatPage 3、TodosPage 1、5 个 Context/theme 各 1，属基线，不得新增）；build 通过 |
 | 工作区 | 见 `git status`。**本地领先 origin 的提交均未推送**（数量以 `git rev-list --count origin/main..main` 实时为准，含 P0-1、通知箱/分时 UI、引导页/模块自定义、P0-2、身份修复及收工文档提交）。缺 `ghp_`/`github_pat_` 开头的 PAT，见 6.5 |
 | 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》两轮均已完成**。**2026-10-18 用真实 DeepSeek Key 完成了首次端到端验收**，并修复了一个只有真实调用才能暴露的 P0（流式对话工作线程丢失调用方身份，详见第 5 节当日条目）。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
@@ -168,6 +168,8 @@ npm run build
 | `Timestamp.valueOf("2026-09-28 23:59")` 缺秒 | 用 `LocalDateTime.parse(s.replace(" ", "T"))` |
 | `isValidProposal` 的 switch 漏分支 | 漏了会静默丢弃整类提案；每加一种 action 必须同步 `splitToSingleActions` / `recordField` / 校验分支三处 |
 | `LlmClientRegistry.active()` 先抛 503 | 之后的 `isConfigured()` 分支是永远走不到的死代码 |
+| 给被 `@Import` 的组件加硬依赖 | `LlmClientRegistry` 加 `LlmUsageRecorder` 挂 12 个用例、加 `LlmProviderSettings` 挂 **81 个**。精简测试上下文不会 Import 新组件，用 `ObjectProvider` + `getIfAvailable()` 兜住 |
+| 为了让 `List.copyOf(keys)` 不 NPE 而丢弃 client | 跳过 `providerId()` 为 null 的实现，等于把 AI 整个关掉（挂 57 个用例）。给稳定占位 id 继续用才对——降级要保证功能还在 |
 | `mvn -q test` 会吞掉断言失败 | `-q` 只保留 ERROR 级别的 Maven 输出，surefire 的失败明细写进了 `target/surefire-reports/*.txt` 而不上屏。跑「预期会失败」的变异验证时，别拿 `mvn -q` 的 stdout 判断结果，去看那份报告（`Failures`/`Errors` 计数） |
 | 并发去重锁在 `finally` 里直接 remove | 必须 `if (!lock.hasQueuedThreads())` 才摘除，且判断与 `unlock()` 同线程。否则等锁的线程还没进排队队列时对象被摘走，后续请求会拿到一把新锁，锁形同虚设 |
 | 前端 `client.ts` 方法白名单 | 新增 HTTP 方法（如 PATCH）要在 Options 白名单里补 |
@@ -234,6 +236,13 @@ npm run build
 
 ---
 
+### 3.11 界面配置 provider 的三个约束（2026-10-19）
+
+- **加密判据必须按模式，不能按字面量**：`LocalSettings` 最初只对 `deepseek.api-key` 加密，其余键明文落盘。新增 `llm.provider.<id>.api-key` 时会静默泄漏用户 Key，而界面文案还写着「加密保存」。现改为匹配 `*-api-key`，AAD 绑定真实键名（不同键的密文不能互换），启动时把历史明文敏感项补加密。**以后新增任何存 Key 的键名，务必以 `api-key` 结尾。**
+- **优先级是「界面 > 配置文件」**，且字段级覆盖：只填 Key 时模型名仍取 yml。反过来（配置赢）会出现「我明明填了为什么还用旧的」，是最难排查的一类问题。
+- **热生效靠配置指纹**：`LlmProviderSettings.version()` 变化时 registry 重建动态客户端。指纹里 Key 必须用摘要而非长度——第一版算长度，`sk-1` 换 `sk-2` 不触发重建，用户改了 Key 还在用旧的。
+- **`deepseek` 有独立入口**：它走既有 `deepseek.api.*` 与本机 Key 设置，provider 端点显式拒绝这个 id，避免两个入口互相打架。
+
 ## 4. 关键文件地图
 
 **后端**
@@ -294,6 +303,44 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-19 · WorkBuddy · 设置页配置 AI 服务提供方（成本治理 6.1 #2 收尾）
+
+**动机**：`app.llm.providers.*` 只能改 yml / 环境变量。桌面单机版用户没有运维，
+注册了 provider 却配不上，等于功能不存在。
+
+**顺手挖出一个安全问题**：`LocalSettings` 的 AES-GCM 只在键**等于字面量**
+`deepseek.api-key` 时才生效，其它键一律明文写入 `settings.properties`。
+也就是说，如果按最直觉的写法加一个 `llm.provider.glm.api-key`，用户的 GLM Key
+会明文躺在磁盘上，而界面文案还在承诺「Key 加密保存在本机配置中」。
+改为 `*-api-key` 模式匹配 + AAD 绑定真实键名 + 启动时补加密历史明文项。
+
+**做了什么**：
+1. `LlmProviderSettings`：本地设置覆盖 yml（字段级），优先级「界面 > 配置文件」
+2. 热生效：`version()` 指纹变化即重建动态客户端，不重启
+3. `/api/ai/providers` GET/PUT/DELETE，权限同 `/ai/config`，只回掩码 Key
+4. 设置页 `LlmProviderSettings.tsx`：表格 + 表单 + 四个预设一键填
+
+**验证**：
+- 新增 21 项测试，**全量 209/209 绿**
+- 加密做了**变异验证**：退回「只认字面量键」，3 个用例立刻失败
+- **真机端到端**（standalone jar + H2 + 静态代理 + Chromium）：
+  空白页 → 点「智谱 GLM」预设 → 填 Key → 保存 → 表格出现 `glm / 可用 / 界面配置`，
+  绿色提示「当前可用: glm」；`settings.properties` 里 Key 是 `ENCv1:` 密文，
+  明文 grep 计数为 0。截图存 `docs/assets/llm-provider-settings.png`
+- 真机还验了：只改模型名时 Key 保留、非法地址/非法 id/deepseek 三种 400、删除后回退
+
+**踩到的两个坑（已记入 3.7）**：
+- `LlmClientRegistry` 新增 `LlmProviderSettings` 硬依赖 → 12 个精简测试上下文全挂，
+  一次 **81 个用例**失败。上次 `LlmUsageRecorder` 已经踩过一次，这次又踩了。
+  **结论：注册表这类被测试 `@Import` 的组件，新依赖一律用 `ObjectProvider`。**
+- 修的时候改错了一次方向：为了避开 `List.copyOf(null)` 的 NPE，我一开始直接
+  `continue` 跳过 `providerId()` 为 null 的 client，结果把 `@MockBean` 的 client
+  整个丢了，AI 变成「未配置」，又挂 57 个。**正确做法是给稳定占位 id 继续用，
+  而不是丢弃 client**——丢掉等于功能突然不可用，比 id 难看严重得多。
+
+**未做**：连通性测试按钮（填完只能靠「生成一次计划」验证，体验不够直接，已列入待办）；
+「设为默认 provider」按钮（要改 `active-provider`，涉及运行时改 yml 语义，需单独设计）。
 
 ### 2026-10-19 · WorkBuddy · 计划生成失败重试退避 + 并发去重（成本治理 6.1 #6 收尾）
 
@@ -736,7 +783,7 @@ Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings`
 | # | 事项 | 说明 |
 |---|---|---|
 | 1 | **补用户行为埋点** | ✅ **P0-1 已完成提案确认/拒绝埋点**（`ai_event` + `decided_at` + `/api/stats/proposals`）。**仍缺**：计划采纳率（生成后 24h 内完成或调整占比）/ 7 日留存 / 计划采纳率口径（`daily_plan` 没有决定时刻字段，要先补数据） |
-| 2 | **多 LLM provider 注册** | ✅ **已完成**（`OpenAiCompatibleLlmClient` + `app.llm.providers.<id>`；抽象层抽为 `AbstractOpenAiLlmClient`，DeepSeek 退化为薄子类）。**仍缺**：界面里填 provider 配置——目前只能改 yml/环境变量，桌面单机版用户用不上 |
+| 2 | **多 LLM provider 注册** | ✅ **已完成**。后端 `OpenAiCompatibleLlmClient` + `app.llm.providers.<id>`（抽象层抽为 `AbstractOpenAiLlmClient`）；**界面配置也已完成**——设置页「AI 服务提供方」卡片可增删改，支持智谱/通义/豆包/Kimi 预设，Key 加密落盘，保存后**热生效不需重启**（见 3.11） |
 | 3 | **按任务分级路由** | ✅ **已完成**（`app.llm.routes.<SCENE>=<providerId>`，7 处调用点改 `forScene(SCENE_*)`）。**下一步**：等真有第二个 provider 上线，按实测单价把 EXTRACT/OCR 这类轻活切过去；2026 年国产模型价格：DeepSeek-V4-Lite 0.1/0.2 元每百万 token、GLM-4-Flash 免费、V4-Pro 1.0/2.0（缓存命中 0.025） |
 | 4 | **Prompt Caching** | 系统提示词 + 学生画像这类稳定前缀打 cache 标记，输入成本可降 80–90% |
 | 5 | **token 计量与预算** | ✅ **P0-1 + P0-2 均已完成**（`llm_usage` + `/api/stats/usage` + 统计页用量与预算卡片 + `LlmBudgetService` 两级额度熔断，详见 3.8）。**默认不限制**，要熔断必须显式配 `app.llm.budget.*` |
