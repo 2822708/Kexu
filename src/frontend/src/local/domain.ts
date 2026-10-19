@@ -7,6 +7,7 @@ import type {
   Schedule,
 } from '../types'
 import { mutateLocalState, readLocalState } from './db'
+import type { DailyOrigin } from './daily/types'
 import {
   newPublicId,
   nextLocalId,
@@ -130,7 +131,11 @@ function updateTodo(state: LocalState, id: number, body: { title: string; ddl: s
     title: requireText(body.title, '待办标题'),
     ddl: normalizeDateTime(body.ddl),
     updatedAt: stamp(),
+    dailyVersion: (row.dailyVersion ?? 0) + 1,
   })
+  for (const entry of state.dayEntries)
+    if (entry.kind === 'todo' && entry.todoPublicId === row.publicId)
+      entry.titleSnapshot = row.title
   return row
 }
 function removeTodo(state: LocalState, id: number) {
@@ -141,10 +146,55 @@ function removeTodo(state: LocalState, id: number) {
     if (occurrence.todoId === id) occurrence.todoId = null
   return null
 }
-function toggleTodo(state: LocalState, id: number) {
+export function setLocalTodoCompleted(
+  state: LocalState,
+  id: number,
+  completed: boolean,
+  context: {
+    operationId?: string
+    attributedDate?: string
+    source?: 'manual' | 'backfill' | 'system'
+    entryPublicId?: string | null
+    origin?: DailyOrigin | null
+  } = {},
+) {
   const row = find(state.todos, id, '待办')
-  row.completed = !row.completed
+  assertLocal(typeof completed === 'boolean', '完成状态不合法')
+  if (row.completed === completed) return row
+  row.completed = completed
+  row.dailyVersion = (row.dailyVersion ?? 0) + 1
   row.updatedAt = stamp()
+  const attributedDate = context.attributedDate ?? nowLocalDateTime().slice(0, 10)
+  const plannedEntry = state.dayEntries.find(
+    (e) => e.kind === 'todo' && e.todoPublicId === row.publicId && e.plannedDate === attributedDate,
+  )
+  const prior = [...state.dailyEvents]
+    .reverse()
+    .find(
+      (e) =>
+        e.targetKind === 'todo' &&
+        e.targetPublicId === row.publicId &&
+        ['complete', 'undo'].includes(e.kind),
+    )
+  state.dailyEvents.push({
+    publicId: newPublicId(),
+    operationId: context.operationId ?? newPublicId(),
+    kind: completed ? 'complete' : 'undo',
+    targetKind: 'todo',
+    targetPublicId: row.publicId,
+    entryPublicId: context.entryPublicId ?? plannedEntry?.publicId ?? null,
+    attributedDate,
+    recordedAt: stamp(),
+    occurredAt: context.source === 'backfill' ? null : stamp(),
+    source: context.source ?? 'manual',
+    titleSnapshot: row.title,
+    origin: context.origin ?? plannedEntry?.origin ?? null,
+    fromDate: null,
+    toDate: null,
+    previousEventId: prior?.publicId ?? null,
+    targetVersion: row.dailyVersion,
+    priorityAfter: plannedEntry?.isPriority ?? null,
+  })
   if (row.completed && row.recurringId != null && !row.chainGenerated) {
     row.chainGenerated = true
     const rule = state.recurringRules.find((r) => r.id === row.recurringId)
@@ -158,6 +208,10 @@ function toggleTodo(state: LocalState, id: number) {
     }
   }
   return row
+}
+function toggleTodo(state: LocalState, id: number) {
+  const row = find(state.todos, id, '待办')
+  return setLocalTodoCompleted(state, id, !row.completed)
 }
 function syncExamTodo(state: LocalState, exam: LocalExam, create = false) {
   let row = state.todos.find((t) => t.examId === exam.id)
@@ -201,10 +255,11 @@ export function isCourseOccurrence(schedule: Schedule, course: LocalCourse, date
   const week = Math.floor((selected.getTime() - first.getTime()) / 604800000) + 1
   return weekday === course.dayOfWeek && course.weeks.includes(week)
 }
-function setFocus(
+export function setFocusCompletion(
   state: LocalState,
   courseId: number,
   body: { scheduleId: number; date: string; completed: boolean },
+  operationId = newPublicId(),
 ) {
   const schedule = scheduleOf(state, body.scheduleId),
     course = find(state.courses, courseId, '课程')
@@ -216,6 +271,7 @@ function setFocus(
   const current = state.focusCompletions.find(
     (f) => f.courseId === courseId && f.date === body.date,
   )
+  if (!!current?.completed === body.completed) return null
   if (body.completed && !current)
     state.focusCompletions.push({
       publicId: newPublicId(),
@@ -226,6 +282,33 @@ function setFocus(
     })
   if (!body.completed && current)
     state.focusCompletions = state.focusCompletions.filter((f) => f !== current)
+  const prior = [...state.dailyEvents]
+    .reverse()
+    .find(
+      (e) =>
+        e.targetKind === 'course' &&
+        e.targetPublicId === course.publicId &&
+        e.attributedDate === body.date &&
+        ['courseComplete', 'courseUndo'].includes(e.kind),
+    )
+  state.dailyEvents.push({
+    publicId: newPublicId(),
+    operationId,
+    kind: body.completed ? 'courseComplete' : 'courseUndo',
+    targetKind: 'course',
+    targetPublicId: course.publicId,
+    entryPublicId: null,
+    attributedDate: body.date,
+    recordedAt: stamp(),
+    occurredAt: stamp(),
+    source: 'manual',
+    titleSnapshot: course.name,
+    origin: null,
+    fromDate: null,
+    toDate: null,
+    previousEventId: prior?.publicId ?? null,
+    targetVersion: (prior?.targetVersion ?? 0) + 1,
+  })
   return null
 }
 
@@ -341,8 +424,10 @@ export function advanceLocalTime(state: LocalState, now = nowLocalDateTime()): n
   )
   for (const todo of state.todos)
     if (!todo.completed && todo.examId != null && ended.has(todo.examId)) {
-      todo.completed = true
-      todo.updatedAt = stamp()
+      setLocalTodoCompleted(state, todo.id, true, {
+        source: 'system',
+        attributedDate: now.slice(0, 10),
+      })
     }
   return generated
 }
@@ -421,7 +506,7 @@ export const localFocusApi = {
   setCourseCompleted: (
     courseId: number,
     body: { scheduleId: number; date: string; completed: boolean },
-  ) => mutateLocalState((s) => setFocus(s, courseId, body)),
+  ) => mutateLocalState((s) => setFocusCompletion(s, courseId, body)),
 }
 export const localRecurringApi = {
   list: async () => {

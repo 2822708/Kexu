@@ -27,6 +27,7 @@ import {
   ScheduleOutlined,
 } from '@ant-design/icons'
 import RecurringTodoPanel from '../components/RecurringTodoPanel'
+import DailyTaskIndex from '../components/daily/DailyTaskIndex'
 import type { Dayjs } from 'dayjs'
 import { todoApi } from '../api'
 import { useApp } from '../store/AppContext'
@@ -341,6 +342,7 @@ export default function TodosPage() {
         className="daily-todo-tabs"
         items={[
           { key: 'todos', label: '待办事项', children: todoTab },
+          ...(LOCAL_MODE ? [{ key: 'daily', label: '日任务', children: <DailyTaskIndex /> }] : []),
           {
             key: 'recurring',
             label: `循环任务${recurringTodos.length ? ` (${recurringTodos.length})` : ''}`,

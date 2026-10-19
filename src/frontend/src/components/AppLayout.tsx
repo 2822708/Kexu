@@ -198,7 +198,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Link>
         ))}
       </nav>
-      {!location.pathname.startsWith('/ai') && <QuickImportWidget />}
+      {!location.pathname.startsWith('/ai') && !location.pathname.startsWith('/focus') && <QuickImportWidget />}
     </div>
   )
 }

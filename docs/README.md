@@ -7,6 +7,8 @@
 | [design/UI_REDESIGN_PLAN.md](design/UI_REDESIGN_PLAN.md) | 课序浅色蓝绿UI、命名依据、页面架构与实施顺序 |
 | [design/UI_IMPLEMENTATION_2026_10_19.md](design/UI_IMPLEMENTATION_2026_10_19.md) | 新界面落实、实际截图、周表与移动布局复验、preview.2交付 |
 | [design/DAILY_TASKS_PRODUCT_PLAN.md](design/DAILY_TASKS_PRODUCT_PLAN.md) | 今日任务、自选重点、完成正反馈、每日回顾、临时事项与数据迁移策划 |
+| [design/DAILY_TASKS_IMPLEMENTATION.md](design/DAILY_TASKS_IMPLEMENTATION.md) | 日任务正式实现、schema2迁移、回顾/草稿、运行包与验收边界 |
+| [native/README.md](native/README.md) | 最新本地前端封装 APK 与 Windows EXE 的工程、数据迁移、构建和验收边界 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 新目录下的开发命令和 Git 工作流 |
 | [WORKSPACE_SETUP.md](WORKSPACE_SETUP.md) | 项目来源、整理范围、基线及验证 |
 | [desktop/README.md](desktop/README.md) | 桌面版安全、备份恢复和构建说明 |
@@ -51,4 +53,4 @@
 - [桌面版补丁](archive/handoff-2026-09-26/04-桌面版补丁.patch)
 - [安卓离线版方案（设计资料）](archive/handoff-2026-09-26/05-安卓离线单机版方案.md)
 
-历史审查报告的顶部是修复状态更新，正文主要保留修复前描述；两份补丁均已包含在当前源码基线，不要再次应用。归档中的安卓方案是历史设计稿，已由当前项目中的 [Android 实施架构方案](android/ANDROID_IMPLEMENTATION_PLAN.md) 细化取代；Android 首个离线业务切片已有源码，但当前没有经过构建验证的成品。当前项目没有复制 original/fixed 两套目录，版本对比使用 Git 标签。
+历史审查报告的顶部是修复状态更新，正文主要保留修复前描述；两份补丁均已包含在当前源码基线，不要再次应用。归档中的安卓方案是历史设计稿，已由当前项目中的 [Android 实施架构方案](android/ANDROID_IMPLEMENTATION_PLAN.md) 细化取代；Compose首个离线业务切片已有源码且仍暂停，本次APK另见 [原生外壳封装](native/README.md)。当前项目没有复制 original/fixed 两套目录，版本对比使用 Git 标签。

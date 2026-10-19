@@ -1,5 +1,5 @@
-import { createEmptyLocalState, type LocalState } from './types'
-import { validateLocalState } from './validation'
+import { createEmptyLocalState, newPublicId, type LocalState } from './types'
+import { migrateLocalStateV1, validateLocalState } from './validation'
 export { validateLocalState } from './validation'
 
 export const LOCAL_DATABASE_NAME = 'tangent-timetable-local-v1'
@@ -41,7 +41,7 @@ function openDatabase(): Promise<IDBDatabase> {
       reject(new Error('本地数据库不可用，请退出无痕浏览并允许网站保存数据'))
       return
     }
-    const req = indexedDB.open(LOCAL_DATABASE_NAME, 1)
+    const req = indexedDB.open(LOCAL_DATABASE_NAME, 2)
     let abandoned = false
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE_NAME))
@@ -82,7 +82,13 @@ export async function initializeLocalStore(): Promise<LocalState> {
     const get = store.get(STATE_KEY)
     get.onsuccess = () => {
       try {
-        result = get.result ?? createEmptyLocalState()
+        const original = get.result
+        if (original?.schemaVersion === 1) {
+          result = migrateLocalStateV1(original)
+          // Both the exact old value and new state commit together, or neither does.
+          store.put(original, 'migration:v1:recovery')
+          store.put(result, STATE_KEY)
+        } else result = original ?? createEmptyLocalState()
         validateLocalState(result)
         if (get.result == null) store.put(result, STATE_KEY)
       } catch (error) {
@@ -181,7 +187,12 @@ export async function replaceLocalState(
     const datasetId = state.datasetId,
       createdAt = state.createdAt,
       revision = state.revision
-    Object.assign(state, incoming, { datasetId, createdAt, revision })
+    Object.assign(state, incoming, {
+      datasetId,
+      createdAt,
+      revision,
+      dataGeneration: newPublicId(),
+    })
   })
 }
 

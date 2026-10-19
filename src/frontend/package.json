@@ -14,6 +14,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:mobile": "tsc -b && vite build --mode mobile",
+    "build:shell": "tsc -b && vite build --mode shell --outDir dist-shell",
     "typecheck": "tsc --noEmit",
     "test:device-session": "node --test scripts/test-device-session.mjs",
     "test:pwa": "node --test scripts/test-pwa.mjs",
@@ -27,7 +28,9 @@
     "test:local-ai": "node --test scripts/test-local-ai.mjs",
     "mock:ai": "node scripts/mock-openai.mjs",
     "eval:ai": "node scripts/eval-local-ai.mjs",
-    "test:local": "node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs",
+    "test:local": "node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs scripts/test-daily-core.mjs scripts/test-daily-review.mjs",
+    "test:daily": "node --test scripts/test-daily-core.mjs scripts/test-daily-review.mjs",
+    "test:shell": "node --test scripts/test-native-export.mjs",
     "test:timetable-layout": "node --test scripts/test-timetable-layout.mjs"
   },
   "dependencies": {

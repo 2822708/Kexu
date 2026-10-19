@@ -48,7 +48,7 @@ function AppRoutes() {
   if (LOCAL_MODE && (!ready || !authed)) {
     return (
       <div className="app-loading-page">
-        {!ready ? (
+        {!ready || (!authed && !connectionError) ? (
           <Spin tip="正在打开本机数据">
             <div style={{ height: 48 }} />
           </Spin>

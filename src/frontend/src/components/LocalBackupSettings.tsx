@@ -14,6 +14,7 @@ import {
   message,
 } from 'antd'
 import { readLocalState, subscribeLocalChanges } from '../local/db'
+import { saveJsonFile } from '../platform/saveJson'
 import {
   createLogicalSnapshot,
   parseLogicalSnapshot,
@@ -44,16 +45,6 @@ import {
   type RestorePointMetadata,
 } from '../backup/storage'
 
-const downloadJson = (value: unknown, filename: string) => {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }),
-  )
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
-}
 const time = (value: string | null) => (value ? new Date(value).toLocaleString() : '尚无成功备份')
 const countLabels = {
   schedules: '课表',
@@ -64,6 +55,9 @@ const countLabels = {
   recurringRules: '循环规则',
   recurringOccurrences: '循环发生记录',
   focusCompletions: '专注记录',
+  dayEntries: '日任务安排',
+  dailyEvents: '日活动记录',
+  dailyReviews: '每日回顾',
 }
 
 export default function LocalBackupSettings() {
@@ -133,8 +127,8 @@ export default function LocalBackupSettings() {
           description="断网仍可编辑。云端只保存加密快照；下载恢复必须手动确认，不进行多设备自动合并。"
         />
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          核心备份包含课表、课程、考试、待办、节次、循环规则与发生记录、专注完成记录。不包含 AI
-          历史、附件、偏好或任何密钥。
+          核心备份包含课表、课程、考试、待办、节次、循环规则与发生记录、课程参加记录、日任务、日活动和每日回顾（含草稿）。不包含
+          AI 历史、附件、偏好或任何密钥。
         </Typography.Paragraph>
         <Space wrap>
           <Button
@@ -142,8 +136,13 @@ export default function LocalBackupSettings() {
             onClick={() =>
               void execute(async () => {
                 const snapshot = createLogicalSnapshot(await readLocalState())
-                downloadJson(snapshot, `Tangent-core-${new Date().toISOString().slice(0, 10)}.json`)
-                message.success('已生成本地数据文件，请确认文件已保存')
+                if (
+                  await saveJsonFile(
+                    snapshot,
+                    `Tangent-core-${new Date().toISOString().slice(0, 10)}.json`,
+                  )
+                )
+                  message.success('已生成本地数据文件，请确认文件已保存')
               })
             }
           >
@@ -287,8 +286,13 @@ export default function LocalBackupSettings() {
                 disabled={busy}
                 onClick={() =>
                   void execute(async () => {
-                    downloadJson(await exportRecoveryCredential(), 'Tangent-private-recovery.json')
-                    setCredentialExported(true)
+                    if (
+                      await saveJsonFile(
+                        await exportRecoveryCredential(),
+                        'Tangent-private-recovery.json',
+                      )
+                    )
+                      setCredentialExported(true)
                   })
                 }
               >
@@ -459,13 +463,22 @@ export default function LocalBackupSettings() {
         {preview && (
           <Space direction="vertical" style={{ width: '100%' }}>
             <Typography.Text>
-              来源：{time(preview.snapshot.createdAt)} · 修订 {preview.snapshot.source.revision}
+              来源：{time(preview.snapshot.createdAt)} · 修订 {preview.snapshot.source.revision} ·
+              快照 v{preview.snapshot.version}
             </Typography.Text>
             <Typography.Paragraph>
               {Object.entries(preview.counts)
                 .map(([key, count]) => `${countLabels[key as keyof typeof countLabels]} ${count}`)
                 .join('，')}
             </Typography.Paragraph>
+            {preview.snapshot.version === 1 && (
+              <Alert
+                type="warning"
+                showIcon
+                message="这是一份旧版 v1 快照，没有日任务、活动记录或每日回顾。"
+                description="恢复后这些日记录将为空；旧待办的完成状态会保留，但不会补造完成日期或评价。当前日记录会先随全部核心数据保存为本机恢复点。"
+              />
+            )}
             <Alert
               type="warning"
               showIcon

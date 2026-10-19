@@ -15,6 +15,10 @@ application-prod.yml
 
 node_modules/
 dist/
+src/frontend/dist-shell/
+src/android-shell/local.properties
+src/android-shell/signing.properties
+src/android-shell/app/src/main/assets/
 .env
 .env.local
 npm-debug.log*
