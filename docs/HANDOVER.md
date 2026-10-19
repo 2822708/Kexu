@@ -4,7 +4,7 @@
 >
 > **已同步到项目网盘**（tdrive 根目录，2026-10-16）：`Timetable-HANDOVER-交接主文件.md`（本文件）、`Timetable-交接总览-20261015.md`（自包含精简版，可整份粘给新 Agent）、`下一步方向调研报告.md`（**下一步方向决策依据，接手必读**）、`REA-逆向验证报告.md`、`ai-campus-agent-源码快照-ec2ec62.zip`（**免 git 的源码通道**）、`ai-campus-agent-git-bundle.bundle`（免凭证的 git 通道），操作细节见 `/workspace/Git同步操作指引.md`。
 >
-> 最近更新：2026-10-19 ｜ 更新者：WorkBuddy ｜ 对应提交：`965ebd4`（计划采纳率埋点 + 产品健康端点 + 凭据泄露修复）
+> 最近更新：2026-10-19 ｜ 更新者：WorkBuddy ｜ 对应提交：`c59c2db`（Prompt Caching：稳定前缀拆分 + 命中计量 + 命中价计费）
 >
 > ⚠️ **下一步做什么，请直接读 `/workspace/下一步方向调研报告.md` 第 8 节。**本文件第 6 节已按其结论重排待办。
 > 🆕 **跨环境同步现已有正式通道**：主分支 `main`，远端为 GitHub **私有仓库 `2552555/timetable-ai`**（2026-10-16 推送，CI 全绿）。有 GitHub 凭证的机器直接 `git clone`；无凭证的机器用网盘 zip 快照（已验证解压即 134/134）。两种方式都有效，网盘通道继续保留。
@@ -60,9 +60,9 @@ npm run build
 |---|---|
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效）；**信息处理中心 `/info` 落地**（信息收纳盒 + AI 查询中心 + 最近解析预览，两处边界适配见 3.9） |
-| 后端测试 | **253/253 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、provider 配置 `LlmProviderSettingsTest` 9 个、provider 端点 `LlmProviderEndpointTest` 6 个、本地设置加密 `LocalSettingsEncryptionTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个、**产品健康 `ProductHealthEndpointTest` 9 个 + 采纳判定 `DailyPlanAdoptionServiceTest` 5 个 + 凭据泄露 `CredentialLeakTest` 5 个**） |
+| 后端测试 | **281/281 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、provider 配置 `LlmProviderSettingsTest` 9 个、provider 端点 `LlmProviderEndpointTest` 6 个、本地设置加密 `LocalSettingsEncryptionTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个、产品健康 `ProductHealthEndpointTest` 9 个 + 采纳判定 `DailyPlanAdoptionServiceTest` 5 个 + 凭据泄露 `CredentialLeakTest` 5 个、**前缀缓存 `AiPromptCachingTest` 6 个 + 缓存字段解析 `LlmCacheUsageParsingTest` 8 个 + 命中计价 `CachePricingStatsTest` 14 个**） |
 | 前端 | typecheck 通过；lint **0 错误 / 9 警告**（9 个全在存量文件：AiChatPage 3、TodosPage 1、5 个 Context/theme 各 1，属基线，不得新增）；build 通过 |
-| 工作区 | 见 `git status`。**当前分支 `feature/duolingo-style-ui`，与 `main` 已对齐到 `965ebd4`**，四个远端 ref（`origin:main` / `origin:feature/duolingo-style-ui` / `friend:feature/ai-campus-agent-v1` / `friend:feature/duolingo-style-ui`）同步推送。**⚠️ 双远端待用户决策**：`origin`（2552555/timetable-ai）与 `friend`（2822708/Timetable）两边都在推，属双份维护，见 6.5 |
+| 工作区 | 见 `git status`。**当前分支 `feature/duolingo-style-ui`，与 `main` 已对齐到 `c59c2db`**，四个远端 ref（`origin:main` / `origin:feature/duolingo-style-ui` / `friend:feature/ai-campus-agent-v1` / `friend:feature/duolingo-style-ui`）同步推送。**⚠️ 双远端待用户决策**：`origin`（2552555/timetable-ai）与 `friend`（2822708/Timetable）两边都在推，属双份维护，见 6.5 |
 | 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》两轮均已完成**。**2026-10-18 用真实 DeepSeek Key 完成了首次端到端验收**，并修复了一个只有真实调用才能暴露的 P0（流式对话工作线程丢失调用方身份，详见第 5 节当日条目）。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **网盘同步产物** | 根目录 `MTOwZfixfiEX`。`ai-campus-agent-git-bundle.bundle`（949,805 B，md5 `7b509d010dd527aaa6905c6186d91f2c`）+ `ai-campus-agent-源码快照-<HEAD>.zip`（md5 见《Git同步操作指引》§7）+ 三份文档，均已刷新到当前 HEAD 并经 **ETag == 本地 md5** 验证。上传/下载通道的坑见 3.7 与第 5 节当日收尾条目 |
@@ -79,7 +79,7 @@ npm run build
 | 缺口 | 状态 |
 |---|---|
 | ① 无 LLM 调用计量/预算 | ✅ **已全部解决**：P0-1 计量与看板（V5 迁移 + `llm_usage` + `/api/stats/*` + 统计页）；**P0-2 月度预算与超限熔断**（两级额度 + 装饰器拦截 + 统计页预算卡片）。**默认不限制**，需显式配置额度。**2026-10-18 真实 Key 端到端验收**又抓出并修掉两个静默缺陷：CHAT/REFINE 场景不计量、流式对话丢身份（见第 5 节当日条目） |
-| ② `LlmClientRegistry` 仅注册 DeepSeek 一家（单点 + 无法分级路由） | 未解决（6.1 第 2/3 项） |
+| ② `LlmClientRegistry` 仅注册 DeepSeek 一家（单点 + 无法分级路由） | ✅ **已解决**（6.1 #2/#3）：多 provider 注册 + `app.llm.routes.<SCENE>` 分级路由 + 设置页可视配置 + 连通性测试 + 故障降级（见 3.11） |
 | ③ 无用户行为埋点 | ✅ **三类都有了**（P0-1：`ai_event` + `ai_action.decided_at`）；**计划采纳率 + 7 日留存**（`/api/stats/health`，见 3.12）。**顺带发现并修掉四处凭据泄露**：`DailyPlan`/`Memory`/`StudentProfile`/`Task` 四个实体的 `apiKey` 漏了 `@JsonIgnore` |
 | ④ 无模型输出评估集 | 未解决 |
 
@@ -265,6 +265,30 @@ npm run build
 - 这类泄露**不改功能、页面也看不出来**，只有开 DevTools 或把接口响应贴给别人时才暴露，因此极易悄悄回归。`CredentialLeakTest` 用五个用例直接断言响应体里不含 `apiKey` 字面量与 Key 值。
 - **新增任何带 `apiKey` 字段的实体，先自查有没有 `@JsonIgnore`。**
 
+### 3.14 Prompt Caching 的四条硬约束（成本治理 6.1 #4，2026-10-19）
+
+- **前缀缓存是「从第一个 token 起逐字节比对」，一处不同就整段不命中**。原实现把「今天是 X 月 X 日」夹在 system 中间，用户第二天再聊，前缀在日期那行就断了，后面几千 token 的协议说明全部重新计费。现在拆成两条 system 消息：稳定前缀（人格 + JSON 协议 + 原则）+ 动态上下文（日期/课表/档案/任务/记忆）。`AiPromptCachingTest` 用「换日期 / 换全部业务数据，前缀必须逐字节相同」守住这条线——**这个测试失败意味着缓存已静默失效，不是「格式化变了」**。
+- **不是所有 prompt 都值得拆**。记忆提炼、抽取这类本来就没有稳定大前缀的，保持单条。只有聊天主链路的 system 有几千字的固定协议段。
+- **`null` 与 `0` 必须分开**：`cache_hit_tokens` 为 null = 上游没报这个字段（该 provider 不支持缓存），0 = 报了但没命中。合成 0 会让不支持的 provider 被算进命中率分母，看板显示 0%，看着像缓存配错了。
+- **两家字段名不一样，必须都认**：DeepSeek 用 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`，OpenAI 用 `prompt_tokens_details.cached_tokens`（只给命中数，miss 要反推）。只认一家等于让另一家的缓存白做，且不报错。
+
+### 3.15 定价配置的三个坑（2026-10-19 端到端才发现，全部静默）
+
+这三个都**不报错、不改功能**，只让看板上的钱算错。踩坑顺序就是排查顺序：
+
+1. **`PerMillion` 的字段默认值必须是 `null`，不能是 `0.0`**。`0.0` 会让「这一项没配，应该继承全局」的判断永远不成立。修法是默认 null，`getInput()` 内部兜底成 0（计价不 NPE），另留 `rawInput()` 给合并逻辑判断「有没有配」。
+2. **`forModel()` 要字段级合并，不能整对象替换**。原来只要 `models` 里存在同名项就直接返回它，于是全局 `per-million` 下新加的字段（比如 `cached-input`）静默全部失效。
+3. **`models` 下不要写带默认值的占位符**。`input: ${LLM_PRICE_INPUT_DEEPSEEK_FLASH:0.5}` 里的 `0.5` 等于「显式配了 0.5」，会挡住对全局值的继承。实测：全局 `LLM_PRICE_INPUT=10`，成本却按 0.5 算，显示成实际值的 1/20。改成 `${...:}` 空默认后整条模型条目被省略，才正确回退到全局。
+
+> 排查手法记一下：**用两次调用反解单价**。由 `estimatedCost` 和 `cacheSavedCny` 联立能解出实际生效的 input/cached/output，一眼看出是「配置没读到」还是「读到但没用上」。光看接口返回的数字判断不了。
+
+### 3.16 批量重命名缓冲区时，函数调用参数会被漏掉（2026-10-19 真实事故）
+
+把 `sb.` 批量替换成 `ctx.` 时，`appendContextRecord(sb, record, sectionStart)` 这种**把缓冲区当参数传进去**的调用不会匹配到 `sb.` 前缀，漏了 6 处。后果是：`sectionStart` 记的是 `ctx` 的偏移，记录却写进了 `sb`，长度检查立刻越界 → **任务与记忆完全不进上下文**，模型看不到任何待办。
+
+- 教训：批量替换后必须 `grep` 一遍旧名字的**不带点形式**（`grep "sb,"`、`grep "(sb"`），不能只 `grep "sb\."`。
+- 这次是全量测试抓出来的（两个既有测试断言「任务/记忆出现在 prompt 里」）。**改 prompt 装配这类「输出是一大段字符串」的代码，一定要有内容断言，不能只测不抛异常。**
+
 ## 4. 关键文件地图
 
 **后端**
@@ -325,6 +349,36 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-19 · WorkBuddy · Prompt Caching 落地（成本治理 6.1 #4），281/281 绿
+
+**动机**：「打 cache 标记、输入成本降 80–90%」这个待办说法有误导性。查了 DeepSeek 官方文档：**上下文硬盘缓存是默认自动开启的，不需要任何代码改动**。真正的问题在前端——原实现把「今天是 X 月 X 日」夹在 system 消息中间，用户第二天再聊，前缀在日期那行就断了，后面几千 token 的协议说明全部重新计费，**缓存等于没开，而且没有任何报错**。所以本轮做的是两件事：**让前缀真的稳定** + **让命中可见可计价**。
+
+**做了什么**
+
+| 改动 | 说明 |
+|---|---|
+| `AiPromptBuilder` | 拆出 `stablePrefix` / `dynamicContext`，`chatSystemMessages()` 返回**两条** system 消息 |
+| `AbstractOpenAiLlmClient.readCacheFields()` | 认两家字段：DeepSeek `prompt_cache_hit_tokens/miss_tokens`、OpenAI `prompt_tokens_details.cached_tokens` |
+| V7 双 vendor 迁移 | `llm_usage` 补 `cache_hit_tokens` / `cache_miss_tokens`，**必须可空**（0 与 null 是两件事，见 3.14） |
+| `UsageStatsServiceImpl.rowCost()` | 有缓存数据时按命中价分段计价；统计页出命中率与节省金额 |
+| 测试 3 份 28 个 | `AiPromptCachingTest`(6) + `LlmCacheUsageParsingTest`(8) + `CachePricingStatsTest`(14) |
+
+约束见 3.14。**记忆提炼/抽取刻意不拆**——它们本来就没有稳定大前缀，拆了只会多一条消息。
+
+**三个静默 bug（都不报错、只看板算错钱，详见 3.15）**
+
+1. `PerMillion.input/output` 默认 `0.0` 而非 `null` →「没配就继承全局」的判断永远不成立
+2. `forModel()` 整对象替换 → 全局新加的 `cached-input` 字段静默失效
+3. yml 里 `models.deepseek-flash.input: ${LLM_PRICE_INPUT_DEEPSEEK_FLASH:0.5}` 的默认值等于显式配了 0.5 → 全局价 10 元被丢，成本显示成 1/20
+
+定位手法：**用两次调用反解单价**——由 `estimatedCost` 与 `cacheSavedCny` 联立解出实际生效的 input/cached/output，一眼判断是「配置没读到」还是「读到但没用上」。
+
+**一次真实事故（详见 3.16）**：批量 `sed` 把 `sb.` 换成 `ctx.` 时漏掉 6 处 `appendContextRecord(sb, record, sectionStart)`——把缓冲区当**参数**传的调用不匹配 `sb.` 前缀。后果是任务与记忆完全不进上下文。教训：批量替换后要 grep 旧名字的**不带点形式**。
+
+**验证**：281/281 绿；变异验证 5 次全被抓住（日期混回前缀、null 当 0、缓存价失效 ×3、`forModel` 回退、默认值回退）；真实端到端 PASS（假上游按真实字段名返回，`cost=0.0256` / `saved=0.0576` / `rate=0.8`，均与手算一致）；前端 typecheck + lint 基线不变。
+
+---
 
 ### 2026-10-19 · WorkBuddy · 计划采纳率埋点 + 产品健康端点（6.1 #1 收尾），253/253 绿
 
@@ -938,9 +992,11 @@ Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings`
 | 1 | **补用户行为埋点** | ✅ **已完成**。三块齐了：(a) 提案确认/拒绝（P0-1：`ai_event` + `decided_at` + `/api/stats/proposals`）；(b) **计划采纳率**（`DailyPlanAdoptionService` 读时对账，判定口径是「计划引用的任务当天真被推进」而非用户点赞，见 3.12）；(c) **7 日留存**（`APP_ACTIVE` 事件，`DailyActiveRecorder` 按天去重）。统一出口 `GET /api/stats/health`，返回 `generatedCount / adoptedCount / pendingCount / adoptionRate / retention7d`。**不需要给 `daily_plan` 补决定时刻字段**——`task.updated_at` 就是决定时刻 |
 | 2 | **多 LLM provider 注册** | ✅ **已完成**。后端 `OpenAiCompatibleLlmClient` + `app.llm.providers.<id>`（抽象层抽为 `AbstractOpenAiLlmClient`）；**界面配置也已完成**——设置页「AI 服务提供方」卡片可增删改，支持智谱/通义/豆包/Kimi 预设，Key 加密落盘，保存后**热生效不需重启**（见 3.11） |
 | 3 | **按任务分级路由** | ✅ **已完成**（`app.llm.routes.<SCENE>=<providerId>`，7 处调用点改 `forScene(SCENE_*)`）。**下一步**：等真有第二个 provider 上线，按实测单价把 EXTRACT/OCR 这类轻活切过去；2026 年国产模型价格：DeepSeek-V4-Lite 0.1/0.2 元每百万 token、GLM-4-Flash 免费、V4-Pro 1.0/2.0（缓存命中 0.025） |
-| 4 | **Prompt Caching** | 系统提示词 + 学生画像这类稳定前缀打 cache 标记，输入成本可降 80–90% |
+| 4 | **Prompt Caching** | ✅ **已完成**。chat system 拆为「稳定前缀（人格+协议）+ 动态上下文」两条消息，前缀逐字节稳定；`llm_usage` 补 `cache_hit_tokens/cache_miss_tokens`（V7）；兼容 DeepSeek 与 OpenAI 两种字段名；按命中价计费并在统计页展示命中率与节省金额。约束见 3.14，定价配置的三个坑见 3.15。**注意 DeepSeek 缓存是自动开启的、无需 code 改动**——这里做的是「让前缀真的稳定 + 能看见命中了多少」 |
 | 5 | **token 计量与预算** | ✅ **P0-1 + P0-2 均已完成**（`llm_usage` + `/api/stats/usage` + 统计页用量与预算卡片 + `LlmBudgetService` 两级额度熔断，详见 3.8）。**默认不限制**，要熔断必须显式配 `app.llm.budget.*` |
 | 6 | **降级与重试** | ✅ **已完成**。两半都齐了：(a) provider 故障切备用（`FallbackLlmClient` + `app.llm.fallback`，流式吐过正文不切换、499 不重试）；(b) **计划生成失败重试退避**（`app.llm.plan-retry.*`，只重试 502/503/504，指数退避 + 抖动，`enabled=false` 可回滚）+ **同账号同日并发去重**（见 3.3） |
+
+**6.1 六项已全部收口**（2026-10-19）。下一阶段是 6.2 记忆系统升级，入口项是 **#7 建模型输出评估集**——它独立、无依赖，且是后面 #8/#9 盲改的前置条件。**注意 6.2 会显著增加每次注入的上下文，先把 #4 的缓存与计价用起来再动记忆**，否则成本先涨。
 
 ### 6.2 第二阶段：记忆系统升级（调研报告 §5 方向 A，约 2–3 周）
 
