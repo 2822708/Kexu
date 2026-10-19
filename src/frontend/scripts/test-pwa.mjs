@@ -320,6 +320,12 @@ test('mobile build plugin precaches lazy routes, transitive parser workers, publ
   assert.ok(paths.every((p) => !p.endsWith('.map') && !p.includes('/api/')))
   assert.match(JSON.parse(generated.get('manifest.webmanifest')).description, /本机保存/)
   assert.match(JSON.parse(generated.get('manifest.webmanifest')).description, /快照/)
+  // Display branding can change; the installed app must keep its existing identity and scope.
+  const manifest = JSON.parse(generated.get('manifest.webmanifest'))
+  assert.equal(manifest.id, '/timetable/')
+  assert.equal(manifest.start_url, '/timetable/')
+  assert.equal(manifest.scope, '/timetable/')
+  for (const icon of manifest.icons) assert.ok(icon.src.startsWith('/timetable/pwa/'))
 })
 
 test('online navigation responses are never put into cache', async () => {

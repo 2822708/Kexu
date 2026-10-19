@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Empty, Radio, Segmented, Space, Typography, message } from 'antd'
+import { Button, Card, Dropdown, Empty, Segmented, Space, Typography, message } from 'antd'
 import {
   ImportOutlined,
   LeftOutlined,
+  MoreOutlined,
   PlusOutlined,
   RightOutlined,
   SettingOutlined,
@@ -31,6 +32,7 @@ import {
   type LocalEditorScope,
 } from '../local/editorScope'
 import '../day-agenda.css'
+import '../daily-pages.css'
 
 export default function TimetablePage() {
   const {
@@ -363,26 +365,54 @@ export default function TimetablePage() {
   }
 
   return (
-    <div className="tt-page">
-      <div className="page-header">
-        <Space size={12} wrap>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+    <div className="tt-page daily-timetable-page">
+      <div className="page-header daily-page-header timetable-page-header">
+        <div className="daily-page-heading">
+          <Typography.Title level={2} style={{ margin: 0 }}>
             {activeSchedule?.name ?? '课表'}
           </Typography.Title>
-          <Segmented
-            value={viewMode}
-            onChange={(v) => setViewMode(v as 'day' | 'week' | 'all')}
-            options={[
-              { value: 'day', label: '按日' },
-              { value: 'week', label: '按周' },
-              { value: 'all', label: '全部课程' },
-            ]}
-          />
+          <Typography.Text type="secondary">
+            {activeSchedule
+              ? `${activeSchedule.periodStartDate} — ${activeSchedule.periodEndDate} · 共 ${total} 周`
+              : '选择一个学期，查看课程与考试安排'}
+          </Typography.Text>
+        </div>
+        <Space className="daily-page-actions">
+          <Button icon={<PlusOutlined />} type="primary" onClick={() => openCreate()}>
+            添加课程
+          </Button>
+          <Dropdown
+            trigger={['click']}
+            menu={{
+              items: [
+                { key: 'exams', label: '考试管理', icon: <TrophyOutlined />, onClick: openExamManager },
+                { key: 'import', label: '导入课表', icon: <ImportOutlined />, onClick: openImport },
+                { type: 'divider' },
+                { key: 'schedules', label: '课表管理', icon: <SettingOutlined />, onClick: () => setScheduleModalOpen(true) },
+              ],
+            }}
+          >
+            <Button icon={<MoreOutlined />} aria-label="更多课表操作">更多</Button>
+          </Dropdown>
+        </Space>
+      </div>
+
+      <div className="timetable-view-toolbar">
+        <Segmented
+          aria-label="课表显示方式"
+          value={viewMode}
+          onChange={(v) => setViewMode(v as 'day' | 'week' | 'all')}
+          options={[
+            { value: 'day', label: '按日' },
+            { value: 'week', label: '按周' },
+            { value: 'all', label: '全部课程' },
+          ]}
+        />
           {viewMode === 'week' && (
-            <Space size={4}>
+            <Space className="timetable-week-picker" size={4}>
               <Button
-                size="small"
                 icon={<LeftOutlined />}
+                aria-label="上一教学周"
                 disabled={week <= 1}
                 onClick={() => setWeek((w) => Math.max(1, w - 1))}
               />
@@ -390,36 +420,14 @@ export default function TimetablePage() {
                 第 {week} 周 / 共 {total} 周
               </Typography.Text>
               <Button
-                size="small"
                 icon={<RightOutlined />}
+                aria-label="下一教学周"
                 disabled={week >= total}
                 onClick={() => setWeek((w) => Math.min(total, w + 1))}
               />
-              <Radio.Group
-                size="small"
-                value={week === realCurrentWeek ? 'now' : ''}
-                onChange={() => setWeek(realCurrentWeek)}
-              >
-                <Radio.Button value="now">本周</Radio.Button>
-              </Radio.Group>
+              <Button disabled={week === realCurrentWeek} onClick={() => setWeek(realCurrentWeek)}>本周</Button>
             </Space>
           )}
-        </Space>
-
-        <Space wrap>
-          <Button icon={<PlusOutlined />} type="primary" onClick={() => openCreate()}>
-            添加课程
-          </Button>
-          <Button icon={<TrophyOutlined />} onClick={openExamManager}>
-            考试管理
-          </Button>
-          <Button icon={<ImportOutlined />} onClick={openImport}>
-            导入课表
-          </Button>
-          <Button icon={<SettingOutlined />} onClick={() => setScheduleModalOpen(true)}>
-            课表管理
-          </Button>
-        </Space>
       </div>
 
       {viewMode === 'day' && activeSchedule ? (

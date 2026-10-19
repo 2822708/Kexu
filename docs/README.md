@@ -4,7 +4,8 @@
 
 | 文件 | 用途 |
 |---|---|
-| [design/UI_REDESIGN_PLAN.md](design/UI_REDESIGN_PLAN.md) | 浅色蓝绿UI、候选名“课序”、页面架构与实施顺序；本轮仅修复周课表遮挡 |
+| [design/UI_REDESIGN_PLAN.md](design/UI_REDESIGN_PLAN.md) | 课序浅色蓝绿UI、命名依据、页面架构与实施顺序 |
+| [design/UI_IMPLEMENTATION_2026_10_19.md](design/UI_IMPLEMENTATION_2026_10_19.md) | 新界面落实、实际截图、周表与移动布局复验、preview.2交付 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 新目录下的开发命令和 Git 工作流 |
 | [WORKSPACE_SETUP.md](WORKSPACE_SETUP.md) | 项目来源、整理范围、基线及验证 |
 | [desktop/README.md](desktop/README.md) | 桌面版安全、备份恢复和构建说明 |

@@ -11,6 +11,7 @@ import {
   Slider,
   Space,
   Table,
+  Tabs,
   TimePicker,
   Typography,
   message,
@@ -25,6 +26,8 @@ import { useFont } from '../store/FontContext'
 import type { AiConfig, PeriodCategory, PeriodConfig } from '../types'
 import { dayjs } from '../utils/schedule'
 import BackupSettings from '../components/BackupSettings'
+import { Link } from 'react-router-dom'
+import '../settings-ai.css'
 
 const TIME_FORMAT = 'HH:mm'
 
@@ -237,184 +240,269 @@ export default function SettingsPage() {
     },
   ]
 
-  return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {!LOCAL_MODE && (
-        <Card
-          title="桌面小组件网页地址"
-          extra={
-            <Button type="primary" icon={<CopyOutlined />} onClick={copyWidgetApi}>
-              一键复制
-            </Button>
-          }
-        >
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <Alert
-              type="info"
-              showIcon
-              message="复制下面的网页地址，填入支持加载网页（WebView）的桌面小组件 App（iPad / Android），即可在小尺寸小组件中直接展示本课表的课程与待办。若使用全屏应用，直接打开本站首页即可（已适配窄屏）。"
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <Typography.Text strong>选择课表</Typography.Text>
-              <Select
-                style={{ minWidth: 220, flex: 1 }}
-                placeholder="选择课表"
-                value={activeScheduleId ?? undefined}
-                onChange={(id) => setActiveScheduleId(id)}
-                options={schedules.map((s) => ({ label: s.name, value: s.id }))}
-              />
-              {activeSchedule && (
-                <Typography.Text type="secondary">当前：{activeSchedule.name}</Typography.Text>
-              )}
-            </div>
-            <Input readOnly value={widgetPageUrl} onFocus={(e) => e.currentTarget.select()} />
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              该地址包含你的 API Key，仅供自己使用，请勿公开。
-            </Typography.Text>
-          </Space>
-        </Card>
-      )}
-
-      {LOCAL_MODE ? (
-        <AiConnectionSettings />
-      ) : (
-        <Card title="AI 助手（DeepSeek）">
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <Alert
-              type={aiConfig?.configured ? 'success' : 'warning'}
-              showIcon
-              message={
-                aiConfig?.configured
-                  ? `AI 功能已启用（来源：${
-                      aiConfig.source === 'local' ? '本机设置' : '环境变量 / 配置文件'
-                    }${aiConfig.keyMasked ? `，Key：${aiConfig.keyMasked}` : ''}）`
-                  : aiConfig?.canEdit
-                    ? 'AI 功能未启用：填入 DeepSeek API Key 后即可使用自然语言增删改与 HTML 课表导入'
-                    : 'AI 功能尚未配置，请由管理员完成服务设置'
-              }
-            />
-            {aiConfig?.canEdit && (
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <Input.Password
-                  style={{ minWidth: 280, flex: 1 }}
-                  placeholder="sk-..."
-                  value={aiKeyInput}
-                  onChange={(e) => setAiKeyInput(e.target.value)}
-                  onPressEnter={saveAiKey}
-                />
-                <Button type="primary" loading={savingKey} onClick={saveAiKey}>
-                  保存
-                </Button>
-                <Button
-                  danger
-                  loading={savingKey}
-                  disabled={!aiConfig?.configured || aiConfig.source !== 'local'}
-                  onClick={clearAiKey}
-                >
-                  清除本机 Key
-                </Button>
-              </div>
-            )}
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {aiConfig?.canEdit
-                ? '桌面版将 Key 加密保存在本机配置中，并在请求 AI 服务时发送给所配置的服务提供方。请勿分享数据目录中的凭据文件。'
-                : '此部署的 AI 服务配置由管理员管理；Web 部署通过服务器环境变量设置服务密钥。'}
-            </Typography.Text>
-          </Space>
-        </Card>
-      )}
-
-      {LOCAL_MODE ? <LocalBackupSettings /> : isAdmin && <BackupSettings />}
-
-      <Card
-        title="字体大小"
-        extra={
-          <Button
-            size="small"
-            onClick={() => {
-              setGlobalScale(1)
-              setTtScale(1)
-            }}
-          >
-            重置
-          </Button>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Typography.Text strong>全局其它字体</Typography.Text>
-              <Typography.Text type="secondary">{globalScale.toFixed(2)}×</Typography.Text>
-            </div>
-            <Slider
-              min={0.8}
-              max={1.4}
-              step={0.05}
-              value={globalScale}
-              onChange={setGlobalScale}
-              marks={{ 0.8: '小', 1: '默认', 1.4: '大' }}
-            />
-          </div>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Typography.Text strong>课程表字体</Typography.Text>
-              <Typography.Text type="secondary">{ttScale.toFixed(2)}×</Typography.Text>
-            </div>
-            <Slider
-              min={0.8}
-              max={1.4}
-              step={0.05}
-              value={ttScale}
-              onChange={setTtScale}
-              marks={{ 0.8: '小', 1: '默认', 1.4: '大' }}
-            />
-          </div>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            设置保存在当前设备（localStorage），不随账号同步。
-          </Typography.Text>
-        </div>
-      </Card>
-
-      <Card
-        title="作息时间表"
-        extra={
-          <Space>
-            {dirty && <Typography.Text type="warning">有未保存的修改</Typography.Text>}
-            {canEdit && (
-              <Button type="primary" loading={saving} disabled={!dirty} onClick={save}>
-                保存
-              </Button>
-            )}
-          </Space>
-        }
-      >
-        {canEdit ? (
-          <Alert
-            type="info"
-            showIcon
-            message={
-              LOCAL_MODE
-                ? '作息时间保存在本机，当前设备的课表与 AI 上下文会使用这些时间。'
-                : '作息时间表为全局配置，修改后课表视图与 AI 解析都会按新时间计算。'
-            }
-            style={{ marginBottom: 16 }}
-          />
-        ) : (
-          <Alert
-            type="error"
-            showIcon
-            message="这是南京邮电大学标准作息时间表，仅供阅读，不可编辑！"
-            style={{ marginBottom: 16 }}
-          />
-        )}
-        <Table
-          size="small"
-          rowKey="periodNumber"
-          columns={columns}
-          dataSource={rows}
-          pagination={false}
+  const widgetSection = !LOCAL_MODE && (
+    <Card
+      title="桌面小组件网页地址"
+      extra={
+        <Button type="primary" icon={<CopyOutlined />} onClick={copyWidgetApi}>
+          一键复制
+        </Button>
+      }
+    >
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Alert
+          type="info"
+          showIcon
+          message="复制下面的网页地址，填入支持加载网页（WebView）的桌面小组件 App（iPad / Android），即可在小尺寸小组件中直接展示本课表的课程与待办。若使用全屏应用，直接打开本站首页即可（已适配窄屏）。"
         />
-      </Card>
-    </Space>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Typography.Text strong>选择课表</Typography.Text>
+          <Select
+            style={{ minWidth: 220, flex: 1 }}
+            placeholder="选择课表"
+            value={activeScheduleId ?? undefined}
+            onChange={(id) => setActiveScheduleId(id)}
+            options={schedules.map((s) => ({ label: s.name, value: s.id }))}
+          />
+          {activeSchedule && (
+            <Typography.Text type="secondary">当前：{activeSchedule.name}</Typography.Text>
+          )}
+        </div>
+        <Input readOnly value={widgetPageUrl} onFocus={(e) => e.currentTarget.select()} />
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          该地址包含你的 API Key，仅供自己使用，请勿公开。
+        </Typography.Text>
+      </Space>
+    </Card>
+  )
+
+  const aiSection = LOCAL_MODE ? (
+    <AiConnectionSettings />
+  ) : (
+    <Card title="AI 助手（DeepSeek）">
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Alert
+          type={aiConfig?.configured ? 'success' : 'warning'}
+          showIcon
+          message={
+            aiConfig?.configured
+              ? `AI 功能已启用（来源：${
+                  aiConfig.source === 'local' ? '本机设置' : '环境变量 / 配置文件'
+                }${aiConfig.keyMasked ? `，Key：${aiConfig.keyMasked}` : ''}）`
+              : aiConfig?.canEdit
+                ? 'AI 功能未启用：填入 DeepSeek API Key 后即可使用自然语言增删改与 HTML 课表导入'
+                : 'AI 功能尚未配置，请由管理员完成服务设置'
+          }
+        />
+        {aiConfig?.canEdit && (
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <Input.Password
+              style={{ minWidth: 280, flex: 1 }}
+              placeholder="sk-..."
+              value={aiKeyInput}
+              onChange={(e) => setAiKeyInput(e.target.value)}
+              onPressEnter={saveAiKey}
+            />
+            <Button type="primary" loading={savingKey} onClick={saveAiKey}>
+              保存
+            </Button>
+            <Button
+              danger
+              loading={savingKey}
+              disabled={!aiConfig?.configured || aiConfig.source !== 'local'}
+              onClick={clearAiKey}
+            >
+              清除本机 Key
+            </Button>
+          </div>
+        )}
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {aiConfig?.canEdit
+            ? '桌面版将 Key 加密保存在本机配置中，并在请求 AI 服务时发送给所配置的服务提供方。请勿分享数据目录中的凭据文件。'
+            : '此部署的 AI 服务配置由管理员管理；Web 部署通过服务器环境变量设置服务密钥。'}
+        </Typography.Text>
+      </Space>
+    </Card>
+  )
+
+  const backupSection = LOCAL_MODE ? <LocalBackupSettings /> : isAdmin && <BackupSettings />
+
+  const appearanceSection = (
+    <Card
+      title="字体大小"
+      extra={
+        <Button
+          size="small"
+          onClick={() => {
+            setGlobalScale(1)
+            setTtScale(1)
+          }}
+        >
+          重置
+        </Button>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Typography.Text strong>界面文字</Typography.Text>
+            <Typography.Text type="secondary">{globalScale.toFixed(2)}×</Typography.Text>
+          </div>
+          <Slider
+            min={0.8}
+            max={1.4}
+            step={0.05}
+            value={globalScale}
+            onChange={setGlobalScale}
+            marks={{ 0.8: '小', 1: '默认', 1.4: '大' }}
+          />
+        </div>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Typography.Text strong>课表文字</Typography.Text>
+            <Typography.Text type="secondary">{ttScale.toFixed(2)}×</Typography.Text>
+          </div>
+          <Slider
+            min={0.8}
+            max={1.4}
+            step={0.05}
+            value={ttScale}
+            onChange={setTtScale}
+            marks={{ 0.8: '小', 1: '默认', 1.4: '大' }}
+          />
+        </div>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          字号偏好只保存在当前设备。
+        </Typography.Text>
+      </div>
+    </Card>
+  )
+
+  const periodSection = (
+    <Card
+      title="作息时间表"
+      extra={
+        <Space>
+          {dirty && <Typography.Text type="warning">有未保存的修改</Typography.Text>}
+          {canEdit && (
+            <Button type="primary" loading={saving} disabled={!dirty} onClick={save}>
+              保存
+            </Button>
+          )}
+        </Space>
+      }
+    >
+      {canEdit ? (
+        <Alert
+          type="info"
+          showIcon
+          message={
+            LOCAL_MODE
+              ? '作息时间保存在本机，当前设备的课表与 AI 上下文会使用这些时间。'
+              : '作息时间表为全局配置，修改后课表视图与 AI 解析都会按新时间计算。'
+          }
+          style={{ marginBottom: 16 }}
+        />
+      ) : (
+        <Alert
+          type="error"
+          showIcon
+          message="这是南京邮电大学标准作息时间表，仅供阅读，不可编辑！"
+          style={{ marginBottom: 16 }}
+        />
+      )}
+      <Table
+        size="small"
+        rowKey="periodNumber"
+        columns={columns}
+        dataSource={rows}
+        pagination={false}
+        scroll={{ x: 360 }}
+      />
+    </Card>
+  )
+  return (
+    <div className="settings-page">
+      <header className="settings-page-heading">
+        <div>
+          <Typography.Title level={2}>我的</Typography.Title>
+          <Typography.Paragraph type="secondary">
+            {LOCAL_MODE
+              ? '管理这台设备的数据、学习安排与使用偏好。'
+              : '管理数据备份、作息与使用偏好。'}
+          </Typography.Paragraph>
+        </div>
+        <span className="settings-mode-label">{LOCAL_MODE ? '本机数据' : '服务连接'}</span>
+      </header>
+      <Tabs
+        className="settings-tabs"
+        defaultActiveKey={window.location.hash === '#ai' ? 'ai' : 'data'}
+        items={[
+          {
+            key: 'data',
+            label: '数据与快照',
+            children: (
+              <section aria-label="数据与快照" className="settings-section">
+                <div className="settings-section-intro">
+                  <Typography.Title level={3}>数据与快照</Typography.Title>
+                  <Typography.Paragraph type="secondary">
+                    {LOCAL_MODE
+                      ? '日常编辑先保存在本机；最近云备份状态在下方单独显示，恢复前需要预览并确认。'
+                      : '在这里查看可用备份与恢复入口。'}
+                  </Typography.Paragraph>
+                </div>
+                {backupSection || (
+                  <Alert type="info" showIcon message="备份由此部署的管理员管理。" />
+                )}
+              </section>
+            ),
+          },
+          {
+            key: 'schedule',
+            label: '学期与作息',
+            children: (
+              <section aria-label="学期与作息" className="settings-section">
+                <Card title="当前学期">
+                  <div className="settings-schedule-picker">
+                    <Select
+                      aria-label="选择当前学期课表"
+                      placeholder="选择课表"
+                      value={activeScheduleId ?? undefined}
+                      onChange={(id) => setActiveScheduleId(id)}
+                      options={schedules.map((schedule) => ({
+                        label: schedule.name,
+                        value: schedule.id,
+                      }))}
+                      style={{ width: '100%', maxWidth: 440 }}
+                    />
+                    <Link to="/timetable">前往课表管理学期与课程</Link>
+                  </div>
+                </Card>
+                {periodSection}
+              </section>
+            ),
+          },
+          {
+            key: 'appearance',
+            label: '显示偏好',
+            children: (
+              <section aria-label="显示偏好" className="settings-section">
+                {appearanceSection}
+              </section>
+            ),
+          },
+          {
+            key: 'ai',
+            label: 'AI 连接',
+            children: (
+              <section aria-label="AI 连接" className="settings-section">
+                {aiSection}
+              </section>
+            ),
+          },
+          ...(!LOCAL_MODE ? [{ key: 'widget', label: '小组件', children: widgetSection }] : []),
+        ]}
+      />
+    </div>
   )
 }

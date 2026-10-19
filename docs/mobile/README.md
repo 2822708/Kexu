@@ -1,12 +1,12 @@
-# 大切课程表 · 本地主数据 PWA
+# 课序 · 本地主数据 PWA
 
-2026-10-18 开发验收版。分支 `feature/local-first-snapshots`。原生 Android 继续暂停。
+2026-10-19课序UI开发验收版。分支 `feature/local-first-snapshots`。原生 Android 继续暂停。[新界面落实与验收](../design/UI_IMPLEMENTATION_2026_10_19.md)。
 
 课表、课程、考试、待办、作息、循环与专注记录写入设备 IndexedDB，核心功能不依赖 Java 或云端登录。云服务仅接收加密快照、保存必要元数据与提供应用文件；AI 是用户主动配置的可选直连服务。
 
 ## 运行
 
-交付包与校验值见 [本地版发行目录](../../releases/mobile/local-first-2026.10.18/README.md)。解压到 E 盘普通目录，使用 Node.js 22 或更新的兼容 LTS 运行包内说明中的本机入口。源代码开发：
+交付包与校验值见 [本地版发行目录](../../releases/mobile/kexu-2026.10.19/README.md)。解压到 E 盘普通目录，使用 Node.js 22 或更新的兼容 LTS 运行包内说明中的本机入口。源代码开发：
 
 ```powershell
 cd src/frontend

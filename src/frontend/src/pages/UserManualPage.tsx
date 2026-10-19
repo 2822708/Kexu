@@ -18,9 +18,9 @@ const FAQ = [
   },
   {
     key: 'conflict',
-    label: '课表格子为什么有的课没显示？',
+    label: '课程时间重叠时怎么查看？',
     children:
-      '同一时间段撞了两门课，系统只显示其中一门，并在格子上显示一个警告角标，点开能看到被顶掉的那门。去把时间调整开就好。',
+      '周课表会把重叠的课程和考试并列展示，每一项都可点击查看或编辑。窄屏可在课表区域左右滑动；也可切换日程或全部课程查找。',
   },
   {
     key: 'weeks',
@@ -61,7 +61,7 @@ function LocalUserManual() {
         title={
           <Space>
             <BookOutlined />
-            <span>大切课程表 · 本地版使用手册</span>
+            <span>课序 · 本地版使用手册</span>
           </Space>
         }
       >
@@ -115,7 +115,7 @@ function LocalUserManual() {
               <li>
                 考试结束后，应用打开、回到前台或运行中的定时检查会自动将关联待办完成；关闭应用后不会发送系统通知。
               </li>
-              <li>普通待办可单独添加、编辑和勾选完成。「专注」页可标记当天实际安排的课程完成。</li>
+              <li>普通待办可单独添加、编辑和勾选完成。「今日」页可查看当天安排、标记课程完成并使用专注计时。</li>
               <li>
                 循环任务支持每日、每周、每月，按北京时间计算。应用重新打开时每条规则最多补算 5
                 期；关闭应用不保证后台定时运行。「脚本文本」只保存文字，不执行、不生成待办。
@@ -125,7 +125,7 @@ function LocalUserManual() {
           <Divider />
           <section>
             <Title level={4}>保存副本与自动云快照</Title>
-            <Paragraph>在「设置 → 本地数据与云快照」中操作：</Paragraph>
+            <Paragraph>在「我的 → 数据与快照」中操作：</Paragraph>
             <ol>
               <li>
                 无需联网即可点击「导出核心数据文件」，另存一份
@@ -168,7 +168,7 @@ function LocalUserManual() {
               </Space>
             </Title>
             <Paragraph>
-              在设置中填写你选择的 OpenAI 兼容服务地址、模型和自己的 API
+              在「我的 → AI 连接」中填写你选择的 OpenAI 兼容服务地址、模型和自己的 API
               Key，确认允许发送必要上下文后保存连接。「测试连接」会发起少量真实调用，可能产生服务费用；AI
               未配置或连接失败时，课表仍可正常离线编辑。
             </Paragraph>
@@ -197,7 +197,7 @@ function LocalUserManual() {
           <section>
             <Title level={4}>设置与应用更新</Title>
             <Paragraph>
-              本地版可以修改自己的作息时间，字体大小只影响当前设备。看到「有新版本」时，先保存表单并等待
+              本地版可以修改自己的作息时间，字体大小只影响当前设备。顶部出现「更新」时，先保存表单并等待
               AI
               请求结束；确认后会先在本机保存核心数据恢复点，再刷新应用，不需要先连上云。未保存的输入不会自动迁移。
             </Paragraph>
@@ -220,7 +220,7 @@ export default function UserManualPage() {
         title={
           <Space>
             <BookOutlined />
-            <span>大切课程表 · 使用手册</span>
+            <span>课序 · 使用手册</span>
           </Space>
         }
         extra={<Text type="secondary">给非技术朋友的白话教程</Text>}

@@ -99,7 +99,7 @@ self.addEventListener('fetch', (event) => {
         return await fetch(request);
       } catch {
         const shell = await caches.match(SHELL, { cacheName: CACHE_NAME });
-        return shell || new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><p>本机课表数据仍保存在浏览器中，但离线页面资源尚未准备完整。请联网后重新打开大切课程表；不要清除网站数据。</p>',
+        return shell || new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><p>本机课表数据仍保存在浏览器中，但离线页面资源尚未准备完整。请联网后重新打开课序；不要清除网站数据。</p>',
           { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
       }
     })());

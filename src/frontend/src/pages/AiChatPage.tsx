@@ -26,6 +26,7 @@ import { subscribeAiSettings } from '../local/ai/settings'
 import { localAiStream } from '../local/ai'
 import { readLocalState, subscribeLocalChanges } from '../local/db'
 import { currentImportConversation, localChatView } from '../local/ai/uiState'
+import '../settings-ai.css'
 
 const EXAMPLES = [
   '下周一3-4节加一节形势政策，地点待定',
@@ -643,6 +644,11 @@ export default function AiChatPage() {
   const weekInfo = activeSchedule
     ? formatWeekInfo(activeSchedule.periodStartDate, activeSchedule.periodEndDate)
     : null
+  const pendingCount = messages.reduce(
+    (count, item) =>
+      count + (item.actions ?? []).filter((action) => action.status === 'PENDING').length,
+    0,
+  )
 
   return (
     <div className="ai-chat-page" style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
@@ -669,6 +675,7 @@ export default function AiChatPage() {
                 type="text"
                 icon={<EditOutlined />}
                 title="批量编辑"
+                aria-label="批量编辑对话标题"
                 onClick={startBatchEdit}
               />
               <Button
@@ -677,6 +684,7 @@ export default function AiChatPage() {
                 danger
                 icon={<DeleteOutlined />}
                 title="批量删除"
+                aria-label="批量删除对话"
                 onClick={startBatchDelete}
               />
               <Button
@@ -684,6 +692,7 @@ export default function AiChatPage() {
                 type="text"
                 icon={<PlusOutlined />}
                 title="新建对话"
+                aria-label="新建对话"
                 onClick={newConversation}
               />
             </Space>
@@ -723,9 +732,22 @@ export default function AiChatPage() {
             const active = listMode === 'normal' && conv.id === currentId
             return (
               <List.Item
+                className={active ? 'conversation-item is-active' : 'conversation-item'}
+                role={listMode === 'edit' ? undefined : 'button'}
+                tabIndex={listMode === 'edit' ? undefined : 0}
+                aria-current={active ? 'true' : undefined}
+                aria-label={listMode === 'edit' ? undefined : `打开对话：${conv.title || '新对话'}`}
+                onKeyDown={(event) => {
+                  if (listMode === 'edit' || !['Enter', ' '].includes(event.key)) return
+                  event.preventDefault()
+                  if (listMode === 'normal') {
+                    changeConversation(conv.id, true, conversationIdentity(conv))
+                    setConvPanelOpen(false)
+                  } else toggleDeleteSelect(conv.id)
+                }}
                 style={{
                   cursor: listMode === 'normal' ? 'pointer' : 'default',
-                  background: active || selected ? 'var(--accent)' : undefined,
+                  background: active || selected ? 'var(--assistant-selected-bg)' : undefined,
                   borderRadius: 4,
                   paddingInline: 8,
                 }}
@@ -785,7 +807,7 @@ export default function AiChatPage() {
           body: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: 16 },
         }}
         title={
-          <Space wrap={false}>
+          <Space wrap className="assistant-header-title">
             <Button
               className="conv-toggle-btn"
               size="small"
@@ -794,10 +816,10 @@ export default function AiChatPage() {
             >
               对话
             </Button>
-            <span>AI 助手</span>
+            <span>助手</span>
             {convScheduleName ? (
               <Tag color={workspaceMismatch ? 'red' : 'blue'}>
-                {workspaceMismatch ? '⚠ ' : ''}
+                {workspaceMismatch ? '课表不一致 · ' : ''}
                 {convScheduleName}
               </Tag>
             ) : activeSchedule ? (
@@ -805,29 +827,50 @@ export default function AiChatPage() {
             ) : (
               <Tag color="orange">未选择课表</Tag>
             )}
-            {activeSchedule && !workspaceMismatch && weekInfo && <Tag>{weekInfo}</Tag>}
           </Space>
         }
+        extra={
+          <Button
+            className="assistant-new-conversation"
+            icon={<PlusOutlined />}
+            onClick={newConversation}
+          >
+            新对话
+          </Button>
+        }
       >
+        <div className="assistant-context" aria-label="当前助手上下文">
+          <div>
+            <Typography.Text strong>{activeSchedule?.name ?? '未选择课表'}</Typography.Text>
+            <Typography.Text type="secondary">
+              {weekInfo ?? '选择课表后可按当前安排提问'}
+            </Typography.Text>
+          </div>
+          <Tag color={pendingCount ? 'gold' : 'default'}>
+            {pendingCount ? `已加载消息中 ${pendingCount} 项待确认` : '修改前逐项确认'}
+          </Tag>
+        </div>
         {enabled === false && (
           <Alert
             type="warning"
             showIcon
-            message="AI 功能未启用"
+            message="连接 AI 后即可开始对话"
             description={
               LOCAL_MODE
                 ? '请在设置中连接你选择的 AI 服务。消息、选定课表与本机待办的必要上下文仅在主动发送时直达该服务，课表、考试和待办可离线使用。'
                 : '请联系服务管理员启用 AI。课表、考试和待办仍可正常使用。'
+            }
+            action={
+              LOCAL_MODE ? (
+                <Button onClick={() => navigate('/settings#ai')}>配置 AI 连接</Button>
+              ) : undefined
             }
             style={{ marginBottom: 12, flexShrink: 0 }}
           />
         )}
 
         {LOCAL_MODE && enabled === true && (
-          <Typography.Paragraph
-            type="secondary"
-            style={{ marginBottom: 8, flexShrink: 0, fontSize: 12 }}
-          >
+          <Typography.Paragraph type="secondary" className="assistant-privacy-note">
             会话保存在本机；点击发送时才会把消息、当前课表与待办的必要上下文发给你设置的AI服务。每张修改卡仍需单独确认。
           </Typography.Paragraph>
         )}
@@ -869,25 +912,33 @@ export default function AiChatPage() {
               </div>
             ) : messages.length === 0 && !stream ? (
               <Empty
+                className="assistant-empty"
                 description={
                   <div>
-                    <span>用一句话管理课表和待办，支持一次做多件事</span>
-                    <Space wrap style={{ justifyContent: 'center' }}>
+                    <Typography.Title level={3}>把安排说清楚，确认后再保存</Typography.Title>
+                    <Typography.Paragraph type="secondary">
+                      描述课程调整、考试或待办，也可以添加课表文件与截图。
+                    </Typography.Paragraph>
+                    <div className="assistant-examples">
                       {EXAMPLES.map((ex, i) => (
-                        <Typography.Text key={i} className="example-chip" type="secondary">
+                        <Button
+                          key={i}
+                          className="assistant-example"
+                          disabled={workspaceMismatch || sending}
+                          onClick={() => setInput(ex)}
+                        >
                           {ex}
-                        </Typography.Text>
+                        </Button>
                       ))}
-                    </Space>
+                    </div>
                     <Typography.Text
                       type="secondary"
                       style={{ display: 'block', fontSize: 11, marginTop: 4 }}
                     >
-                      以上仅为示例，不一定适用于当前课表，请按自己的情况描述。
+                      点击示例只会填入输入框；请按实际安排修改后发送。
                     </Typography.Text>
                   </div>
                 }
-                style={{ paddingTop: 60 }}
               />
             ) : (
               messages.map((msg) => (

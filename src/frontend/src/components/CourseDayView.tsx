@@ -87,7 +87,7 @@ export default function CourseDayView({
       </div>
       <div className="day-agenda-summary">
         <Typography.Title level={4} style={{ margin: 0 }}>
-          {weekDayName(agenda.dayOfWeek ?? 0)}
+          {selected.format('M月D日')} · {weekDayName(agenda.dayOfWeek ?? 0)}
         </Typography.Title>
         <Tag>{termLabel}</Tag>
         <Typography.Text type="secondary">
@@ -113,7 +113,7 @@ export default function CourseDayView({
                 <span>地点</span>
                 <span>{exam.location || '未指定'}</span>
               </div>
-              <Button icon={<EditOutlined />} onClick={onExamClick}>
+              <Button icon={<EditOutlined />} aria-label={`管理考试 ${exam.name}`} onClick={onExamClick}>
                 管理考试
               </Button>
             </article>
@@ -149,7 +149,7 @@ export default function CourseDayView({
                   <span>教师</span>
                   <span>{course.teacher || '未指定'}</span>
                 </div>
-                <Button icon={<EditOutlined />} onClick={() => onEdit(course)}>
+                <Button icon={<EditOutlined />} aria-label={`编辑课程 ${course.name}`} onClick={() => onEdit(course)}>
                   编辑课程
                 </Button>
               </article>

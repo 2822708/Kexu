@@ -15,7 +15,7 @@ const inStandalone = () =>
   window.matchMedia('(display-mode: standalone)').matches ||
   (navigator as Navigator & { standalone?: boolean }).standalone === true
 
-/** Mount once outside routed pages so pending update/install prompts survive navigation. */
+/** Mounted in the persistent app header so prompts survive route changes without covering content. */
 export default function PwaStatus() {
   const onChatPage = useLocation().pathname.startsWith('/ai')
   const [online, setOnline] = useState(navigator.onLine)
@@ -267,13 +267,15 @@ export default function PwaStatus() {
         aria-label="应用安装与更新"
       >
         {waiting && (
-          <Button size="small" icon={<ReloadOutlined />} onClick={() => setUpdateOpen(true)}>
-            有新版本
+          <Button size="small" aria-label="更新应用" title="更新课序" icon={<ReloadOutlined />} onClick={() => setUpdateOpen(true)}>
+            更新
           </Button>
         )}
         {!standalone && (
           <Button
             size="small"
+            aria-label="安装应用"
+            title="安装课序到主屏幕"
             icon={<DownloadOutlined />}
             loading={installing}
             onClick={() => void install()}
@@ -288,7 +290,7 @@ export default function PwaStatus() {
         )}
       </aside>
       <Modal
-        title="将大切课程表添加到主屏幕"
+        title="将课序添加到主屏幕"
         open={guideOpen}
         onCancel={() => setGuideOpen(false)}
         footer={<Button onClick={() => setGuideOpen(false)}>知道了</Button>}

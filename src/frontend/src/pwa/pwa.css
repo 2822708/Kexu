@@ -1,22 +1,20 @@
 .pwa-controls {
-  position: fixed;
-  z-index: 900;
-  left: max(12px, env(safe-area-inset-left));
-  bottom: calc(12px + env(safe-area-inset-bottom));
   display: flex;
+  align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .pwa-controls:empty {
   display: none;
 }
 .pwa-controls .ant-btn {
-  box-shadow: 0 2px 8px #0002;
+  box-shadow: none;
 }
 
 .pwa-offline {
   position: fixed;
-  top: calc(52px + env(safe-area-inset-top));
+  top: calc(var(--topbar-height, 72px) + 8px);
   left: max(8px, env(safe-area-inset-left));
   right: max(8px, env(safe-area-inset-right));
   z-index: 1100;
@@ -34,13 +32,19 @@
   .pwa-controls.pwa-controls-chat {
     display: none;
   }
-  .pwa-controls {
-    bottom: calc(var(--mobile-nav-height, calc(60px + env(safe-area-inset-bottom))) + 16px);
-  }
   .pwa-controls .ant-btn {
-    min-height: 40px;
-    padding-inline: 12px;
+    min-height: 44px;
+    width: 44px;
+    min-width: 44px;
+    padding-inline: 0;
   }
+  .pwa-controls .ant-btn > span:not(.ant-btn-icon) {
+    display: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .app-topbar .app-brand-mark { display: none; }
 }
 
 [data-keyboard-open] .pwa-controls,

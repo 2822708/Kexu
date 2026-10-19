@@ -26,13 +26,16 @@ import {
   PlusOutlined,
   RobotOutlined,
   RightOutlined,
+  TrophyOutlined,
 } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
 import { useNavigate } from 'react-router-dom'
 import { focusApi, todoApi } from '../api'
 import { useApp } from '../store/AppContext'
 import type { Course, Todo } from '../types'
-import { currentWeekOf, dayjs } from '../utils/schedule'
+import { dayjs } from '../utils/schedule'
+import { dayAgenda } from '../utils/dayAgenda'
+import '../daily-pages.css'
 
 type FocusTarget = {
   key: string
@@ -99,6 +102,7 @@ export default function FocusPage() {
     activeSchedule,
     activeScheduleId,
     courses,
+    exams,
     periods,
     todos,
     refreshTodos,
@@ -171,18 +175,45 @@ export default function FocusPage() {
     else message.info('休息结束，可以开始下一轮专注。')
   }, [activeTimer, now])
 
-  const classTasks = useMemo(() => {
-    if (!activeSchedule) return []
-    const date = selectedDate.format('YYYY-MM-DD')
-    if (date < activeSchedule.periodStartDate || date > activeSchedule.periodEndDate) return []
-    const week = currentWeekOf(activeSchedule.periodStartDate, selectedDate)
-    return courses
-      .filter(
-        (course) =>
-          course.dayOfWeek === selectedDate.isoWeekday() && course.weeks.includes(week),
-      )
-      .sort((a, b) => a.startPeriod - b.startPeriod)
-  }, [activeSchedule, courses, selectedDate])
+  const agenda = useMemo(
+    () => activeSchedule ? dayAgenda(selectedDate.format('YYYY-MM-DD'), activeSchedule, courses, exams) : null,
+    [activeSchedule, courses, exams, selectedDate],
+  )
+  const classTasks = agenda?.courses ?? []
+  const timeline = useMemo(() => {
+    if (!agenda) return []
+    const courseEntries = agenda.courses.map((course) => ({
+      key: `course:${course.id}`,
+      kind: 'course' as const,
+      title: course.name,
+      location: course.location,
+      startTime: periods.find((period) => period.periodNumber === course.startPeriod)?.startTime ?? null,
+      endTime: periods.find((period) => period.periodNumber === course.endPeriod)?.endTime ?? null,
+      course,
+    }))
+    const examEntries = agenda.exams.map((exam) => ({
+      key: `exam:${exam.id}`,
+      kind: 'exam' as const,
+      title: exam.name,
+      location: exam.location,
+      startTime: exam.startTime,
+      endTime: exam.endTime,
+      exam,
+    }))
+    return [...courseEntries, ...examEntries].sort((a, b) =>
+      (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99') || a.key.localeCompare(b.key),
+    )
+  }, [agenda, periods])
+  const nextArrangement = useMemo(() => {
+    const selectedDay = selectedDate.format('YYYY-MM-DD')
+    const today = dayjs(now).format('YYYY-MM-DD')
+    if (selectedDay < today) return null
+    return timeline.find((item) => {
+      if (item.kind === 'course' && completedCourseIds.has(item.course.id)) return false
+      if (!item.startTime || !item.endTime) return false
+      return selectedDay > today || dayjs(`${selectedDay}T${item.endTime}`).valueOf() > now
+    }) ?? null
+  }, [timeline, selectedDate, now, completedCourseIds])
 
   const openTodos = useMemo(
     () => [...todos].filter((todo) => !todo.completed).sort((a, b) => dayjs(a.ddl).valueOf() - dayjs(b.ddl).valueOf()),
@@ -377,20 +408,24 @@ export default function FocusPage() {
   }
 
   const completedCourseCount = classTasks.filter((course) => completedCourseIds.has(course.id)).length
-  const percentage = classTasks.length === 0 ? 0 : Math.round((completedCourseCount / classTasks.length) * 100)
+  const overdueTodoCount = openTodos.filter((todo) => dayjs(todo.ddl).isBefore(dayjs(now))).length
+  const dueTodayCount = openTodos.filter((todo) => dayjs(todo.ddl).isSame(selectedDate, 'day')).length
+  const nextIsRunning = nextArrangement?.startTime
+    ? selectedDate.isSame(dayjs(now), 'day') && dayjs(`${selectedDate.format('YYYY-MM-DD')}T${nextArrangement.startTime}`).valueOf() <= now
+    : false
   const selectedDateLabel = selectedDate.format('YYYY年M月D日')
   const activeDuration = activeTimer?.phase === 'break' ? BREAK_SECONDS : (activeTimer?.focusMinutes ?? focusMinutes) * 60
   const timerPercent = activeTimer ? Math.min(100, Math.round((1 - activeRemaining / activeDuration) * 100)) : 0
 
   return (
-    <div className="focus-page">
-      <div className="page-header focus-page-header">
-        <div>
-          <Typography.Title level={2} style={{ margin: 0 }}>专注</Typography.Title>
-          <Typography.Text type="secondary">把今天的课程和待办，变成可以一步步完成的安排。</Typography.Text>
+    <div className="focus-page daily-today-page">
+      <div className="page-header focus-page-header daily-page-header">
+        <div className="daily-page-heading">
+          <Typography.Title level={2} style={{ margin: 0 }}>今日</Typography.Title>
+          <Typography.Text type="secondary">{activeSchedule?.name ?? '选择课表后查看课程与考试'} · 先安排，再专注</Typography.Text>
         </div>
         <Space wrap>
-          <Button icon={<RobotOutlined />} onClick={() => navigate('/ai')}>请 AI 帮我规划</Button>
+          <Button icon={<RobotOutlined />} onClick={() => navigate('/ai')}>规划一天</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>临时任务</Button>
         </Space>
       </div>
@@ -405,29 +440,53 @@ export default function FocusPage() {
         <Typography.Text type="secondary">{selectedDateLabel}</Typography.Text>
       </div>
 
+      <section className="today-next-arrangement" aria-label="下一项安排">
+        <div className="today-next-copy">
+          <div className="daily-eyebrow">{nextIsRunning ? '正在进行' : selectedDate.isSame(dayjs(now), 'day') ? '下一项安排' : '所选日期安排'}</div>
+          <Typography.Title level={3} style={{ margin: '6px 0' }}>
+            {nextArrangement?.title ?? (timeline.some((item) => !item.startTime || !item.endTime)
+              ? '课程时间待配置'
+              : timeline.length ? '这一天的后续安排已结束' : '给这一天留一点自己的时间')}
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            {nextArrangement
+              ? `${nextArrangement.kind === 'exam' ? '考试' : '课程'} · ${nextArrangement.startTime?.slice(0, 5)}–${nextArrangement.endTime?.slice(0, 5)} · ${nextArrangement.location || '地点未指定'}`
+              : timeline.some((item) => !item.startTime || !item.endTime)
+                ? '部分课程未配置作息时间，请在下方时间线查看节次。'
+                : '查看下方待办，或选择一项任务开始专注。'}
+          </Typography.Text>
+        </div>
+        <Button onClick={() => navigate('/timetable')}>查看课表</Button>
+      </section>
+
       <div className="focus-layout">
         <div className="focus-task-column">
-          <Card className="focus-progress-card">
-            <div className="focus-progress-copy">
-              <div className="focus-eyebrow"><CalendarOutlined /> 今日课程</div>
-              <Typography.Title level={4} style={{ margin: '6px 0' }}>
-                {completedCourseCount} / {classTasks.length} 项完成
-              </Typography.Title>
-              <Typography.Text type="secondary">
-                {activeSchedule ? `${activeSchedule.name} · ${selectedDateLabel}` : '先在课表中选择一个学期'}
-              </Typography.Text>
-            </div>
-            <Progress type="circle" percent={percentage} size={76} strokeColor="#5b8c5a" />
-          </Card>
 
-          <Card title={<Space><CalendarOutlined />课程日程</Space>} className="focus-list-card">
+          <Card title={<Space><CalendarOutlined />当日时间线</Space>} className="focus-list-card" extra={<Typography.Text type="secondary">课程 {completedCourseCount}/{classTasks.length} 已完成</Typography.Text>}>
             {!activeSchedule ? (
               <Empty description="请先创建或选择课表" />
-            ) : classTasks.length === 0 ? (
-              <Empty description="这一天没有排课，可以安排自己的任务" />
+            ) : timeline.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这一天没有课程或考试" />
             ) : (
-              <div className="focus-task-list">
-                {classTasks.map((course) => {
+              <div className="focus-task-list today-timeline">
+                {timeline.map((entry) => {
+                  if (entry.kind === 'exam') return (
+                    <div key={entry.key} className="focus-task-row today-timeline-row is-exam">
+                      <div className="today-timeline-time">{entry.startTime?.slice(0, 5)}<span>{entry.endTime?.slice(0, 5)}</span></div>
+                      <div className="focus-task-copy">
+                        <Typography.Text strong>{entry.title}</Typography.Text>
+                        <Space size={[6, 4]} wrap>
+                          <Tag icon={<TrophyOutlined />} color="red">考试</Tag>
+                          <Typography.Text type="secondary">{entry.location || '地点未指定'}</Typography.Text>
+                        </Space>
+                      </div>
+                      <Button onClick={() => {
+                        navigate('/timetable')
+                        message.info('请在课表页「更多 → 考试管理」查看或修改考试。')
+                      }}>查看考试</Button>
+                    </div>
+                  )
+                  const course = entry.course
                   const completed = completedCourseIds.has(course.id)
                   const target: FocusTarget = {
                     key: `course:${selectedDate.format('YYYY-MM-DD')}:${course.id}`,
@@ -437,7 +496,11 @@ export default function FocusPage() {
                   }
                   const timerSelected = activeTimer?.target.key === target.key
                   return (
-                    <div key={course.id} className={`focus-task-row${completed ? ' is-completed' : ''}`}>
+                    <div key={entry.key} className={`focus-task-row today-timeline-row${completed ? ' is-completed' : ''}`}>
+                      <div className="today-timeline-time">
+                        {entry.startTime?.slice(0, 5) ?? `第${course.startPeriod}节`}
+                        <span>{entry.endTime?.slice(0, 5) ?? `至第${course.endPeriod}节`}</span>
+                      </div>
                       <div className="focus-task-copy">
                         <Typography.Text strong>{course.name}</Typography.Text>
                         <Space size={[6, 4]} wrap>
@@ -470,15 +533,19 @@ export default function FocusPage() {
           </Card>
 
           <Card
-            title={<Space><CheckOutlined />待办任务<Tag>{openTodos.length}</Tag></Space>}
+            title={<Space><CheckOutlined />待办概要<Tag>{openTodos.length}</Tag></Space>}
             className="focus-list-card"
             extra={<Button type="link" onClick={() => navigate('/todos')}>管理全部</Button>}
           >
+            <div className="today-todo-summary">
+              <span>所选日期截止 <strong>{dueTodayCount}</strong></span>
+              {overdueTodoCount > 0 && <span className="daily-danger">已逾期 <strong>{overdueTodoCount}</strong></span>}
+            </div>
             {openTodos.length === 0 ? (
               <Empty description="没有待处理任务，享受一下空档吧" />
             ) : (
               <div className="focus-task-list">
-                {openTodos.map((todo) => {
+                {openTodos.slice(0, 5).map((todo) => {
                   const target: FocusTarget = {
                     key: `todo:${todo.id}`,
                     kind: 'todo',
@@ -499,6 +566,7 @@ export default function FocusPage() {
                 })}
               </div>
             )}
+            {openTodos.length > 5 && <Button type="link" onClick={() => navigate('/todos')}>查看其余 {openTodos.length - 5} 项待办</Button>}
           </Card>
 
           {completedTodos.length > 0 && (
@@ -520,7 +588,7 @@ export default function FocusPage() {
 
         <Card className="focus-timer-card">
           <div className="focus-timer-heading">
-            <Space><FieldTimeOutlined />番茄时钟</Space>
+            <Space><FieldTimeOutlined />专注计时</Space>
             <Select
               aria-label="专注时长"
               size="small"
@@ -536,7 +604,7 @@ export default function FocusPage() {
             percent={timerPercent}
             size={208}
             strokeWidth={6}
-            strokeColor={activeTimer?.phase === 'break' ? '#5b8c5a' : '#c36d54'}
+            strokeColor={activeTimer?.phase === 'break' ? '#0c7c72' : '#167d9a'}
             format={() => (
               <div className="focus-clock-face">
                 <Typography.Text type="secondary">

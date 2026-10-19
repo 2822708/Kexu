@@ -1,0 +1,280 @@
+/* Page-level layout for timetable, today, and tasks. Data and theme stay in their existing layers. */
+.daily-page-header.page-header {
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 0;
+}
+.daily-page-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.daily-page-heading h2.ant-typography {
+  font-size: 24px !important;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.daily-page-heading > .ant-typography {
+  overflow-wrap: anywhere;
+}
+.daily-page-actions {
+  flex-shrink: 0;
+}
+.daily-eyebrow {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.daily-danger {
+  color: var(--color-danger, #b42318);
+}
+.daily-timetable-page .timetable-view-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+.daily-timetable-page .timetable-page-header {
+  flex-shrink: 0;
+}
+.daily-timetable-page .timetable-week-picker .ant-btn {
+  box-shadow: none;
+}
+.daily-today-page .today-next-arrangement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  border: 1px solid var(--border-light);
+  border-left: 3px solid #167d9a;
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+.today-next-copy {
+  min-width: 0;
+}
+.today-next-copy .ant-typography {
+  overflow-wrap: anywhere;
+}
+.daily-today-page .focus-layout {
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+}
+.daily-today-page .focus-list-card .ant-card-head {
+  min-height: 52px;
+}
+.daily-today-page .focus-list-card .ant-card-head-wrapper {
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 10px 0;
+}
+.daily-today-page .focus-list-card .ant-card-head-title {
+  white-space: normal;
+}
+.daily-today-page .focus-list-card .ant-card-extra {
+  font-size: 12px;
+  margin-inline-start: 0;
+}
+.daily-today-page .focus-task-row {
+  gap: 14px;
+  padding: 16px 0;
+}
+.daily-today-page .today-timeline-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 14px;
+}
+.daily-today-page .today-timeline-row > .ant-btn,
+.daily-today-page .today-timeline-row > .ant-space {
+  grid-column: 2;
+}
+.today-timeline-time {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.today-timeline-time > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.daily-today-page .is-exam .today-timeline-time {
+  color: var(--color-danger, #b42318);
+}
+.daily-today-page .today-todo-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding-bottom: 12px;
+}
+.daily-today-page .focus-timer-heading {
+  flex-wrap: wrap;
+}
+.daily-today-page .focus-current-task {
+  overflow-wrap: anywhere;
+}
+.daily-today-page .focus-paused-list .ant-btn {
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.daily-todos-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.daily-todos-page .ant-tabs-nav {
+  margin-bottom: 20px;
+}
+.todo-filter-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.todo-summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.daily-todos-page .todo-notification-note {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 12px 0 24px;
+}
+.todo-group {
+  margin-bottom: 24px;
+}
+.todo-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.todo-group-heading h4.ant-typography {
+  color: inherit;
+  font-size: 15px;
+}
+.todo-group-heading > span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.daily-todos-page .todo-record {
+  align-items: flex-start;
+  padding: 16px 0;
+}
+.daily-todos-page .todo-record .ant-list-item-meta-title {
+  margin-bottom: 8px;
+}
+.daily-todos-page .todo-record .ant-list-item-meta-title .ant-typography {
+  overflow-wrap: anywhere;
+}
+.todo-record-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.daily-todos-page .todo-record .ant-list-item-action {
+  flex-shrink: 0;
+}
+
+@media (max-width: 1024px) {
+  .daily-today-page .focus-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .daily-today-page .focus-timer-card {
+    position: static;
+    order: 0;
+  }
+}
+@media (max-width: 767px) {
+  .daily-page-heading h2.ant-typography {
+    font-size: 22px !important;
+  }
+  .daily-page-header.page-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .daily-page-header .ant-btn,
+  .timetable-view-toolbar .ant-btn,
+  .daily-today-page .ant-btn,
+  .daily-todos-page .todo-record .ant-btn {
+    min-height: 44px;
+  }
+  .daily-timetable-page .daily-page-actions {
+    width: 100%;
+  }
+  .daily-timetable-page .daily-page-actions > .ant-space-item:first-child {
+    flex: 1;
+  }
+  .daily-timetable-page .daily-page-actions > .ant-space-item:first-child .ant-btn {
+    width: 100%;
+  }
+  .daily-timetable-page .timetable-week-picker {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .daily-today-page .focus-date-row > .ant-space {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px !important;
+    width: 100%;
+  }
+  .daily-today-page .focus-date-row > .ant-space > .ant-space-item:nth-child(2) {
+    flex: 1;
+    min-width: 0;
+  }
+  .daily-today-page .focus-date-row .ant-picker {
+    min-height: 44px;
+    width: 100%;
+    min-width: 0;
+  }
+  .daily-today-page .focus-date-row .ant-picker-input > input {
+    font-size: 16px;
+  }
+  .daily-today-page .today-next-arrangement {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px 16px;
+  }
+  .daily-today-page .today-next-arrangement h3 {
+    font-size: 21px;
+  }
+  .daily-today-page .focus-list-card .ant-card-body {
+    padding: 16px;
+  }
+  .daily-today-page .focus-timer-card {
+    order: 0;
+  }
+  .daily-todos-page .todo-record .ant-list-item-action {
+    margin-top: 10px;
+  }
+  .daily-todos-page .todo-record .ant-list-item-action .ant-btn {
+    min-width: 44px;
+  }
+  .daily-todos-page .todo-record .ant-checkbox-wrapper {
+    min-width: 44px;
+    min-height: 44px;
+    margin-top: 0 !important;
+    align-items: flex-start;
+    padding-top: 3px;
+  }
+}

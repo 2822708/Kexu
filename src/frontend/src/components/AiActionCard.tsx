@@ -82,13 +82,13 @@ export default function AiActionCard({
 
   return (
     <Card
-      className="chat-action-card"
+      className={`chat-action-card${pending ? ' is-pending' : ''}`}
       size="small"
       style={stale ? { opacity: 0.6 } : undefined}
       title={
-        <Space>
+        <Space wrap size={6}>
           <span>{ACTION_LABELS[action.type] ?? action.type}</span>
-          <Tag color={action.scope === 'COURSE' ? 'geekblue' : 'purple'}>
+          <Tag color={action.scope === 'COURSE' ? 'blue' : 'cyan'}>
             {action.scope === 'COURSE'
               ? '课表'
               : action.type.includes('RECURRING')
@@ -97,24 +97,6 @@ export default function AiActionCard({
           </Tag>
           {statusTag}
         </Space>
-      }
-      extra={
-        pending && (
-          <Space>
-            <Button
-              size="small"
-              type="primary"
-              loading={executing}
-              disabled={disabled || executing}
-              onClick={onExecute}
-            >
-              确认执行
-            </Button>
-            <Button size="small" disabled={disabled || executing} onClick={onReject}>
-              取消
-            </Button>
-          </Space>
-        )
       }
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
@@ -127,6 +109,24 @@ export default function AiActionCard({
         {action.type === 'DELETE_EXAM' && '；对应考试待办也会删除'}
       </Typography.Paragraph>
       {renderBody(action.type, data)}
+      {pending && (
+        <div className="assistant-action-footer">
+          <Typography.Text type="secondary">核对目标与内容后，再确认这一项。</Typography.Text>
+          <Space wrap>
+            <Button disabled={disabled || executing} onClick={onReject}>
+              取消
+            </Button>
+            <Button
+              type="primary"
+              loading={executing}
+              disabled={disabled || executing}
+              onClick={onExecute}
+            >
+              确认执行
+            </Button>
+          </Space>
+        </div>
+      )}
       {stale && (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           数据已变动，请重新向 AI 提问以获得最新提案。
@@ -162,6 +162,7 @@ function recurringLine(r: Dict): string {
   const offset = describeOffset(Number(r.ddlOffsetMinutes))
   const chain = r.chainAfterComplete ? '，完成后接下一期' : ''
   if (r.frequency === 'CUSTOM') {
+    if (LOCAL_MODE) return '脚本文本归档（不执行、不生成待办）'
     return `自定义脚本判断触发，触发后 ${offset} 截止${chain}`
   }
   const time = String(r.triggerTime ?? '').slice(0, 5) || '--:--'

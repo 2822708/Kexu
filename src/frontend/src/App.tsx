@@ -3,7 +3,6 @@ import { lazy, Suspense } from 'react'
 import { Alert, Button, Spin } from 'antd'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
-import PwaStatus from './components/PwaStatus'
 import DeviceConnectionPage from './pages/DeviceConnectionPage'
 import { useApp } from './store/AppContext'
 
@@ -18,7 +17,6 @@ const WidgetPreviewPage = lazy(() => import('./pages/WidgetPreviewPage'))
 export default function App() {
   return (
     <>
-      <PwaStatus />
       <Suspense
         fallback={
           <div className="app-loading-page">

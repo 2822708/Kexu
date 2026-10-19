@@ -87,16 +87,16 @@ export function mobilePwa() {
         )
       const manifest = {
         id: base,
-        name: '大切课程表',
-        short_name: '大切课表',
+        name: '课序 · 课表与待办',
+        short_name: '课序',
         description:
           '课表、待办与考试在本机保存，可离线读写；云端提供自动快照、手动恢复与版本分发。AI 需要联网。',
         lang: 'zh-CN',
         start_url: base,
         scope: base,
         display: 'standalone',
-        background_color: '#f5f0eb',
-        theme_color: '#2d2d2d',
+        background_color: '#f5f8fa',
+        theme_color: '#167d9a',
         icons: [192, 512].map((size) => ({
           src: `${base}pwa/icon-${size}.png`,
           sizes: `${size}x${size}`,
