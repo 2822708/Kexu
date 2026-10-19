@@ -4,7 +4,7 @@
 >
 > **已同步到项目网盘**（tdrive 根目录，2026-10-16）：`Timetable-HANDOVER-交接主文件.md`（本文件）、`Timetable-交接总览-20261015.md`（自包含精简版，可整份粘给新 Agent）、`下一步方向调研报告.md`（**下一步方向决策依据，接手必读**）、`REA-逆向验证报告.md`、`ai-campus-agent-源码快照-ec2ec62.zip`（**免 git 的源码通道**）、`ai-campus-agent-git-bundle.bundle`（免凭证的 git 通道），操作细节见 `/workspace/Git同步操作指引.md`。
 >
-> 最近更新：2026-10-16 ｜ 更新者：WorkBuddy ｜ 对应提交：`ec2ec62` + 待提交的分支改名与 GitHub 同步通道
+> 最近更新：2026-10-19 ｜ 更新者：WorkBuddy ｜ 对应提交：`965ebd4`（计划采纳率埋点 + 产品健康端点 + 凭据泄露修复）
 >
 > ⚠️ **下一步做什么，请直接读 `/workspace/下一步方向调研报告.md` 第 8 节。**本文件第 6 节已按其结论重排待办。
 > 🆕 **跨环境同步现已有正式通道**：主分支 `main`，远端为 GitHub **私有仓库 `2552555/timetable-ai`**（2026-10-16 推送，CI 全绿）。有 GitHub 凭证的机器直接 `git clone`；无凭证的机器用网盘 zip 快照（已验证解压即 134/134）。两种方式都有效，网盘通道继续保留。
@@ -60,27 +60,27 @@ npm run build
 |---|---|
 | HEAD | 见 `git log -1 --oneline`（分支 `main`；已与 GitHub 私有仓库 `2552555/timetable-ai` 同步） |
 | 开发进度 | **Step 0–7 全部完成**；**V1.0 收口三轮全部完成**（档案端点 + 端到端旅程 + 文档 + 展示态 STALE + 计划缓存失效）；**信息处理中心 `/info` 落地**（信息收纳盒 + AI 查询中心 + 最近解析预览，两处边界适配见 3.9） |
-| 后端测试 | **209/209 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、provider 配置 `LlmProviderSettingsTest` 9 个、provider 端点 `LlmProviderEndpointTest` 6 个、本地设置加密 `LocalSettingsEncryptionTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个） |
+| 后端测试 | **253/253 通过**（0 失败 0 错误；含 P0-1 的 `UsageStatsIntegrationTest` 8 个、通知箱 `NoticeEndpointIntegrationTest` 9 个、P0-2 预算 `LlmBudgetGuardTest` 13 个、多 provider 路由 `LlmRoutingTest` 11 个、计划重试与并发 `AiCampusAgentDailyPlanRetryTest` 6 个、provider 配置 `LlmProviderSettingsTest` 9 个、provider 端点 `LlmProviderEndpointTest` 6 个、本地设置加密 `LocalSettingsEncryptionTest` 6 个、ThreadLocal 防回归 `AiStreamIdentityIntegrationTest` 2 个 + `RequestContextTest` 5 个、**产品健康 `ProductHealthEndpointTest` 9 个 + 采纳判定 `DailyPlanAdoptionServiceTest` 5 个 + 凭据泄露 `CredentialLeakTest` 5 个**） |
 | 前端 | typecheck 通过；lint **0 错误 / 9 警告**（9 个全在存量文件：AiChatPage 3、TodosPage 1、5 个 Context/theme 各 1，属基线，不得新增）；build 通过 |
-| 工作区 | 见 `git status`。**本地领先 origin 的提交均未推送**（数量以 `git rev-list --count origin/main..main` 实时为准，含 P0-1、通知箱/分时 UI、引导页/模块自定义、P0-2、身份修复及收工文档提交）。缺 `ghp_`/`github_pat_` 开头的 PAT，见 6.5 |
+| 工作区 | 见 `git status`。**当前分支 `feature/duolingo-style-ui`，与 `main` 已对齐到 `965ebd4`**，四个远端 ref（`origin:main` / `origin:feature/duolingo-style-ui` / `friend:feature/ai-campus-agent-v1` / `friend:feature/duolingo-style-ui`）同步推送。**⚠️ 双远端待用户决策**：`origin`（2552555/timetable-ai）与 `friend`（2822708/Timetable）两边都在推，属双份维护，见 6.5 |
 | 当前阶段 | V1.0 功能收口完成；**成本治理 P0-1（埋点 + 计量 + 看板）与 P0-2（月度预算 + 超限熔断）均已完成**；**《产品界面与功能细化方案》两轮均已完成**。**2026-10-18 用真实 DeepSeek Key 完成了首次端到端验收**，并修复了一个只有真实调用才能暴露的 P0（流式对话工作线程丢失调用方身份，详见第 5 节当日条目）。剩余仅**人工走查**（浏览器 / 桌面端打包），需用户在本机执行 |
 | **⚠️ 多环境同步** | **2026-10-16 已推送 GitHub 私有仓库 `2552555/timetable-ai`**（https://github.com/2552555/timetable-ai ），remote `origin` 已配置，主分支 `main`，标签 `v1.0`。**CI 首次真实运行并全绿**（backend + frontend 均 success）。另一环境（Codex）的分叉提交 `9bb3200` **不在本仓库对象库中**，需先 fetch 再合并，或用网盘 zip 整体覆盖 |
 | **网盘同步产物** | 根目录 `MTOwZfixfiEX`。`ai-campus-agent-git-bundle.bundle`（949,805 B，md5 `7b509d010dd527aaa6905c6186d91f2c`）+ `ai-campus-agent-源码快照-<HEAD>.zip`（md5 见《Git同步操作指引》§7）+ 三份文档，均已刷新到当前 HEAD 并经 **ETag == 本地 md5** 验证。上传/下载通道的坑见 3.7 与第 5 节当日收尾条目 |
 | **线上部署状态** | `timetable.zozovip.work` 首页 200，但**前端是 baseline `61981d9`，未部署 V1.0**（资产哈希与字符串扫描实证，详见第 5 节 2026-10-16 条）。后端版本外部不可判定（API Key 拦截在路由前） |
 
-**代码规模（2026-10-18 实测，含信息处理中心）**
+**代码规模（2026-10-19 实测，含信息处理中心）**
 
 | 层 | 文件数 | 行数 |
 |---|---|---|
-| 后端主代码 | 165 | 14,449（`service` 层占大头） |
-| 后端测试 | 24 | 5,712 |
+| 后端主代码 | 179 | 16,952（`service` 层占大头） |
+| 后端测试 | 34 | 7,813（2026-10-19 实测） |
 | 前端 | 62 | 16,042（11 页面 / 26 组件 / 4 API / 2 store） |
 
 | 缺口 | 状态 |
 |---|---|
 | ① 无 LLM 调用计量/预算 | ✅ **已全部解决**：P0-1 计量与看板（V5 迁移 + `llm_usage` + `/api/stats/*` + 统计页）；**P0-2 月度预算与超限熔断**（两级额度 + 装饰器拦截 + 统计页预算卡片）。**默认不限制**，需显式配置额度。**2026-10-18 真实 Key 端到端验收**又抓出并修掉两个静默缺陷：CHAT/REFINE 场景不计量、流式对话丢身份（见第 5 节当日条目） |
 | ② `LlmClientRegistry` 仅注册 DeepSeek 一家（单点 + 无法分级路由） | 未解决（6.1 第 2/3 项） |
-| ③ 无用户行为埋点 | **提案确认/拒绝已解决**（P0-1：`ai_event` + `ai_action.decided_at`）；留存 / 计划采纳率未做 |
+| ③ 无用户行为埋点 | ✅ **三类都有了**（P0-1：`ai_event` + `ai_action.decided_at`）；**计划采纳率 + 7 日留存**（`/api/stats/health`，见 3.12）。**顺带发现并修掉四处凭据泄露**：`DailyPlan`/`Memory`/`StudentProfile`/`Task` 四个实体的 `apiKey` 漏了 `@JsonIgnore` |
 | ④ 无模型输出评估集 | 未解决 |
 
 **Step 完成表**
@@ -250,6 +250,21 @@ npm run build
 - **热生效靠配置指纹**：`LlmProviderSettings.version()` 变化时 registry 重建动态客户端。指纹里 Key 必须用摘要而非长度——第一版算长度，`sk-1` 换 `sk-2` 不触发重建，用户改了 Key 还在用旧的。
 - **`deepseek` 有独立入口**：它走既有 `deepseek.api.*` 与本机 Key 设置，provider 端点显式拒绝这个 id，避免两个入口互相打架。
 
+### 3.12 计划采纳率的判定口径（2026-10-19）
+
+- **采纳 ≠ 用户点赞**。唯一不说谎的证据是「计划里安排的任务，当天真被推进了」。判定用 SQL 直接查 `task`：`id IN (计划引用的任务) AND status 是推进态 AND updated_at ∈ [planDate, planDate+1)`。之所以能用 `updated_at` 当完成时刻，是因为 `updateStatus` **只在状态真变化时才写它**——反复点「完成」不会把时刻刷新到第二天。
+- **必须「读时对账」，不能在生成时判定**：计划成不成效要等一天过完才知道。`DailyPlanAdoptionService.settleRecent()` 在查健康度时回看最近 7 天，挑「已过完当天 + 尚未 settle」的计划逐条判定。**只落 `PLAN_ADOPTED`，不落「未采纳」事件**——没有事件即未采纳，分母用 `PLAN_GENERATED` 减去差集算，写入量少一半。
+- **pending 必须从分母剔除**：当天还没过完的计划既不算采用也不算未采用，否则白天查健康度会觉得「采纳率怎么这么低」。
+- **缓存命中不记 `PLAN_GENERATED`**：用户没花 token，也不构成一次新的「让学长排一天」。`DailyPlanServiceImpl` 只在真调模型并落库的分支埋点。
+- **`APP_ACTIVE` 必须按天去重**：`DailyActiveRecorder` 挂在拦截器上，每请求都跑，直接写事件会把 `ai_event` 撑爆。用 `ConcurrentHashMap.newKeySet()` 存 `日期@apiKey`，跨天自动清空。
+- **接口层的补偿逻辑会掩盖服务层缺陷**：`UsageStatsController` 曾用 `countPendingPlans` 减 pending，让比率看起来对，但服务层仍会给当天未过完的计划写 `PLAN_ADOPTED`。变异验证时把「排除 pending」那一行注释掉，接口测试 **9/9 仍然全绿**——这就是必须单独测 `DailyPlanAdoptionService` 的原因。**以后凡是「接口层做了一次修正」，都要问一句：被修正的那份错数据是否已经落库了。**
+
+### 3.13 凭据字段必须逐个实体核对（2026-10-19）
+
+- 12 个实体里 `DailyPlan`/`Memory`/`StudentProfile`/`Task` 四个的 `apiKey` **漏了 `@JsonIgnore`**，其余 8 个都有——纯属遗漏，不是设计。
+- 这类泄露**不改功能、页面也看不出来**，只有开 DevTools 或把接口响应贴给别人时才暴露，因此极易悄悄回归。`CredentialLeakTest` 用五个用例直接断言响应体里不含 `apiKey` 字面量与 Key 值。
+- **新增任何带 `apiKey` 字段的实体，先自查有没有 `@JsonIgnore`。**
+
 ## 4. 关键文件地图
 
 **后端**
@@ -310,6 +325,38 @@ npm run build
 ---
 
 ## 5. 会话日志（倒序，最新在最上）
+
+### 2026-10-19 · WorkBuddy · 计划采纳率埋点 + 产品健康端点（6.1 #1 收尾），253/253 绿
+
+**动机**：此前只能答「调了多少次模型」，答不了「这东西到底有用吗」。采纳率不能靠用户点赞——唯一的硬证据是**计划里安排的任务，当天真被推进了**。
+
+**做了什么**
+
+| 新增 | 职责 |
+|---|---|
+| `DailyPlanAdoptionService` | `settleRecent()` 回看 7 天，对已过完当天且未 settle 的计划逐条判定，落 `PLAN_ADOPTED` |
+| `ProductHealthService` | 把采纳率与 7 日留存聚合成一个 DTO |
+| `DailyActiveRecorder` | 拦截器侧按 `日期@apiKey` 去重记 `APP_ACTIVE`，跨天清空 |
+| `GET /api/stats/health` | `generatedCount / adoptedCount / pendingCount / adoptionRate / retention7d` |
+| 测试 3 份 | `DailyPlanAdoptionServiceTest`(5) + `ProductHealthEndpointTest`(9) + `CredentialLeakTest`(5) |
+
+口径与硬约束见 3.12，凭据泄露见 3.13。
+
+**变异验证（三次，关键的第二次）**
+
+| 变异 | 结果 |
+|---|---|
+| 无条件采用（去掉「任务真被推进」判定） | ✅ `untouchedTaskIsNotAdopted` 抓住 |
+| **去掉 pending 排除** | ⚠️ **接口测试 9/9 仍全绿** —— 接口层 `countPendingPlans` 减了 pending，把服务层缺陷盖住了，但事件表里已经写了错的 `PLAN_ADOPTED`。补 `DailyPlanAdoptionServiceTest` 后立刻被抓 |
+| 去掉 settle 去重 | ✅ `writesExactlyOneAdoptedEventAcrossRepeatedSettles` 抓住 |
+
+**真实端到端**：独立 3300 端口实例，造「昨天的计划 + 任务昨天 15:00 完成」→ `{"generatedCount":1,"adoptedCount":1,"pendingCount":0,"adoptionRate":100.0}`，重复调用结果一致。去重实测：连调 5 次 `/api/stats/health`，直接查 H2 库确认 `APP_ACTIVE` 只有 1 行。
+
+**顺带修掉凭据泄露**：审计 12 个实体，发现 4 个漏 `@JsonIgnore`。修完后重启实例实测任务接口响应，`apiKey` 字段已消失。
+
+**踩的坑**：① `-Dtest=A+B` maven 静默不跑，读到的是上一次的旧报告（显示 `Failures: 1` 但测试根本没执行）——**必须用逗号 `-Dtest=A,B`**，且先删旧报告；② 两个精简 `@SpringBootTest` 用 `@Import` 手工列 Bean，`DailyPlanServiceImpl` 新增构造器依赖后必须同步补进 `@Import`，否则 18 个 ERROR；③ `student_profile` 的 `interest`/`skills` 是 NOT NULL 无默认值，造数要显式传。
+
+---
 
 ### 2026-10-19 · WorkBuddy · 界面里切换默认 provider（成本治理 6.1 #2 收尾）
 
@@ -888,7 +935,7 @@ Key 存哪（复用 `LocalSettings` + `app.security.allow-local-ai-key-settings`
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 1 | **补用户行为埋点** | ✅ **P0-1 已完成提案确认/拒绝埋点**（`ai_event` + `decided_at` + `/api/stats/proposals`）。**仍缺**：计划采纳率（生成后 24h 内完成或调整占比）/ 7 日留存 / 计划采纳率口径（`daily_plan` 没有决定时刻字段，要先补数据） |
+| 1 | **补用户行为埋点** | ✅ **已完成**。三块齐了：(a) 提案确认/拒绝（P0-1：`ai_event` + `decided_at` + `/api/stats/proposals`）；(b) **计划采纳率**（`DailyPlanAdoptionService` 读时对账，判定口径是「计划引用的任务当天真被推进」而非用户点赞，见 3.12）；(c) **7 日留存**（`APP_ACTIVE` 事件，`DailyActiveRecorder` 按天去重）。统一出口 `GET /api/stats/health`，返回 `generatedCount / adoptedCount / pendingCount / adoptionRate / retention7d`。**不需要给 `daily_plan` 补决定时刻字段**——`task.updated_at` 就是决定时刻 |
 | 2 | **多 LLM provider 注册** | ✅ **已完成**。后端 `OpenAiCompatibleLlmClient` + `app.llm.providers.<id>`（抽象层抽为 `AbstractOpenAiLlmClient`）；**界面配置也已完成**——设置页「AI 服务提供方」卡片可增删改，支持智谱/通义/豆包/Kimi 预设，Key 加密落盘，保存后**热生效不需重启**（见 3.11） |
 | 3 | **按任务分级路由** | ✅ **已完成**（`app.llm.routes.<SCENE>=<providerId>`，7 处调用点改 `forScene(SCENE_*)`）。**下一步**：等真有第二个 provider 上线，按实测单价把 EXTRACT/OCR 这类轻活切过去；2026 年国产模型价格：DeepSeek-V4-Lite 0.1/0.2 元每百万 token、GLM-4-Flash 免费、V4-Pro 1.0/2.0（缓存命中 0.025） |
 | 4 | **Prompt Caching** | 系统提示词 + 学生画像这类稳定前缀打 cache 标记，输入成本可降 80–90% |
