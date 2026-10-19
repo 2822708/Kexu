@@ -154,3 +154,70 @@ UPDATE api_key SET account_role = 'ADMIN' WHERE label = 'Tangent0712';
 这是一次性回填（把当时的存量账号提为管理员），只在新库迁移时执行一次，不是后门。
 但**硬编码了账号标签**，属于技术债：换库或改标签会失效。已有 `StandaloneAdminRoleUpgrade`
 和 `app.admin-api-keys` 作为正式的管理员授予通道，这句可择机清理。
+
+---
+
+## 5. 从这里部署一份在线实例
+
+### 5.1 为什么不用沙箱的分享链接
+
+开发用的沙箱环境**只作开发**。它的对外网关不保证会把这个应用的端口暴露出去
+（实测：进程健康、`/api/health` 返回 up，但分享链接始终 404），
+所以对外可用的实例要落在你自己的机器上。
+
+### 5.2 打包
+
+```bash
+cd src/backend
+mvn -Pstandalone package      # 必须带 -Pstandalone
+```
+
+`-Pstandalone` 不能省：H2 驱动只在该 profile 是 runtime scope，前端 dist 也只在该 profile
+才会被复制进 jar。漏了的结果是「jar 能跑但打开是空白页 / 启动即找不到驱动」。
+
+产物：`src/backend/target/timetable-backend-1.0.0.jar`（约 35 MB，已含前端）。
+
+### 5.3 部署
+
+```bash
+mkdir -p ~/timetable && cd ~/timetable
+cp -r <仓库>/scripts/deploy/* .          # Dockerfile + deploy.sh
+cp <仓库>/src/backend/target/timetable-backend-1.0.0.jar .
+
+./deploy.sh docker                       # 有 Docker（推荐）
+./deploy.sh jar                          # 没 Docker，需要 JDK 17+
+PORT=8080 ./deploy.sh docker             # 换端口
+PORT=8080 ./deploy.sh stop               # 停
+```
+
+两种模式都会：
+
+- 首次运行生成主密钥写入 `.env`（**别删**，换个值已存的 AI Key 就解不开）；
+- 数据落在 `./data/`——H2 文件库 + `settings.properties`，重启不丢；
+- 等到 `/api/health` 返回 up 才报成功，不会「看起来启动了其实没起」。
+
+### 5.4 装到手机上
+
+浏览器打开实例地址 → 菜单里选「添加到主屏幕 / 安装应用」。
+
+> **必须走 https（或 localhost）**，PWA 的 Service Worker 只在安全上下文注册。
+> 局域网 `http://192.168.x.x:3000` 能打开页面，但**装不上、离线缓存也不生效**。
+> 要给别人用，前面套一层 Nginx + Let's Encrypt，或用 Cloudflare Tunnel。
+
+### 5.5 备份
+
+```bash
+# 停服务后直接复制整个数据目录即可（H2 是单文件库）
+./deploy.sh stop && tar czf backup-$(date +%F).tgz data/
+```
+
+### 5.6 排查
+
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| 打开是空白页 | 打包漏了 `-Pstandalone` | 重新 `mvn -Pstandalone package` |
+| 启动报 `No suitable driver` | 同上，H2 没进 jar | 同上 |
+| 页面能开但一直「暂时无法连接」 | 后端没起 / 端口不通 | `curl <地址>/api/health` 看是不是 503 |
+| `/api/health` 返回 503 | 数据库连不上 | 看日志，确认 `./data` 目录可写 |
+| 之前配的 AI Key 全部失效 | `.env` 里主密钥变了 | 找回旧值；找不回只能在界面里重填 |
+| 装不到主屏 | 走的是 http 而非 https | §5.4 |
