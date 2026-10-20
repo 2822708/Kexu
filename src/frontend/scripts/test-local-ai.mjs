@@ -68,6 +68,54 @@ test('speech consent revoked in an older tab also revokes the renamed preference
   assert.ok(updates >= 1)
 })
 
+test('revoking speech consent notifies an older tab even if the new preference write fails, without mirroring grants', () => {
+  for (const blockedKey of [null, 'kexu_speech_consent_v1', legacyNames.speechConsent]) {
+    const values = new Map([['kexu_speech_consent_v1', 'true'], [legacyNames.speechConsent, 'true']])
+    const olderTab = new EventTarget()
+    let olderConsent = true
+    olderTab.addEventListener('storage', (event) => {
+      // A still-open previous release only understands its original preference.
+      if (event.key === legacyNames.speechConsent) olderConsent = event.newValue === 'true'
+    })
+    const writes = []
+    const localStorage = {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => {
+        writes.push([key, value])
+        if (key === blockedKey) throw new Error('storage unavailable')
+        values.set(key, value)
+        const event = new Event('storage')
+        Object.assign(event, { key, newValue: value, storageArea: localStorage })
+        olderTab.dispatchEvent(event)
+      },
+    }
+    const window = new EventTarget()
+    window.localStorage = localStorage
+    const hooks = {
+      useCallback: (fn) => fn, useEffect: () => {}, useRef: (current) => ({ current }),
+      useState: (initial) => [initial, () => {}],
+      useSyncExternalStore: (subscribe, getSnapshot) => { subscribe(() => {}); return getSnapshot() },
+    }
+    const module = { exports: {} }
+    const compiled = ts.transpileModule(readFileSync(new URL('../src/hooks/useSpeechInput.ts', import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText
+    vm.runInNewContext(compiled, { module, exports: module.exports, window, localStorage,
+      require: (name) => name === 'react' ? hooks : { legacyNames, readCompatiblePreference } })
+    const [, setConsent] = module.exports.useSpeechConsent()
+    assert.doesNotThrow(() => setConsent(false))
+    assert.equal(module.exports.useSpeechConsent()[0], false)
+    assert.ok(writes.some(([key, value]) => key === legacyNames.speechConsent && value === 'false'))
+    if (blockedKey !== legacyNames.speechConsent) {
+      assert.equal(olderConsent, false)
+      assert.equal(values.get(legacyNames.speechConsent), 'false')
+    }
+    assert.doesNotThrow(() => setConsent(true))
+    assert.equal(module.exports.useSpeechConsent()[0], true)
+    assert.equal(writes.some(([key, value]) => key === legacyNames.speechConsent && value === 'true'), false)
+  }
+})
+
 const syntheticKey = 'synthetic-only-eval-key-12345678'
 const scheduleBody = {
   name: '评测专用课表',

@@ -71,6 +71,11 @@ function setConsent(value: boolean) {
     // A blocked/full store must not prevent an explicit choice during this page session.
     sessionOnlyConsent = true
   }
+  if (!value) {
+    // Older open tabs observe only their original key. Revoke them independently;
+    // granting consent in this version must never enable an older tab.
+    try { window.localStorage.setItem(legacyNames.speechConsent, 'false') } catch { /* Best effort if storage is unavailable. */ }
+  }
   notifyConsentListeners()
 }
 
