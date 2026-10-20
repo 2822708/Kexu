@@ -1,0 +1,11 @@
+{
+  "status": "not_run",
+  "reason": "Live model quality is unmeasured. Set dedicated AI_EVAL_ENDPOINT/AI_EVAL_MODEL/AI_EVAL_API_KEY and pass --live explicitly.",
+  "credentialPresence": {
+    "AI_EVAL_API_KEY": false,
+    "OPENAI_API_KEY": false,
+    "DEEPSEEK_API_KEY": false,
+    "AI_API_KEY": false
+  },
+  "semanticCases": 12
+}
