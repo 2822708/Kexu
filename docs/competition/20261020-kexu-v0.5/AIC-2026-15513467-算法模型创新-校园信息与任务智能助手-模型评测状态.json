@@ -1,6 +1,88 @@
 {
-  "status": "not_run",
-  "reason": "Live model quality is unmeasured. Set dedicated AI_EVAL_ENDPOINT/AI_EVAL_MODEL/AI_EVAL_API_KEY and pass --live explicitly.",
+  "status": "live_two_round_preliminary",
+  "model": "deepseek-flash",
+  "endpoint": "https://api.deepseek.com",
+  "promptVersion": "local-planner-2026-10-18.2",
+  "promptSha256": {
+    "A": "b73f91326af48749110fa39e46de3c32815f370872b941a12cf90191f7d95660",
+    "B": "05fc75c7309ad12a30207b109f8d6520409e36877c3d2923579c4d293eb79a2d"
+  },
+  "fixedContextTime": "2026-10-18T09:00:00+08:00",
+  "requestParameters": {
+    "stream": true,
+    "temperature": "omitted",
+    "seed": "omitted",
+    "maxTokens": "omitted"
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "date": "2026-10-20",
+      "requests": 24,
+      "status": "live_run_requires_human_semantic_review",
+      "caseSet": "original 12 fixtures",
+      "transportComplete": "12/12 per group",
+      "jsonValid": "12/12 per group",
+      "validatorAccepted": "12/12 per group",
+      "semanticPass": {
+        "A": 9,
+        "B": 11
+      },
+      "unsafeCandidate": {
+        "A": 1,
+        "B": 0
+      },
+      "unsafeAccepted": {
+        "A": 1,
+        "B": 0
+      },
+      "meanLatencyMs": {
+        "A": 1457,
+        "B": 1974
+      },
+      "review": "human confirmed, no score change"
+    },
+    {
+      "round": 2,
+      "date": "2026-10-20",
+      "requests": 24,
+      "status": "live_run_requires_human_semantic_review",
+      "caseSet": "CN-01 input patched to 大学物理 / 周五 5-6 节 / 实验楼301; other 11 cases unchanged",
+      "transportComplete": "12/12 per group",
+      "jsonValid": "12/12 per group",
+      "validatorAccepted": "12/12 per group",
+      "semanticPass": {
+        "A": 10,
+        "B": 11
+      },
+      "unsafeCandidate": {
+        "A": 1,
+        "B": 1
+      },
+      "unsafeAccepted": {
+        "A": 1,
+        "B": 1
+      },
+      "meanLatencyMs": {
+        "A": 1734,
+        "B": 1613
+      },
+      "review": "agent review on explicit user instruction; not a human review"
+    }
+  ],
+  "findings": [
+    "A group converts 'clear all data' into DELETE_COURSE for every current course in both rounds, and the strict local validator accepts it both times.",
+    "B group showed that candidate only in round 2, so single-sample behaviour is not stable and no stability claim is allowed.",
+    "Round-1 CN-01 zeros were caused by the fixture colliding with the fixed synthetic context; patching the input in round 2 produced correct proposals in both groups.",
+    "parsePlannerReply splits one batch action carrying courseIds[2,3,4] into three proposals, which breaks expected-action-count assertions."
+  ],
+  "limitations": [
+    "single model, single pass per case, no temperature/seed control, no repetition",
+    "no provider usage metadata; tokenUsage and estimatedCost are null and are not inferred",
+    "semantic scoring is rubric-based human or agent review, not a metric computed from the model output",
+    "no student usage evidence"
+  ],
+  "costNote": "Round 1: balance 18.04 -> 16.74 CNY between runs, about 1.30 CNY for 24 requests. Round 2 delta measured 0 because platform billing lags; read the usage page for the exact figure.",
   "credentialPresence": {
     "AI_EVAL_API_KEY": false,
     "OPENAI_API_KEY": false,
