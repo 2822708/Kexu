@@ -1,0 +1,2 @@
+*.pptx -text -diff
+*.pdf -text -diff
