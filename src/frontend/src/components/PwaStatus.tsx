@@ -267,7 +267,7 @@ export default function PwaStatus() {
         aria-label="应用安装与更新"
       >
         {waiting && (
-          <Button size="small" aria-label="更新应用" title="更新课序" icon={<ReloadOutlined />} onClick={() => setUpdateOpen(true)}>
+          <Button size="small" aria-label="更新应用" title="更新Kexu" icon={<ReloadOutlined />} onClick={() => setUpdateOpen(true)}>
             更新
           </Button>
         )}
@@ -275,7 +275,7 @@ export default function PwaStatus() {
           <Button
             size="small"
             aria-label="安装应用"
-            title="安装课序到主屏幕"
+            title="安装Kexu到主屏幕"
             icon={<DownloadOutlined />}
             loading={installing}
             onClick={() => void install()}
@@ -290,7 +290,7 @@ export default function PwaStatus() {
         )}
       </aside>
       <Modal
-        title="将课序添加到主屏幕"
+        title="将Kexu添加到主屏幕"
         open={guideOpen}
         onCancel={() => setGuideOpen(false)}
         footer={<Button onClick={() => setGuideOpen(false)}>知道了</Button>}

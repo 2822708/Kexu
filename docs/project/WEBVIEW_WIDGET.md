@@ -1,10 +1,12 @@
+> 名称整理说明（2026-10-19）：本页为历史资料的 Kexu 阅读副本，名称与示例已统一，原始字节和原始补丁保存在 [Git 历史](https://github.com/2822708/Kexu/tree/c6c26a13ec812833cf74c374c4c9f5867d8169e6)。下文测试、路径及运行包均描述当时版本，不代表当前发行包或本轮重新验证。
+
 > 迁移说明（2026-09-26）：本文件来自修复版 `32de25c`。正文中的目录树和启动命令仍描述原布局；当前后端为 `src/backend`，前端为 `src/frontend`。当前入口见 [文档导航](../README.md) 和 [开发命令](../DEVELOPMENT.md)。
 
 # WebView 小组件 / 全屏应用
 
 > 更新日期：2026-09-26
 
-「大切课程表」在移动端通过 **WebView** 承载，iPad 与 Android 采用同一套方式。区别只在
+「Kexu」在移动端通过 **WebView** 承载，iPad 与 Android 采用同一套方式。区别只在
 加载哪个页面，共有两种承载形态：
 
 | 形态 | 加载地址 | 说明 |
@@ -65,7 +67,7 @@ X-API-Key: <APIKEY>
   "code": 200,
   "message": "success",
   "data": {
-    "title": "大切课程表",
+    "title": "Kexu",
     "week": "第3周",
     "today": "2026-09-26 周六",
     "updatedAt": "12:30",

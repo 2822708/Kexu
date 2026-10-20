@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-Read-only checks for the Tangent Timetable Windows Android toolchain.
+Read-only checks for the Kexu Windows Android toolchain.
 .DESCRIPTION
 Inspects files and version metadata without running SDK/Gradle commands,
 downloading components, accepting licenses, or changing environment variables.
@@ -208,7 +208,7 @@ if ($AsJson) {
     $result | ConvertTo-Json -Depth 5
 }
 else {
-    Write-Output 'Tangent Timetable Android environment (read-only inspection)'
+    Write-Output 'Kexu Android environment (read-only inspection)'
     foreach ($check in $checks) {
         $optional = ''
         if (-not $check.required) { $optional = ' (optional)' }

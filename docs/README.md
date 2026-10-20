@@ -2,9 +2,11 @@
 
 ## 当前项目
 
+[Kexu 命名与兼容边界](BRANDING.md) 说明当前英文品牌、稳定本地数据身份和历史资料处理。
+
 | 文件 | 用途 |
 |---|---|
-| [design/UI_REDESIGN_PLAN.md](design/UI_REDESIGN_PLAN.md) | 课序浅色蓝绿UI、命名依据、页面架构与实施顺序 |
+| [design/UI_REDESIGN_PLAN.md](design/UI_REDESIGN_PLAN.md) | Kexu浅色蓝绿UI、命名依据、页面架构与实施顺序 |
 | [design/UI_IMPLEMENTATION_2026_10_19.md](design/UI_IMPLEMENTATION_2026_10_19.md) | 新界面落实、实际截图、周表与移动布局复验、preview.2交付 |
 | [design/DAILY_TASKS_PRODUCT_PLAN.md](design/DAILY_TASKS_PRODUCT_PLAN.md) | 今日任务、自选重点、完成正反馈、每日回顾、临时事项与数据迁移策划 |
 | [design/DAILY_TASKS_IMPLEMENTATION.md](design/DAILY_TASKS_IMPLEMENTATION.md) | 日任务正式实现、schema2迁移、回顾/草稿、运行包与验收边界 |
@@ -22,7 +24,7 @@
 | [android/ANDROID_IMPLEMENTATION_STATUS.md](android/ANDROID_IMPLEMENTATION_STATUS.md) | Android 源码已落地部分、未完成范围与构建验证边界 |
 | [android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md](android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md) | Windows 安卓环境安装入口、固定版本、SDK/IDE路径和当前验证状态 |
 | [android/EXCHANGE_FORMAT_V1.md](android/EXCHANGE_FORMAT_V1.md) | Android/桌面文件交换 JSON v1 结构与导入语义 |
-| [releases/windows-2026-09-26.json](releases/windows-2026-09-26.json) | 纳入的桌面成品逐文件 SHA-256 清单 |
+| [历史交付来源](WORKSPACE_SETUP.md) | 初次桌面导入与校验记录；不是当前发行包清单 |
 | [reviews/PROJECT_UNDERSTANDING.md](reviews/PROJECT_UNDERSTANDING.md) | 当前项目结构、数据关系、AI 和循环机制 |
 | [reviews/CURRENT_ISSUES.md](reviews/CURRENT_ISSUES.md) | 原始问题处理状态和剩余验证边界 |
 | [reviews/OPTIMIZATION_PROPOSAL.md](reviews/OPTIMIZATION_PROPOSAL.md) | 工程架构分析、缺陷风险和分阶段优化方案 |
@@ -31,7 +33,7 @@
 
 ## 原项目资料
 
-这些文档来自修复版 `32de25c`，保留原文。原相对路径仍以旧仓库根为起点；当前源码路径应增加 `src/` 前缀。
+这些文档来自修复版 `32de25c`，产品名称和示例已统一为 Kexu，原始字节保存在 Git 历史。原相对路径仍以旧仓库根为起点；当前源码路径应增加 `src/` 前缀。
 
 | 文件 | 用途 |
 |---|---|
@@ -49,8 +51,8 @@
 - [交付说明](archive/handoff-2026-09-26/README.md)
 - [前次会话记录](archive/handoff-2026-09-26/01-全对话记录.md)
 - [前次审查报告](archive/handoff-2026-09-26/02-代码审查报告.md)
-- [原修复补丁](archive/handoff-2026-09-26/03-修复补丁.patch)
-- [桌面版补丁](archive/handoff-2026-09-26/04-桌面版补丁.patch)
+- [修复补丁阅读副本](archive/handoff-2026-09-26/03-修复补丁.patch)
+- [桌面版补丁阅读副本](archive/handoff-2026-09-26/04-桌面版补丁.patch)
 - [安卓离线版方案（设计资料）](archive/handoff-2026-09-26/05-安卓离线单机版方案.md)
 
-历史审查报告的顶部是修复状态更新，正文主要保留修复前描述；两份补丁均已包含在当前源码基线，不要再次应用。归档中的安卓方案是历史设计稿，已由当前项目中的 [Android 实施架构方案](android/ANDROID_IMPLEMENTATION_PLAN.md) 细化取代；Compose首个离线业务切片已有源码且仍暂停，本次APK另见 [原生外壳封装](native/README.md)。当前项目没有复制 original/fixed 两套目录，版本对比使用 Git 标签。
+历史审查报告的顶部是修复状态更新，正文主要保留修复前描述；两份补丁的功能均已包含在当前源码基线；名称整理后的副本只供阅读，不要再次应用。归档中的安卓方案是历史设计稿，已由当前项目中的 [Android 实施架构方案](android/ANDROID_IMPLEMENTATION_PLAN.md) 细化取代；Compose首个离线业务切片已有源码且仍暂停，本次APK另见 [原生外壳封装](native/README.md)。当前项目没有复制 original/fixed 两套目录，版本对比使用 Git 标签。

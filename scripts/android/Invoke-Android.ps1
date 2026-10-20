@@ -39,7 +39,7 @@ switch ($Action) {
         if ($LASTEXITCODE -ne 0) {
             throw 'Hardware acceleration is unavailable. Check BIOS virtualization and Windows Hypervisor Platform, then restart Windows if needed.'
         }
-        Start-Process -FilePath $emulator -ArgumentList '-avd Tangent_API_36 -no-snapshot-load'
+        Start-Process -FilePath $emulator -ArgumentList '-avd Kexu_API_36 -no-snapshot-load'
     }
     'Shell' {
         Set-Location $ProjectRoot

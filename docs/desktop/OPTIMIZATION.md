@@ -1,6 +1,6 @@
 # 桌面安全、构建与交付
 
-本文描述优化分支的源码行为。旧的 `releases/windows/TangentTimetable` 是历史交付物，不会因为源码改变而自动更新。是否可交付，以新包的 `release-manifest.json` 和真实冒烟结果为准。
+本文描述优化分支的源码行为。旧的 `releases/windows/Kexu` 是历史交付物，不会因为源码改变而自动更新。是否可交付，以新包的 `release-manifest.json` 和真实冒烟结果为准。
 
 ## 本机信任边界
 
@@ -31,7 +31,7 @@ SDK SHA256 为 `f492bbf547d0da329553b6727435b677579b1e9f91cc9e4a1ad029366d5f23d0
 发布构建需要准备微软分发的对应 **Windows x64 Fixed Version Runtime**，解压后的目录直接包含 `msedgewebview2.exe`。脚本核对确切版本和 Microsoft Authenticode 签名，并把完整运行时放入 `webview2-runtime`；WebView 优先使用包内该目录。Runtime 的实际输入可执行文件及全部产物都会记录 SHA256。没有取得微软 Fixed Runtime 原始 CAB 的已验证发布哈希，因此不把系统安装目录冒充已核验的发布归档。
 
 ```powershell
-Set-Location -LiteralPath 'E:\codex work\projects\Tangent-Timetable'
+Set-Location -LiteralPath 'E:\codex work\projects\Kexu'
 powershell -ExecutionPolicy Bypass -File .\src\desktop\build-desktop.ps1 `
   -FixedWebView2RuntimeDir 'E:\tools\Microsoft.WebView2.FixedVersionRuntime.153.0.4234.48.x64' `
   -OutputDir '.\releases\windows-optimized'
@@ -39,13 +39,13 @@ powershell -ExecutionPolicy Bypass -File .\src\desktop\build-desktop.ps1 `
 
 本机开发可显式选择 `-AllowEvergreenRuntime`，复用已安装的 WebView2 Runtime。该模式会记录实际运行时版本，但 `releaseVerified` 必为 `false`，不会混同于固定运行时发布构建。`-SkipSmokeTest` 同样明确标记为未验证开发包。所有已有输出目录均被保留，输出已存在时需要选择新目录。
 
-构建顺序为：版本核对 → `npm ci` → 前端 typecheck/lint/build → 后端 `mvnw.cmd -B -ntp verify -Pstandalone` → jlink → 校验和解压 SDK → C# 编译 → 隔离数据冒烟 → 写入清单 → 移动到指定输出目录。失败的中间结果留在仓库 `work/desktop-build` 下，便于诊断；不会打开 `%LOCALAPPDATA%\TangentTimetable` 的真实数据。
+构建顺序为：版本核对 → `npm ci` → 前端 typecheck/lint/build → 后端 `mvnw.cmd -B -ntp verify -Pstandalone` → jlink → 校验和解压 SDK → C# 编译 → 隔离数据冒烟 → 写入清单 → 移动到指定输出目录。失败的中间结果留在仓库 `work/desktop-build` 下，便于诊断；不会打开 `%LOCALAPPDATA%\Kexu` 的真实数据。
 
 `release-manifest.json` 包含 Git HEAD、工作区是否有未提交改动、工具链配置哈希、编译器与 jlink 哈希、前端 lockfile 哈希、验证范围和全部产物的大小/SHA256。它提供追踪和完整性检查；传统 .NET Framework 编译器的时间戳意味着本方案不声称二进制逐字节可重现。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\src\desktop\verify-package.ps1 `
-  -PackageDir '.\releases\windows-optimized\TangentTimetable' -RequireRelease
+  -PackageDir '.\releases\windows-optimized\Kexu' -RequireRelease
 ```
 
 校验器拒绝缺失、额外、哈希变化、重复和越出包目录的文件。清单本身未做代码签名，因此不能替代可信下载来源或发布签名。
@@ -57,7 +57,7 @@ powershell -ExecutionPolicy Bypass -File .\src\desktop\verify-package.ps1 `
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\src\desktop\test-desktop-security.ps1
 powershell -ExecutionPolicy Bypass -File .\src\desktop\test-desktop-smoke.ps1 `
-  -PackageDir '.\releases\windows-optimized\TangentTimetable'
+  -PackageDir '.\releases\windows-optimized\Kexu'
 ```
 
 冒烟工具使用全新 `work/` 数据目录与 `--smoke-test --data-dir=...` 参数，隐藏启动实际外壳，核对后端账号就绪、WebView 页面/自动登录、DPAPI 文件和退出后所属后端清理。它不会复用或终止已有 17817 服务。原生 helper/脚本测试证明信任策略，不能替代实际 WebView 外部导航、固定运行时分发及完整前后端打包检查。

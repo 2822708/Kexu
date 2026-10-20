@@ -1,3 +1,5 @@
+> 历史验收记录：产品名称已统一为 Kexu。以下运行包、哈希和测试结果属于改名前对应构建；当前命名更新不表示这些验证已再次执行。当前包请查阅发行目录的新清单。
+
 # 联网手机首版部署
 
 > 2026-10-18 用户已确认云只承担快照存储与应用发布下载，业务主数据留在设备，自动备份且恢复手动确认。[新架构约定](LOCAL_DATA_CLOUD_SNAPSHOTS.md) 取代本文作为后续目标；本文命令仍仅描述旧联网包，不应据此把 Java/H2 课表主库部署到云端并宣称符合新要求。
@@ -29,8 +31,8 @@ npm run build:mobile
 Set-Location -LiteralPath (Join-Path $project 'src\backend')
 .\mvnw.cmd -B -ntp "-Dmaven.repo.local=$mavenCache" -Pstandalone verify
 
-$dataDir = 'E:/Tangent-Mobile/data'
-java -jar .\target\timetable-backend-1.0.0.jar `
+$dataDir = 'E:/Kexu-Mobile/data'
+java -jar .\target\kexu-backend-1.0.0.jar `
   --spring.profiles.active=standalone `
   --server.address=127.0.0.1 --server.port=17827 `
   "--app.data-dir=$dataDir" `
@@ -38,7 +40,7 @@ java -jar .\target\timetable-backend-1.0.0.jar `
   --app.backup.enabled=false
 ```
 
-`standalone` 默认绑定 `127.0.0.1:17817`，上面的参数明确覆盖为反代使用的 `127.0.0.1:17827`。命令行参数优先于 `application-standalone.yml`。H2 文件库、日志、本地设置都使用显式的新目录；该服务不读取 `%LOCALAPPDATA%\TangentTimetable` 的用户数据。
+`standalone` 默认绑定 `127.0.0.1:17817`，上面的参数明确覆盖为反代使用的 `127.0.0.1:17827`。命令行参数优先于 `application-standalone.yml`。H2 文件库、日志、本地设置都使用显式的新目录；该服务不读取 `%LOCALAPPDATA%\Kexu` 的用户数据。
 
 前端 API 默认 `/api`，同源部署不需要更换认证。当前认证头是 `X-API-Key`，不是 Cookie；无需为了手机首版新增 JWT 或改登录协议。设备自动注册为普通用户，不自动获得管理员权限。
 
@@ -81,7 +83,7 @@ $project = (Get-Location).Path
 $testData = Join-Path $project ('work\mobile-api-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $testData | Out-Null
 $testData = $testData.Replace('\', '/')
-java -jar (Join-Path $project 'src\backend\target\timetable-backend-1.0.0.jar') `
+java -jar (Join-Path $project 'src\backend\target\kexu-backend-1.0.0.jar') `
   --spring.profiles.active=standalone `
   --server.address=127.0.0.1 --server.port=17827 `
   "--app.data-dir=$testData" `
@@ -105,7 +107,7 @@ node .\scripts\mobile\smoke-api.mjs http://127.0.0.1:17827 .\work\mobile-api-smo
 
 当前独立 checkout 的 109 个 Java 源文件编译及 standalone JAR 首次打包通过。完成 `build:mobile` 后已再次打包并确认可执行 JAR 内含手机 `index.html`、manifest、Service Worker 与 H2。最终交付文件校验值在发布清单中记录；不把中间包的校验值用于后续重新构建的文件。
 
-最终同源 JAR 为 `src/backend/target/timetable-backend-1.0.0.jar`，34,867,145 字节，SHA-256：
+当时的同源 JAR 为 34,867,145 字节，SHA-256 如下；原始文件名见 [历史构建记录](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/mobile/BUILD_VALIDATION.json)，此值不可用于校验按当前 Kexu 名称重新构建的文件：
 
 ```text
 1F10CA7B65E21C4E64142267740E72167036D8833A3A7C9F2D72664AEB45DE32

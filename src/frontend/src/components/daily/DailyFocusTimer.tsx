@@ -1,16 +1,17 @@
+import { readCompatiblePreference } from '../../../../shared/brandCompatibility.mjs'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Select } from 'antd'
 import { PauseOutlined, PlayCircleOutlined } from '@ant-design/icons'
 
 type Target = { key: string; title: string }
 type Timer = { target: Target; remaining: number; endsAt: number | null; phase: 'focus' | 'break' }
-const TIMER_KEY = 'tangent.daily.timer.v2'
+const TIMER_KEY = 'kexu.daily.timer.v2'
 const label = (seconds: number) =>
   `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 
 function readTimer(generation: string): Timer | null {
   try {
-    const saved = JSON.parse(localStorage.getItem(TIMER_KEY) ?? 'null')
+    const saved = JSON.parse(readCompatiblePreference(localStorage, TIMER_KEY) ?? 'null')
     if (
       saved?.generation === generation &&
       saved.timer &&

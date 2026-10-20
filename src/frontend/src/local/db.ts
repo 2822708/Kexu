@@ -1,8 +1,10 @@
+import { legacyNames } from '../../../shared/brandCompatibility.mjs'
 import { createEmptyLocalState, newPublicId, type LocalState } from './types'
 import { migrateLocalStateV1, validateLocalState } from './validation'
 export { validateLocalState } from './validation'
 
-export const LOCAL_DATABASE_NAME = 'tangent-timetable-local-v1'
+// Stable identity: preserve existing records and cross-version notifications.
+export const LOCAL_DATABASE_NAME = legacyNames.localDatabase
 const STORE_NAME = 'main'
 const STATE_KEY = 'state'
 let connection: Promise<IDBDatabase> | null = null

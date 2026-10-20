@@ -25,8 +25,8 @@ internal static class ShellPolicyTests
         Check(!ShellPolicy.IsExternalHttp("ms-settings:privacy"), "custom protocol blocked");
         Check(ShellPolicy.IsExternalHttp("https://example.com/a"), "external https allowed");
         Check(!ShellPolicy.IsExternalHttp(origin), "app not external");
-        var request = ShellPolicy.ParseSaveRequest(origin + "/focus", origin + "/focus", Message("课序-备份.json", "{\"schemaVersion\":2}"));
-        Check(request.Filename == "课序-备份.json", "Unicode filename");
+        var request = ShellPolicy.ParseSaveRequest(origin + "/focus", origin + "/focus", Message("Kexu-备份.json", "{\"schemaVersion\":2}"));
+        Check(request.Filename == "Kexu-备份.json", "Unicode filename");
         Check(request.Text == "{\"schemaVersion\":2}", "exact JSON bytes retained");
         Rejected("https://evil.test", Message("a.json", "{}"), "foreign bridge denied");
         Rejected(origin + "/untrusted.html", Message("a.json", "{}"), "untrusted app path denied");

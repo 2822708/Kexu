@@ -71,7 +71,7 @@ src/android/
 │   ├── build.gradle.kts
 │   └── src/main/
 │       ├── AndroidManifest.xml
-│       └── java/com/tangent/timetable/
+│       └── java/com/kexu/timetable/
 │           ├── app/                 # Application、导航、依赖注入入口
 │           ├── core/model/          # 领域类型、枚举、校验结果
 │           ├── core/database/       # Room Database、Entity、DAO、迁移
@@ -92,7 +92,7 @@ src/android/
 └── schemas/                         # Room 版本化 schema JSON，纳入 Git
 ```
 
-推荐 Kotlin、Jetpack Compose、Navigation（优先采用项目启动时稳定的官方导航组件）、Coroutines/Flow、Room、DataStore、Hilt、OkHttp（SSE）、WorkManager 与 Glance。使用 Gradle Version Catalog 锁定依赖版本；实施启动时核实 Android Gradle Plugin、Compose、Room 和 Glance 的兼容稳定版本，不在本设计文档锁死可能过期的版本号。建议 `minSdk 26` 作为首个提案，发布时将 `targetSdk` 设为当时平台与分发要求；`applicationId` 暂定 `com.tangent.timetable.android`，首个对外发布前冻结。统一以 Java 17 工具链构建，桌面端当前技术栈不随此变更。
+推荐 Kotlin、Jetpack Compose、Navigation（优先采用项目启动时稳定的官方导航组件）、Coroutines/Flow、Room、DataStore、Hilt、OkHttp（SSE）、WorkManager 与 Glance。使用 Gradle Version Catalog 锁定依赖版本；实施启动时核实 Android Gradle Plugin、Compose、Room 和 Glance 的兼容稳定版本，不在本设计文档锁死可能过期的版本号。建议 `minSdk 26` 作为首个提案，发布时将 `targetSdk` 设为当时平台与分发要求；`applicationId` 暂定 `com.kexu.timetable.android`，首个对外发布前冻结。统一以 Java 17 工具链构建，桌面端当前技术栈不随此变更。
 
 工程首期已固定 AGP 8.13.2、Gradle 8.13、Kotlin 2.3.20、Room 2.8.5、Compose BOM 2026.09.00 与 Navigation 2.9.8，最低 API 26、目标 API 36。首期采用手动依赖装配，等边界稳定再评估 Hilt；依赖变更仍需对照官方兼容要求并实际构建验证。
 
@@ -203,14 +203,14 @@ Android 直连模型意味着用户的 DeepSeek Key 会被装在该用户自己�
 
 | 文件格式 | 用途 | 内容 |
 |---|---|---|
-| `tangent-timetable-backup` | 手机完整备份/恢复 | 所有业务数据；AI 会话/消息可选；可选口令加密 |
-| `tangent-timetable-exchange` | Android 与桌面版手动文件交换 | 课表、课程、考试、待办、结构化循环规则/期次、作息和提醒；不带 AI 历史、设备权限、队列和密钥 |
+| `kexu-backup` | 手机完整备份/恢复 | 所有业务数据；AI 会话/消息可选；可选口令加密 |
+| `kexu-exchange` | Android 与桌面版手动文件交换 | 课表、课程、考试、待办、结构化循环规则/期次、作息和提醒；不带 AI 历史、设备权限、队列和密钥 |
 
 两种文件都包含 format、整数 schemaVersion、sourceDatasetId、exportedAt（UTC RFC 3339）和 minimumReaderVersion；schemaVersion 与 Room 数据库版本各自演进。v1 交换文件示例如下：
 
 ```json
 {
-  "format": "tangent-timetable-exchange",
+  "format": "kexu-exchange",
   "schemaVersion": 1,
   "sourceDatasetId": "uuid",
   "exportedAt": "2026-09-27T12:00:00Z",

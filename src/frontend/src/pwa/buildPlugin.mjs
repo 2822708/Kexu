@@ -7,7 +7,7 @@ export function mobilePwa() {
   let base = '/'
   let publicDir = ''
   return {
-    name: 'tangent-mobile-pwa',
+    name: 'kexu-mobile-pwa',
     apply: 'build',
     enforce: 'post',
     configResolved(config) {
@@ -87,8 +87,8 @@ export function mobilePwa() {
         )
       const manifest = {
         id: base,
-        name: '课序 · 课表与待办',
-        short_name: '课序',
+        name: 'Kexu · 课表与待办',
+        short_name: 'Kexu',
         description:
           '课表、待办与考试在本机保存，可离线读写；云端提供自动快照、手动恢复与版本分发。AI 需要联网。',
         lang: 'zh-CN',

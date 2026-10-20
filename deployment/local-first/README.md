@@ -4,10 +4,10 @@
 
 ## 包与本机运行
 
-包目录包含 `web/`、`cloud/`、`deployment/`、`README.md`、`release-manifest.json`、`SHA256SUMS`。仅需 Node.js 20+，云服务无 npm 运行依赖；不需要 Java 或 Android SDK。
+包目录包含 `web/`、`cloud/`、`shared/`、`deployment/`、`README.md`、`release-manifest.json`、`SHA256SUMS`。仅需 Node.js 20+，云服务无 npm 运行依赖；不需要 Java 或 Android SDK。`shared/` 中的格式兼容注册表属于运行必需文件，部署时保留完整发行目录。
 
 ```powershell
-node deployment/preview.mjs --data-dir "E:/codex work/Tangent-local-data"
+node deployment/preview.mjs --data-dir "E:/codex work/Kexu-local-data"
 ```
 
 浏览器打开 `http://127.0.0.1:17827`。入口固定只监听 loopback，自动创建随机 loopback 云端口并同源转发，数据放显式目录；省略参数则放包内 `data/`，不会作为网页提供。`data/` 被包内 `.gitignore` 排除，不能上传或重新打包。首次运行前可执行 `node deployment/verify-package.mjs .`；已有默认 `data/` 后，原始包校验会提示额外文件，请将数据保存在包外。预览入口会跳过自己的私有运行目录校验，并继续检查所有发行文件。
@@ -23,18 +23,18 @@ node deployment/preview.mjs --data-dir "E:/codex work/Tangent-local-data"
 | `/var/www/timetable/assets/` | 共享只读哈希资源，保留旧资源供旧标签页读取 |
 | `/var/www/timetable/downloads/` | 公开 ZIP、版本元数据和校验清单；不放云端代码或数据 |
 | `/var/www/timetable/acme/` | 仅证书 HTTP 验证 |
-| `/var/lib/tangent-snapshots/` | 私有密文及 token 哈希，tangent:tangent，0700；文件0600 |
-| `/etc/tangent-snapshots/cloud.env` | root:root，0600；配额与站点配置 |
+| `/var/lib/kexu-snapshots/` | 私有密文及 token 哈希，kexu:kexu，0700；文件0600 |
+| `/etc/kexu-snapshots/cloud.env` | root:root，0600；配额与站点配置 |
 
-先检查 CPU/内存/磁盘、`node --version`（>=20）、`ss -lnt` 的9001占用及 `nginx -t`。端口已被其他程序使用时停止本次操作，不杀其他服务。检查 `tangent`、上述目录、`tangent-snapshots.service` 和同名 Nginx site 是否已存在；若不是本项目资源，不覆盖。
+先检查 CPU/内存/磁盘、`node --version`（>=20）、`ss -lnt` 的9001占用及 `nginx -t`。端口已被其他程序使用时停止本次操作，不杀其他服务。检查 `kexu`、上述目录、`kexu-snapshots.service` 和同名 Nginx site 是否已存在；若不是本项目资源，不覆盖。
 
 专用账户首次创建参考：
 
 ```sh
-sudo useradd --system --home-dir /var/lib/tangent-snapshots --no-create-home --shell /usr/sbin/nologin tangent
+sudo useradd --system --home-dir /var/lib/kexu-snapshots --no-create-home --shell /usr/sbin/nologin kexu
 sudo install -d -m 0755 /var/www/timetable /var/www/timetable/releases /var/www/timetable/assets /var/www/timetable/downloads /var/www/timetable/acme
-sudo install -d -m 0700 -o tangent -g tangent /var/lib/tangent-snapshots
-sudo install -d -m 0700 /etc/tangent-snapshots
+sudo install -d -m 0700 -o kexu -g kexu /var/lib/kexu-snapshots
+sudo install -d -m 0700 /etc/kexu-snapshots
 ```
 
 不要递归修改 `/var/www`、`/var/lib`、`/etc/nginx` 的权限。Node 必须在 `/usr/local/bin` 或 `/usr/bin`，专用用户能够执行；不要依赖 root 的 nvm 配置。systemd 将文件系统设为只读，只允许写本项目私有目录和私有临时目录。默认限制256 MiB内存、50% CPU、32任务；根据实际共享主机资源核对后使用。
@@ -44,7 +44,7 @@ sudo install -d -m 0700 /etc/tangent-snapshots
 将本机生成并校验的 ZIP 通过已验证主机身份的 SSH 上传至专用临时目录，先核对可信来源的 ZIP SHA-256，再解压；哈希只验证字节，不能替代发布者身份。不要从未核实的包中直接执行脚本。以下 `PACKAGE` 指向已解压的原始包：
 
 ```sh
-PACKAGE=/tmp/tangent-release
+PACKAGE=/tmp/kexu-release
 node "$PACKAGE/deployment/verify-package.mjs" "$PACKAGE"
 VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8')).version" "$PACKAGE/release-manifest.json")"
 [[ "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || exit 1
@@ -60,7 +60,7 @@ node "$RELEASE/deployment/verify-package.mjs" "$RELEASE"
 
 再将 `web/assets/` 中的哈希文件复制到 `/var/www/timetable/assets/`：同名已存在时先 `cmp -s` 验证字节相同，不同则中止，不能覆盖旧哈希资源；保留所有仍可能被旧标签页引用的文件。此步骤在切换前完成。
 
-首次配置将 `cloud.env.example` 安装到 `/etc/tangent-snapshots/cloud.env`（0600），将 unit 安装到 `/etc/systemd/system/tangent-snapshots.service`（0644）。已有配置不因更新被覆盖。私有目录不属于发行目录，切换或回滚均不得复制、清空它。
+首次配置将 `cloud.env.example` 安装到 `/etc/kexu-snapshots/cloud.env`（0600），将 unit 安装到 `/etc/systemd/system/kexu-snapshots.service`（0644）。已有配置不因更新被覆盖。私有目录不属于发行目录，切换或回滚均不得复制、清空它。
 
 确认 `current` 不存在或为本项目软链，记录 `readlink /var/www/timetable/current` 作为上一个版本，然后原子切换：
 
@@ -68,12 +68,12 @@ node "$RELEASE/deployment/verify-package.mjs" "$RELEASE"
 sudo ln -s "releases/$VERSION" /var/www/timetable/.current-next
 sudo mv -T /var/www/timetable/.current-next /var/www/timetable/current
 sudo systemctl daemon-reload
-sudo systemctl enable tangent-snapshots
-sudo systemctl restart tangent-snapshots
+sudo systemctl enable kexu-snapshots
+sudo systemctl restart kexu-snapshots
 node "$RELEASE/deployment/healthcheck.mjs" --cloud
 ```
 
-`.current-next` 已存在时中止并检查，不自动覆盖未知路径。`enable`设置开机启动，`restart`启动或重启本项目服务。后台仅监听 `127.0.0.1:9001`，不开放公网端口。运行 `systemd-analyze verify` 和 `systemctl status tangent-snapshots` 检查实际系统支持与启动状态。
+`.current-next` 已存在时中止并检查，不自动覆盖未知路径。`enable`设置开机启动，`restart`启动或重启本项目服务。后台仅监听 `127.0.0.1:9001`，不开放公网端口。运行 `systemd-analyze verify` 和 `systemctl status kexu-snapshots` 检查实际系统支持与启动状态。
 
 ## 先 HTTP 验证，再获取真实 HTTPS
 
@@ -95,9 +95,9 @@ HTTPS模板兼容Ubuntu22常见的Nginx语法。API保持`/api/v1/`前缀，`pro
 
 ## 日志、健康与回滚
 
-- `journalctl -u tangent-snapshots --since today --no-pager`：服务只输出启动与错误，不输出token、密文或解密密钥。unit有日志速率限制。
+- `journalctl -u kexu-snapshots --since today --no-pager`：服务只输出启动与错误，不输出token、密文或解密密钥。unit有日志速率限制。
 - 新site访问日志只记录方法、无query的URI、状态及字节，不记录Authorization/Referer。检查现有Nginx logrotate是否已覆盖`/var/log/nginx/*.log`，不要添加重复轮转规则。
-- 检查`df -h`、`du -sh /var/lib/tangent-snapshots`、`systemctl show tangent-snapshots -p MemoryCurrent`；逻辑配额不代替实际磁盘告警。默认全站256 MiB、单空间32 MiB/20份、16空间，注册为全站3次/天。
+- 检查`df -h`、`du -sh /var/lib/kexu-snapshots`、`systemctl show kexu-snapshots -p MemoryCurrent`；逻辑配额不代替实际磁盘告警。默认全站256 MiB、单空间32 MiB/20份、16空间，注册为全站3次/天。
 - 回滚时先校验先前完整发行目录及schema兼容性，将`.current-next`指向记录的旧`releases/<version>`，`mv -T`原子替换current，restart**本项目**服务并重跑健康检查。不要删除当前/旧发行目录、哈希资源、私有快照或本机IndexedDB。
 - 服务故障仅影响云快照；本地业务可继续。快照目录异常先停本服务并原样复制备份，不在线删索引或未知对象。找不到旧版本或schema不兼容时停止自动回滚并保留现场。
 

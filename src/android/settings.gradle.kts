@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TangentTimetableAndroid"
+rootProject.name = "KexuAndroid"
 include(":app")

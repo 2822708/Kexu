@@ -1,10 +1,12 @@
+> 名称整理说明（2026-10-19）：本页为历史资料的 Kexu 阅读副本，名称与示例已统一，原始字节和原始补丁保存在 [Git 历史](https://github.com/2822708/Kexu/tree/c6c26a13ec812833cf74c374c4c9f5867d8169e6)。下文测试、路径及运行包均描述当时版本，不代表当前发行包或本轮重新验证。
+
 > 迁移说明（2026-09-26）：本文件来自修复版 `32de25c`。正文中的目录树和启动命令仍描述原布局；当前后端为 `src/backend`，前端为 `src/frontend`。当前入口见 [文档导航](../README.md) 和 [开发命令](../DEVELOPMENT.md)。
 
 # 部署指南
 
 > 更新日期：2026-09-26
 
-「大切课程表」是前后端分离应用，推荐的部署形态为：**Nginx 托管前端静态文件 + 反向代理 `/api`，
+「Kexu」是前后端分离应用，推荐的部署形态为：**Nginx 托管前端静态文件 + 反向代理 `/api`，
 Spring Boot 以 systemd 常驻，MySQL 存数据**。本文档给出通用部署与运维流程，示例中的
 `<DOMAIN>`、`<SERVER_HOST>`、`<APP_DIR>`、`<WEB_ROOT>` 请按实际环境替换。
 
@@ -37,7 +39,7 @@ MySQL 数据库 timetable（建议独立库 + 专用账号）
 
 ```bash
 cd backend
-./mvnw package -DskipTests        # 产物：target/timetable-backend-1.0.0.jar
+./mvnw package -DskipTests        # 产物：target/kexu-backend-1.0.0.jar
 ```
 
 ### 2.2 生产配置
@@ -50,7 +52,7 @@ spring:
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/timetable?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
     username: timetable
-    password: ${TANGENT_COMMON_PASSWORD}
+    password: ${KEXU_COMMON_PASSWORD}
   sql:
     init:
       mode: always          # schema.sql / data.sql 幂等，启动自动建表与种子数据
@@ -60,28 +62,28 @@ server:
 
 ### 2.3 systemd 服务
 
-先创建环境文件。`application-prod.yml` 里的 `${TANGENT_COMMON_PASSWORD}` 就是从这里读的；
+先创建环境文件。`application-prod.yml` 里的 `${KEXU_COMMON_PASSWORD}` 就是从这里读的；
 systemd 的 `EnvironmentFile` 只认 `KEY=value` 行，**不能写 `export`**：
 
 ```bash
 sudo tee <APP_DIR>/.env >/dev/null <<'EOF'
-TANGENT_COMMON_PASSWORD=你的数据库密码
+KEXU_COMMON_PASSWORD=你的数据库密码
 DEEPSEEK_API_KEY=sk-xxx
 EOF
 sudo chmod 600 <APP_DIR>/.env
 ```
 
-`/etc/systemd/system/timetable-backend.service`：
+`/etc/systemd/system/kexu-backend.service`：
 
 ```ini
 [Unit]
-Description=Tangent Timetable Backend
+Description=Kexu Backend
 After=network.target mysql.service
 
 [Service]
 WorkingDirectory=<APP_DIR>
 EnvironmentFile=<APP_DIR>/.env
-ExecStart=/usr/bin/java -jar <APP_DIR>/timetable-backend-1.0.0.jar --spring.profiles.active=prod
+ExecStart=/usr/bin/java -jar <APP_DIR>/kexu-backend-1.0.0.jar --spring.profiles.active=prod
 Restart=on-failure
 User=www-data
 
@@ -93,9 +95,9 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now timetable-backend
-sudo systemctl status timetable-backend
-sudo journalctl -u timetable-backend -f
+sudo systemctl enable --now kexu-backend
+sudo systemctl status kexu-backend
+sudo journalctl -u kexu-backend -f
 ```
 
 ---
@@ -177,7 +179,7 @@ VALUES ('tt_xxx', '用户名', '头像URL');
 ```
 
 > 首次部署时 `api_key` 表为空，应用启动后会**自动创建首个账号**并把 Key 打印到日志
-> （也可用环境变量 `TANGENT_BOOTSTRAP_KEY` 预先指定）。建议用 ≥128 位随机串作为 Key，
+> （也可用环境变量 `KEXU_BOOTSTRAP_KEY` 预先指定）。建议用 ≥128 位随机串作为 Key，
 > 不要沿用任何文档里的示例值。仓库不再内置演示 Key。
 
 > **schema 变更需手动 ALTER**：`CREATE TABLE IF NOT EXISTS` 只会创建不存在的表，
@@ -210,8 +212,8 @@ cd backend && ./mvnw package -DskipTests
 cd ../frontend && npm ci && npm run build
 
 # 2. 上传后端 jar 并重启
-scp backend/target/timetable-backend-1.0.0.jar <SERVER_HOST>:<APP_DIR>/
-ssh <SERVER_HOST> 'sudo systemctl restart timetable-backend'
+scp backend/target/kexu-backend-1.0.0.jar <SERVER_HOST>:<APP_DIR>/
+ssh <SERVER_HOST> 'sudo systemctl restart kexu-backend'
 
 # 3. 上传前端静态文件（见 3.2）
 ```

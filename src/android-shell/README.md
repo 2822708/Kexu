@@ -1,8 +1,8 @@
-# 课序 Android 本地外壳
+# Kexu Android 本地外壳
 
 本工程将当前 `src/frontend` 的 `build:shell` 本地主数据版本装入 Android WebView；它与暂停中的 `src/android` Compose 工程无关。没有 Java 服务，也不把网页托管服务器作为数据主库。
 
-- 应用标识：`com.kexu.local`；首个安装包版本 `2026.10.19` / `2026101901`。
+- 应用标识：`com.kexu.local`；当前安装包版本 `2026.10.20.2` / `2026102002`。
 - Android 8.0 / API 26 起；需要较新的 Android System WebView。界面、IndexedDB 和 WebCrypto 在固定 `https://appassets.androidplatform.net` origin 下运行。升级须保留应用标识、origin 和签名；卸载或“清除数据”会删除本机资料，请先导出。
 - 外壳不自动读取浏览器PWA、旧Java桌面库或旧Compose应用的数据。需要在原端导出核心JSON，再从本应用的“本地数据与云快照”选择文件、预览并确认恢复。
 - 课表、日任务、回顾离线保存在应用私有WebView数据目录。首次安装不需要联网下载界面。AI与云快照仍需要HTTPS和服务端CORS许可；此安装包不绕过浏览器的CORS或证书校验，也不代替云部署。
@@ -19,7 +19,7 @@
 
 - Debug：`app/build/outputs/apk/debug/app-debug.apk`。
 - Release：`app/build/outputs/apk/release/app-release.apk`。
-- Release签名密钥与口令配置：仓库忽略的 `work/private/android-shell/`，不可提交或公开上传；以后更新包必须复用它。不要覆盖已有密钥；另行离线备份整个私有目录。
+- Release签名密钥与口令配置：默认在工具根的 `signing/Kexu/`，可用 `-SigningRoot` 指定受保护的私有目录，不可提交或公开上传。脚本会从此前本机私有目录复用已发布密钥；以后更新包必须复用它。不要覆盖已有密钥；另行离线备份整个私有目录。
 - Debug与release的签名不同，不可直接互相覆盖安装；正式交付只使用release。
 - `testDebugUnitTest`检查origin、路由、路径、文件名、长度和外链策略；它不能代替设备验收。
 

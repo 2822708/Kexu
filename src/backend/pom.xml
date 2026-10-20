@@ -12,11 +12,11 @@
     </parent>
 
     <groupId>com.timetable</groupId>
-    <artifactId>timetable-backend</artifactId>
+    <artifactId>kexu-backend</artifactId>
     <version>1.0.0</version>
-    <name>TimeTable Backend</name>
+    <name>Kexu Backend</name>
     <description>大学生课程表+待办事项 后端服务</description>
-    <url>https://github.com/Tangent0712/Tangent-Timetable</url>
+    <url>https://github.com/2822708/Kexu</url>
 
     <licenses>
         <license>
@@ -33,13 +33,14 @@
     </developers>
 
     <scm>
-        <url>https://github.com/Tangent0712/Tangent-Timetable</url>
-        <connection>scm:git:git@github.com:Tangent0712/Tangent-Timetable.git</connection>
+        <url>https://github.com/2822708/Kexu</url>
+        <connection>scm:git:git@github.com:2822708/Kexu.git</connection>
     </scm>
 
     <properties>
         <java.version>17</java.version>
         <mybatis-plus.version>3.5.6</mybatis-plus.version>
+        <frontend.dist.dir>${project.basedir}/../frontend/dist</frontend.dist.dir>
     </properties>
 
     <dependencies>
@@ -140,7 +141,7 @@
                                     <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
                                     <resources>
                                         <resource>
-                                            <directory>${project.basedir}/../frontend/dist</directory>
+                                            <directory>${frontend.dist.dir}</directory>
                                             <filtering>false</filtering>
                                         </resource>
                                     </resources>

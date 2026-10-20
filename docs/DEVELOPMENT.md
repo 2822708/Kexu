@@ -2,7 +2,7 @@
 
 ## 当前工作目录
 
-项目根目录：`E:\codex work\projects\Tangent-Timetable`。
+项目根目录：`E:\codex work\projects\Kexu`。
 
 这是独立文件夹和独立 Git 仓库，未创建或修改磁盘分区。根目录同时管理 docs 和 src，二者没有嵌套 Git 仓库。Windows 桌面源码也在 `src/desktop`，与前后端共享同一版本线。
 
@@ -19,10 +19,10 @@
 ## 检查命令（PowerShell）
 
 ```powershell
-Set-Location -LiteralPath 'E:\codex work\projects\Tangent-Timetable\src\backend'
+Set-Location -LiteralPath 'E:\codex work\projects\Kexu\src\backend'
 .\mvnw.cmd -B test
 
-Set-Location -LiteralPath 'E:\codex work\projects\Tangent-Timetable\src\frontend'
+Set-Location -LiteralPath 'E:\codex work\projects\Kexu\src\frontend'
 npm ci
 npm run typecheck
 npm run lint
@@ -31,15 +31,15 @@ npm run build
 
 ## 启动（PowerShell）
 
-先准备数据库和本机环境配置。默认后端配置读取 `TANGENT_COMMON_PASSWORD`，AI 读取 `DEEPSEEK_API_KEY`。不要把真实值写到版本控制中的文档或命令示例。
+先准备数据库和本机环境配置。默认后端配置读取 `KEXU_COMMON_PASSWORD`，AI 读取 `DEEPSEEK_API_KEY`。不要把真实值写到版本控制中的文档或命令示例。
 
 ```powershell
 # 后端终端：先在当前进程配置所需环境变量
-Set-Location -LiteralPath 'E:\codex work\projects\Tangent-Timetable\src\backend'
+Set-Location -LiteralPath 'E:\codex work\projects\Kexu\src\backend'
 .\mvnw.cmd spring-boot:run
 
 # 另一终端启动前端；首次先运行 npm ci
-Set-Location -LiteralPath 'E:\codex work\projects\Tangent-Timetable\src\frontend'
+Set-Location -LiteralPath 'E:\codex work\projects\Kexu\src\frontend'
 npm run dev
 ```
 
@@ -48,7 +48,7 @@ npm run dev
 ## Git 日常使用
 
 ```powershell
-Set-Location -LiteralPath 'E:\codex work\projects\Tangent-Timetable'
+Set-Location -LiteralPath 'E:\codex work\projects\Kexu'
 git status
 git log --oneline --decorate -10
 
@@ -68,14 +68,14 @@ git diff --cached
 git commit -m 'docs: update current issue status'
 ```
 
-`main` 是当前项目主分支。历史标签指向不可变的交付基线，不随 main 前进。
+当前远程默认分支是 `fix/complete-optimization-plan`。修改前读取 `git remote show origin` 与 `git status` 核实实际分支；历史标签继续指向不可变的交付基线。
 
-当前没有 origin/upstream 远程配置，`git remote -v` 应为空。本地文件夹和 Git 历史解决版本追踪，不替代异地备份。未来接入远程仓库时再配置 URL 并检查历史文件范围。
+远程仓库为 `https://github.com/2822708/Kexu`。推送前检查目标分支、工作区和秘密文件范围；本机与远程历史不能代替用户数据备份。不要强推替换既有历史。
 
 ## Git 忽略范围
 
 忽略依赖与构建目录、日志、真实 `.env.*`、application-local/prod 配置、work 临时文件和常见数据库转储/密钥文件。示例 `.env.example` 继续跟踪。
 
-桌面包位于 `releases/windows/TangentTimetable`，不纳入 Git；对应校验清单在 `docs/releases`。H2 数据文件和本地 settings/account 文件也被忽略。
+当前安装包与便携程序位于 `releases/native`，PWA 运行包位于 `releases/mobile`；使用各发行目录自己的校验清单。历史 Java 桌面包不因源码改名自动更新。H2 数据文件和本地 settings/account 文件也被忽略。
 
 Windows Maven 包装器在原 Git 对象中存储 CRLF；新仓库对该文件使用 `-text` 保留原字节，避免原 `.gitattributes` 设置引起的永久脏状态。其他文件沿用原规则。

@@ -6,11 +6,26 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace TangentTimetable
+namespace Kexu
 {
     // Kept independent of WebView2 so the trust boundary can be exercised without a UI.
+    // Read-only protocol bytes from older packages; new output uses Kexu.
+    internal static class LegacyIdentifiers
+    {
+        internal static readonly string DataDirectory = Ascii(84,97,110,103,101,110,116,84,105,109,101,116,97,98,108,101);
+        internal static readonly byte[] KeyEntropy = Encoding.ASCII.GetBytes(Ascii(84,97,110,103,101,110,116,84,105,109,101,116,97,98,108,101,46,100,101,115,107,116,111,112,45,107,101,121,46,118,49));
+        private static string Ascii(params byte[] bytes) { return Encoding.ASCII.GetString(bytes); }
+    }
+
     internal static class DesktopSecurity
     {
+        internal static string DefaultDataDirectory(string applicationDirectory, string localApplicationData)
+        {
+            string current = Path.Combine(applicationDirectory, "Data");
+            string prior = Path.Combine(localApplicationData, LegacyIdentifiers.DataDirectory);
+            return !Directory.Exists(current) && Directory.Exists(prior) ? prior : current;
+        }
+
         internal static string Origin(int port) { return "http://127.0.0.1:" + port; }
 
         internal static bool IsTrustedOrigin(string value, int port)
@@ -97,8 +112,9 @@ namespace TangentTimetable
 
     internal static class AccountKeyStore
     {
-        private const string Prefix = "DPAPI1:";
-        private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("TangentTimetable.desktop-key.v1");
+        private const string Prefix = "DPAPI2:";
+        private const string LegacyPrefix = "DPAPI1:";
+        private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("Kexu.desktop-key.v1");
 
         internal static string LoadOrCreate(string directory, out bool created)
         {
@@ -109,12 +125,13 @@ namespace TangentTimetable
             if (File.Exists(path))
             {
                 string value = File.ReadAllText(path).Trim();
-                if (!value.StartsWith(Prefix, StringComparison.Ordinal))
+                bool legacyProtected = value.StartsWith(LegacyPrefix, StringComparison.Ordinal);
+                if (!value.StartsWith(Prefix, StringComparison.Ordinal) && !legacyProtected)
                     throw new InvalidDataException("本机账号凭据格式无法识别。请保留数据目录并联系维护人员。");
                 try
                 {
-                    byte[] plain = ProtectedData.Unprotect(Convert.FromBase64String(value.Substring(Prefix.Length)),
-                        Entropy, DataProtectionScope.CurrentUser);
+                    byte[] plain = ProtectedData.Unprotect(Convert.FromBase64String(value.Substring(legacyProtected ? LegacyPrefix.Length : Prefix.Length)),
+                        legacyProtected ? LegacyIdentifiers.KeyEntropy : Entropy, DataProtectionScope.CurrentUser);
                     try { key = Encoding.UTF8.GetString(plain); }
                     finally { Array.Clear(plain, 0, plain.Length); }
                 }
@@ -122,7 +139,12 @@ namespace TangentTimetable
                 {
                     throw new InvalidOperationException("无法解密本机账号凭据，请使用创建该账号的 Windows 用户登录。", ex);
                 }
+                catch (FormatException ex)
+                {
+                    throw new InvalidDataException("本机账号凭据格式无法识别，请保留原文件并联系维护人员。", ex);
+                }
                 Validate(key);
+                if (legacyProtected) StoreProtected(path, key, true);
                 // Also finish a migration interrupted after the atomic protected-file write.
                 if (File.Exists(legacy) && File.ReadAllText(legacy).Trim() == key) File.Delete(legacy);
                 return key;
@@ -136,16 +158,22 @@ namespace TangentTimetable
                 created = true;
             }
             Validate(key);
+            StoreProtected(path, key, false);
+            if (File.Exists(legacy)) File.Delete(legacy);
+            return key;
+        }
+
+        private static void StoreProtected(string path, string key, bool replace)
+        {
             byte[] encrypted = ProtectedData.Protect(Encoding.UTF8.GetBytes(key), Entropy, DataProtectionScope.CurrentUser);
             string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
                 File.WriteAllText(temporary, Prefix + Convert.ToBase64String(encrypted), Encoding.ASCII);
-                File.Move(temporary, path);
+                if (replace) File.Replace(temporary, path, null);
+                else File.Move(temporary, path);
             }
             finally { if (File.Exists(temporary)) File.Delete(temporary); }
-            if (File.Exists(legacy)) File.Delete(legacy);
-            return key;
         }
 
         private static void Validate(string key)

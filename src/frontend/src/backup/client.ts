@@ -1,3 +1,4 @@
+import { legacyNames } from '../../../shared/brandCompatibility.mjs'
 import { ENCRYPTED_MAX_BYTES, fromBase64, type EncryptedSnapshot } from '../local/snapshots/crypto'
 import type { RecoveryCredential } from './storage'
 
@@ -41,7 +42,7 @@ export function validateCredential(value: unknown): RecoveryCredential {
   if (!value || typeof value !== 'object') throw new Error('恢复凭证无效')
   const credential = value as RecoveryCredential
   if (
-    credential.format !== 'tangent-cloud-recovery' ||
+    !['kexu-cloud-recovery', legacyNames.cloudRecovery].includes(credential.format) ||
     credential.version !== 1 ||
     !/^[0-9a-f-]{36}$/i.test(credential.vaultId) ||
     !/^[A-Za-z0-9_-]{43}$/.test(credential.token) ||
@@ -50,7 +51,7 @@ export function validateCredential(value: unknown): RecoveryCredential {
   )
     throw new Error('恢复凭证格式或密钥无效')
   return {
-    format: 'tangent-cloud-recovery',
+    format: 'kexu-cloud-recovery',
     version: 1,
     serverUrl: validateServerUrl(credential.serverUrl),
     vaultId: credential.vaultId,

@@ -1,3 +1,4 @@
+import { legacyNames } from '../shared/brandCompatibility.mjs'
 import http from 'node:http'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, rename, unlink, readdir, chmod, open } from 'node:fs/promises'
@@ -122,7 +123,7 @@ export async function createSnapshotServer(options = {}) {
   const validateEnvelope = (body) => {
     let envelope
     try { envelope = JSON.parse(body.toString('utf8')) } catch { fail(400, 'JSON 格式无效') }
-    if (!envelope || envelope.format !== 'tangent-encrypted-snapshot' || envelope.version !== 1 ||
+    if (!envelope || !['kexu-encrypted-snapshot', legacyNames.encryptedSnapshot].includes(envelope.format) || envelope.version !== 1 ||
       !UUID.test(envelope.snapshotId ?? '') || !UUID.test(envelope.datasetId ?? '') ||
       !Number.isSafeInteger(envelope.revision) || envelope.revision < 0 ||
       typeof envelope.createdAt !== 'string' || !Number.isFinite(Date.parse(envelope.createdAt)) ||

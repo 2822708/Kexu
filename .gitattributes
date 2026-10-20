@@ -7,7 +7,7 @@
 # Preserve the upstream CRLF blob without normalization-induced dirty status.
 src/backend/mvnw.cmd -text
 
-# Historical handoff files are retained byte-for-byte, including patch context.
+# Keep archive line endings; original handoff bytes remain in Git history.
 docs/archive/** -text
 
 # Shell / 包装脚本强制 LF

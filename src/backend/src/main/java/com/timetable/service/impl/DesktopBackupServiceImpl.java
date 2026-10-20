@@ -1,6 +1,7 @@
 package com.timetable.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.timetable.config.LegacyIdentifiers;
 import com.timetable.dto.BackupInfo;
 import com.timetable.dto.BackupPreview;
 import com.timetable.dto.BackupStatus;
@@ -47,10 +48,11 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class DesktopBackupServiceImpl implements DesktopBackupService {
     private static final Logger log = LoggerFactory.getLogger(DesktopBackupServiceImpl.class);
-    private static final String MANIFEST = "tangent-backup.json";
+    private static final String MANIFEST = "kexu-backup.json";
+    private static final String FORMAT = "kexu-h2-backup";
     private static final String DATABASE = "timetable.mv.db";
     private static final long MAX_DATABASE_BYTES = 1024L * 1024 * 1024;
-    private static final Pattern NAME = Pattern.compile("tangent-backup-[0-9]{8}-[0-9]{6}-[a-f0-9]{32}\\.zip");
+    private static final Pattern NAME = Pattern.compile("(?:kexu-backup-|" + Pattern.quote(LegacyIdentifiers.BACKUP_PREFIX) + ")[0-9]{8}-[0-9]{6}-[a-f0-9]{32}\\.zip");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
     private final DataSource dataSource;
     private final ObjectMapper json;
@@ -65,7 +67,7 @@ public class DesktopBackupServiceImpl implements DesktopBackupService {
     public DesktopBackupServiceImpl(DataSource dataSource, ObjectMapper json,
                                     AdminAuthorizationService authorization, Clock clock,
                                     Environment environment,
-                                    @Value("${app.data-dir:~/.tangent-timetable}") String dataDir,
+                                    @Value("${app.data-dir:~/.kexu}") String dataDir,
                                     @Value("${app.backup.enabled:true}") boolean enabled,
                                     @Value("${app.backup.retention:7}") int retention) {
         this.dataSource = dataSource;
@@ -153,11 +155,11 @@ public class DesktopBackupServiceImpl implements DesktopBackupService {
                 }
                 output.closeEntry();
                 output.putNextEntry(new ZipEntry(MANIFEST));
-                output.write(json.writeValueAsBytes(new Manifest("tangent-h2-backup", 1, createdAt.toString(),
+                output.write(json.writeValueAsBytes(new Manifest(FORMAT, 1, createdAt.toString(),
                         schemaVersion, DATABASE, digest.bytes(), digest.sha256())));
                 output.closeEntry();
             }
-            String name = "tangent-backup-" + TIME.format(clock.instant().atZone(clock.getZone()))
+            String name = "kexu-backup-" + TIME.format(clock.instant().atZone(clock.getZone()))
                     + "-" + UUID.randomUUID().toString().replace("-", "") + ".zip";
             Path finished = directory.resolve(name);
             Files.move(packed, finished, StandardCopyOption.ATOMIC_MOVE);
@@ -189,16 +191,19 @@ public class DesktopBackupServiceImpl implements DesktopBackupService {
     /** Pure archive preflight, shared by the regression round-trip test; does not mount the stored DB. */
     public static BackupPreview inspectArchive(Path archive, ObjectMapper json) throws IOException {
         try (ZipFile zip = new ZipFile(archive.toFile())) {
-            if (zip.size() != 2 || zip.getEntry(MANIFEST) == null || zip.getEntry(DATABASE) == null) {
+            ZipEntry manifestEntry = zip.getEntry(MANIFEST);
+            boolean legacy = manifestEntry == null;
+            if (legacy) manifestEntry = zip.getEntry(LegacyIdentifiers.BACKUP_MANIFEST);
+            if (zip.size() != 2 || manifestEntry == null || zip.getEntry(DATABASE) == null) {
                 throw new IOException("Unexpected backup archive layout");
             }
             Manifest manifest;
-            try (InputStream input = zip.getInputStream(zip.getEntry(MANIFEST))) {
+            try (InputStream input = zip.getInputStream(manifestEntry)) {
                 byte[] bytes = input.readNBytes(65_537);
                 if (bytes.length > 65_536) throw new IOException("Manifest too large");
                 manifest = json.readValue(bytes, Manifest.class);
             }
-            if (!"tangent-h2-backup".equals(manifest.format()) || manifest.formatVersion() != 1
+            if (!(legacy ? LegacyIdentifiers.BACKUP_FORMAT : FORMAT).equals(manifest.format()) || manifest.formatVersion() != 1
                     || !DATABASE.equals(manifest.databaseFile())) throw new IOException("Unsupported backup format");
             DigestResult database;
             try (InputStream input = zip.getInputStream(zip.getEntry(DATABASE))) {

@@ -213,7 +213,7 @@ if (
   }
   const server = await startPreview({ dataDir });
   console.log(
-    `Tangent local-first: ${server.origin}\nSnapshot data: ${server.dataDir}\nOnly this computer can connect. Use the HTTPS deployment for phones.`,
+    `Kexu local-first: ${server.origin}\nSnapshot data: ${server.dataDir}\nOnly this computer can connect. Use the HTTPS deployment for phones.`,
   );
   let stopping = false;
   const stop = () => {

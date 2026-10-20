@@ -1,6 +1,8 @@
+> 名称整理说明（2026-10-19）：本页为历史资料的 Kexu 阅读副本，名称与示例已统一，原始字节和原始补丁保存在 [Git 历史](https://github.com/2822708/Kexu/tree/c6c26a13ec812833cf74c374c4c9f5867d8169e6)。下文测试、路径及运行包均描述当时版本，不代表当前发行包或本轮重新验证。
+
 > 迁移说明（2026-09-26）：本文件来自修复版 `32de25c`。正文中的目录树和启动命令仍描述原布局；当前后端为 `src/backend`，前端为 `src/frontend`。当前入口见 [文档导航](../README.md) 和 [开发命令](../DEVELOPMENT.md)。
 
-# 大切课程表（Tangent Timetable）
+# Kexu
 
 面向大学生的**课程表 + 待办事项**一站式日程管理工具。以 AI 降低课表录入与维护成本，
 以实时倒计时、循环待办、考试管理覆盖整个学期的日程。
@@ -37,7 +39,7 @@
 ## 目录结构
 
 ```
-Tangent-Timetable/
+Kexu/
 ├── backend/                 # Spring Boot 后端
 │   ├── mvnw / .mvn/         # Maven Wrapper（无需另装 Maven）
 │   ├── pom.xml
@@ -75,7 +77,7 @@ JDK 17+、MySQL 8、Node.js 18+。Maven 由项目自带的 `./mvnw` 提供。
 cd backend
 
 # 数据库密码（默认回退为 root，可用环境变量覆盖）
-export TANGENT_COMMON_PASSWORD=你的数据库密码
+export KEXU_COMMON_PASSWORD=你的数据库密码
 
 # 可选：配置后才启用 AI 功能
 export DEEPSEEK_API_KEY=sk-xxx
@@ -92,7 +94,7 @@ export DEEPSEEK_API_KEY=sk-xxx
 
 ```bash
 # 想让首个账号用你指定的 Key，就在启动前设置（不设则随机生成并打印到日志）
-export TANGENT_BOOTSTRAP_KEY=your-custom-key
+export KEXU_BOOTSTRAP_KEY=your-custom-key
 ```
 
 后续新增账号见 [`docs/DEPLOYMENT.md`](DEPLOYMENT.md)（`INSERT INTO api_key ...`）。
@@ -113,13 +115,13 @@ npm run dev        # http://localhost:5173，/api 已代理到 :8080
 
 | 环境变量 | 说明 | 默认值 |
 |----------|------|--------|
-| `TANGENT_COMMON_PASSWORD` | MySQL 密码 | `root` |
+| `KEXU_COMMON_PASSWORD` | MySQL 密码 | `root` |
 | `DEEPSEEK_API_KEY` | DeepSeek 密钥；不配置则 AI 功能禁用 | 空 |
 | `DEEPSEEK_BASE_URL` | DeepSeek 接口地址 | `https://api.deepseek.com` |
 | `DEEPSEEK_MODEL` | 模型名（`deepseek-flash` = DeepSeek-V4.1-Flash） | `deepseek-flash` |
 | `CORS_ALLOWED_ORIGINS` | 允许跨域的来源（逗号分隔） | `*` |
 | `ADMIN_LABELS` | 可编辑全局作息表的账号 label（逗号分隔） | `Tangent0712` |
-| `TANGENT_BOOTSTRAP_KEY` | 首次启动且 `api_key` 表为空时，用它创建首个账号 | 空（随机生成并打印） |
+| `KEXU_BOOTSTRAP_KEY` | 首次启动且 `api_key` 表为空时，用它创建首个账号 | 空（随机生成并打印） |
 | `VITE_API_BASE`（前端） | 前端 API 基地址 | `/api` |
 | `VITE_ADMIN_LABELS`（前端） | 前端 UI 管理员判断（仅 UI，后端以 `ADMIN_LABELS` 为准） | `Tangent0712` |
 

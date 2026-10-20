@@ -1,11 +1,13 @@
-# Tangent-Timetable 交付包
+> 名称整理说明（2026-10-19）：本页为历史资料的 Kexu 阅读副本，名称与示例已统一，原始字节和原始补丁保存在 [Git 历史](https://github.com/2822708/Kexu/tree/c6c26a13ec812833cf74c374c4c9f5867d8169e6)。下文测试、路径及运行包均描述当时版本，不代表当前发行包或本轮重新验证。
+
+# Kexu 交付包
 
 本文件夹是本次工作的全部交付物:**可双击运行的 Windows 免安装桌面版**、代码审查报告、全对话记录、
 修复补丁,以及**原版**与**修复版**两个可对比的仓库。
 
 | 项 | 值 |
 |---|---|
-| 目标仓库 | <https://github.com/Tangent0712/Tangent-Timetable> |
+| 目标仓库 | <https://github.com/2822708/Kexu> |
 | 审查的提交 | `57313b1`（`main`） |
 | 修复提交 | `32de25c`（分支 `fix/critical-high`） |
 | 桌面化提交 | `fb93164` + `8f4f686`（分支 `feat/windows-desktop`） |
@@ -17,15 +19,15 @@
 ## 目录结构
 
 ```
-Tangent-Timetable-交付\
+Kexu-交付\
 ├── README.md                    本文件
 ├── 01-全对话记录.md              本次会话全过程：审查结论、实测证据、修复与桌面化
 ├── 02-代码审查报告.md            完整审查报告（2 严重 / 6 高危 / 29 中危 / 低危 / 文档偏差）
 ├── 03-修复补丁.patch             仅「修复严重与高危」的补丁
 ├── 04-桌面版补丁.patch           在 03 之上再打「Windows 桌面应用」的补丁
 ├── 桌面版\                        ★ 可直接双击运行的免安装桌面应用
-│   └── TangentTimetable\
-├── TangentTimetable-桌面版.zip   上面那个目录的压缩包（62.9 MB）
+│   └── Kexu\
+├── Kexu-桌面版.zip   上面那个目录的压缩包（62.9 MB）
 ├── original\                     原版仓库（未修改）  main @ 57313b1
 └── fixed\                        修复+桌面化后的源码仓库
 ```
@@ -34,23 +36,23 @@ Tangent-Timetable-交付\
 
 ## ★ 桌面版（免安装，零外部依赖）
 
-**双击 `桌面版\TangentTimetable\TangentTimetable.exe` 即可。**
+**双击 `桌面版\Kexu\Kexu.exe` 即可。**
 不需要安装 Java、Node.js 或 MySQL —— 数据库、运行时、前端、后端全部在目录里。
 
 | 组成 | 体积 | 说明 |
 |---|---|---|
 | `runtime\` | 49.2 MB | jlink 裁剪出的 JRE（18 个模块，已实测够用） |
-| `app\timetable-backend.jar` | 31.4 MB | Spring Boot fat jar，内含编译好的前端与 H2 驱动 |
-| `TangentTimetable.exe` | 26 KB | WebView2 外壳（.NET Framework 4.8 + 系统自带 csc 编译） |
+| `app\kexu-backend.jar` | 31.4 MB | Spring Boot fat jar，内含编译好的前端与 H2 驱动 |
+| `Kexu.exe` | 26 KB | WebView2 外壳（.NET Framework 4.8 + 系统自带 csc 编译） |
 | WebView2 组件 3 个 | 880 KB | 托管程序集 + 原生 Loader |
 | **合计** | **81.5 MB** | 整个目录拷到任何 Windows 10/11 x64 机器即可运行 |
 
 ### 工作方式
 
 ```
-TangentTimetable.exe
+Kexu.exe
  ├─ 生成/读取本机账号 Key（desktop-key.txt），注入 WebView 的 localStorage → 免登录
- ├─ 启动 runtime\bin\javaw.exe -jar app\timetable-backend.jar --spring.profiles.active=standalone
+ ├─ 启动 runtime\bin\javaw.exe -jar app\kexu-backend.jar --spring.profiles.active=standalone
  ├─ 轮询 http://127.0.0.1:17817/ 直到就绪（最长 90 秒）
  ├─ 用 WebView2 打开界面（无地址栏、自带图标）
  └─ 关窗时结束后端进程；并用 Job Object 保证外壳异常退出时子进程一并被系统回收
@@ -58,7 +60,7 @@ TangentTimetable.exe
 
 ### 数据位置
 
-全部在 `%LOCALAPPDATA%\TangentTimetable\`：
+全部在 `%LOCALAPPDATA%\Kexu\`：
 
 | 文件 | 内容 |
 |---|---|
@@ -92,7 +94,7 @@ powershell -ExecutionPolicy Bypass -File desktop\build-desktop.ps1
 2. **依赖 WebView2 Runtime**：Win11 与打过补丁的 Win10 都自带；极老或精简系统需要单独安装
    （外壳在缺失时会给出明确提示）。本机实测版本 153.0.4234.48。
 3. **只出 x64**：外壳按 `/platform:x64` 编译，用了 win-x64 的 WebView2Loader。
-4. **端口固定 17817**：被占用时会启动失败并提示日志路径。换端口可设环境变量 `TANGENT_PORT`。
+4. **端口固定 17817**：被占用时会启动失败并提示日志路径。换端口可设环境变量 `KEXU_PORT`。
 5. **高 DPI**：已声明 PerMonitorV2，200% 缩放下渲染清晰（见下方"顺带修掉的问题"）。
 
 ---
@@ -130,7 +132,7 @@ git branch -D fix/critical-high feat/windows-desktop   # 后悔了：删分支�
 ## 补丁的应用顺序
 
 ```bash
-git clone https://github.com/Tangent0712/Tangent-Timetable my-copy
+git clone https://github.com/2822708/Kexu my-copy
 cd my-copy
 git am /path/to/03-修复补丁.patch        # → 修复全部严重与高危
 git am /path/to/04-桌面版补丁.patch      # → 再加上 Windows 桌面应用
@@ -144,8 +146,8 @@ git am /path/to/04-桌面版补丁.patch      # → 再加上 Windows 桌面应�
 # 1) 数据库（XAMPP 自带 MariaDB；也可用控制面板启动）
 D:\mapp\mysql\bin\mysqld.exe --defaults-file=D:\mapp\mysql\bin\my.ini --standalone
 
-# 2) 后端 —— 关键：XAMPP 的 root 是空密码，而应用默认读 ${TANGENT_COMMON_PASSWORD:root}
-$env:TANGENT_COMMON_PASSWORD = ''
+# 2) 后端 —— 关键：XAMPP 的 root 是空密码，而应用默认读 ${KEXU_COMMON_PASSWORD:root}
+$env:KEXU_COMMON_PASSWORD = ''
 cd fixed\backend; .\mvnw.cmd spring-boot:run
 
 # 3) 前端

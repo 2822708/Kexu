@@ -1,7 +1,8 @@
+import { legacyNames } from '../../../../shared/brandCompatibility.mjs'
 import { SNAPSHOT_MAX_BYTES, validateLogicalSnapshot, type LogicalSnapshot } from './codec'
 
 export interface EncryptedSnapshot {
-  format: 'tangent-encrypted-snapshot'
+  format: 'kexu-encrypted-snapshot' | typeof legacyNames.encryptedSnapshot
   version: 1
   snapshotId: string
   datasetId: string
@@ -65,7 +66,7 @@ export async function encryptSnapshot(
   validateLogicalSnapshot(snapshot)
   const { key, keyId } = await importKey(rawKey)
   const header: Omit<EncryptedSnapshot, 'iv' | 'ciphertext'> = {
-    format: 'tangent-encrypted-snapshot',
+    format: 'kexu-encrypted-snapshot',
     version: 1,
     snapshotId: snapshot.snapshotId,
     datasetId: snapshot.source.datasetId,
@@ -86,7 +87,7 @@ export async function decryptSnapshot(input: unknown, rawKey: string): Promise<L
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('加密快照无效')
   const envelope = input as EncryptedSnapshot
   if (
-    envelope.format !== 'tangent-encrypted-snapshot' ||
+    !['kexu-encrypted-snapshot', legacyNames.encryptedSnapshot].includes(envelope.format) ||
     envelope.version !== 1 ||
     envelope.algorithm !== 'AES-GCM-256' ||
     typeof envelope.iv !== 'string' ||

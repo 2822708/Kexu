@@ -1,4 +1,4 @@
-// 大切课程表 —— Windows 桌面外壳（.NET Framework 4.8 + WebView2）
+// Kexu —— Windows 桌面外壳（.NET Framework 4.8 + WebView2）
 //
 // 职责：
 //   1. 单实例：已有实例在跑就直接提示退出
@@ -27,12 +27,12 @@ using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
-namespace TangentTimetable
+namespace Kexu
 {
     internal static class Program
     {
         internal const int Port = 17817;
-        private const string MutexName = "TangentTimetable.SingleInstance.v1";
+        private const string MutexName = "Kexu.SingleInstance.v1";
 
         private static readonly IntPtr DpiAwarenessPerMonitorV2 = new IntPtr(-4);
         private static readonly IntPtr DpiAwarenessPerMonitor = new IntPtr(-3);
@@ -89,7 +89,7 @@ namespace TangentTimetable
             {
                 if (!createdNew)
                 {
-                    MessageBox.Show("大切课程表已经在运行了。", "大切课程表",
+                    MessageBox.Show("Kexu已经在运行了。", "Kexu",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
@@ -117,7 +117,7 @@ namespace TangentTimetable
         internal MainForm(string isolatedDataDir, bool smokeTest)
         {
             this.smokeTest = smokeTest;
-            this.Text = "大切课程表";
+            this.Text = "Kexu";
             if (smokeTest) { this.ShowInTaskbar = false; this.Opacity = 0; }
 
             // 窗口内容只有一个 Dock 填充的 WebView2，不需要 WinForms 自动缩放布局；
@@ -128,9 +128,9 @@ namespace TangentTimetable
             this.webView.Dock = DockStyle.Fill;
             this.Controls.Add(this.webView);
 
-            this.dataDir = isolatedDataDir ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "TangentTimetable");
+            this.dataDir = isolatedDataDir ?? DesktopSecurity.DefaultDataDirectory(
+                AppDomain.CurrentDomain.BaseDirectory,
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
         }
 
         /// <summary>
@@ -204,11 +204,11 @@ namespace TangentTimetable
 
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string java = Path.Combine(baseDir, Path.Combine("runtime", Path.Combine("bin", "javaw.exe")));
-            string jar = Path.Combine(baseDir, Path.Combine("app", "timetable-backend.jar"));
+            string jar = Path.Combine(baseDir, Path.Combine("app", "kexu-backend.jar"));
             if (!File.Exists(java) || !File.Exists(jar))
             {
                 throw new FileNotFoundException(
-                    "安装不完整：缺少 runtime\\bin\\javaw.exe 或 app\\timetable-backend.jar。\r\n"
+                    "安装不完整：缺少 runtime\\bin\\javaw.exe 或 app\\kexu-backend.jar。\r\n"
                     + "请重新解压完整的安装目录后运行。");
             }
 
@@ -223,8 +223,8 @@ namespace TangentTimetable
             psi.CreateNoWindow = true;
             psi.WorkingDirectory = baseDir;
             // 环境变量避免把 API Key 暴露在 Java 进程命令行和进程列表中。
-            psi.EnvironmentVariables["TANGENT_BOOTSTRAP_KEY"] = accountKey;
-            psi.EnvironmentVariables["TANGENT_SETTINGS_ENCRYPTION_KEY"] = accountKey;
+            psi.EnvironmentVariables["KEXU_BOOTSTRAP_KEY"] = accountKey;
+            psi.EnvironmentVariables["KEXU_SETTINGS_ENCRYPTION_KEY"] = accountKey;
 
             backend = Process.Start(psi);
             ownsBackend = true;
@@ -406,7 +406,7 @@ namespace TangentTimetable
                 File.WriteAllText(Path.Combine(dataDir, "desktop-smoke-result.txt"), "FAIL: " + ex.Message);
                 Environment.ExitCode = 1;
             }
-            else MessageBox.Show(ex.Message, "大切课程表 - 启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else MessageBox.Show(ex.Message, "Kexu - 启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             Close();
         }
 
@@ -441,7 +441,7 @@ namespace TangentTimetable
                 + "账号恢复凭据如下，请保存在你的密码管理器中。本机服务只供当前电脑访问：\r\n\r\n"
                 + accountKey
                 + "\r\n\r\n该 Key 已通过 Windows DPAPI 保护后保存在本机用户数据目录。",
-                "大切课程表 - 首次运行", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                "Kexu - 首次运行", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

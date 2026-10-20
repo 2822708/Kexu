@@ -38,10 +38,10 @@ public class ValidatedFlywayMigration {
                     if (!tables.isEmpty()) {
                         validateLegacySchema(dataSource, tables);
                         flyway.baseline();
-                        log.info("Validated and baselined the existing Tangent-Timetable schema at version 1");
+                        log.info("Validated and baselined the existing Kexu schema at version 1");
                     } else if (hasUnknownTables(dataSource)) {
                         throw new IllegalStateException(
-                                "Database is non-empty but is not a recognized Tangent-Timetable schema; "
+                                "Database is non-empty but is not a recognized Kexu schema; "
                                         + "refusing to baseline it automatically");
                     }
                 }

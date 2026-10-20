@@ -97,7 +97,7 @@ export async function verifyReleasePackage(
     await readFile(path.join(root, "release-manifest.json"), "utf8"),
   );
   if (
-    manifest.format !== "tangent-local-first-release" ||
+    manifest.format !== "kexu-local-first-release" ||
     manifest.formatVersion !== 1 ||
     !validVersion(manifest.version) ||
     manifest.origin !== "https://timetable.zozovip.work" ||

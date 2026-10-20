@@ -1,13 +1,13 @@
 {
-  "name": "timetable-frontend",
+  "name": "kexu-frontend",
   "private": true,
   "version": "1.0.0",
-  "description": "大切课程表 · 课程表与待办 Web 前端",
+  "description": "Kexu · 课程表与待办 Web 前端",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Tangent0712/Tangent-Timetable.git",
-    "directory": "frontend"
+    "url": "git+https://github.com/2822708/Kexu.git",
+    "directory": "src/frontend"
   },
   "type": "module",
   "scripts": {

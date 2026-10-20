@@ -19,7 +19,7 @@ public class ShellPolicyTest {
         assertTrue(ShellPolicy.safeEncodedPath(ShellPolicy.ORIGIN + "/assets/index-a123.js"));
     }
     @Test public void exportIsOnlyBoundedJsonBasename() {
-        assertTrue(ShellPolicy.validExport("request-123", "Tangent-core-2026-10-19.json", "{\"ok\":true}"));
+        assertTrue(ShellPolicy.validExport("request-123", "Kexu-core-2026-10-19.json", "{\"ok\":true}"));
         for (String file : new String[] {"../backup.json", "/sdcard/a.json", "backup.exe", "a\\b.json", ".json", "a.json.html"}) assertFalse(file, ShellPolicy.validExport("id", file, "{}"));
         assertFalse(ShellPolicy.validExport("bad id", "data.json", "{}"));
         assertFalse(ShellPolicy.validExport("id", "data.json", "中".repeat(ShellPolicy.MAX_EXPORT_BYTES / 3 + 1)));

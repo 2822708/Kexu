@@ -30,7 +30,7 @@ function setup(indexedDB = new IDBFactory()) {
     vm.runInContext(`(function(module,exports,require){${code}\n})`, context)(
       module,
       module.exports,
-      (name) => (name.startsWith('.') ? load(new URL(`${name}.ts`, url)) : nativeRequire(name)),
+      (name) => (name.startsWith('.') ? load(new URL(/\.[cm]?[jt]sx?$/.test(name) ? name : `${name}.ts`, url)) : nativeRequire(name)),
     )
     return module.exports
   }

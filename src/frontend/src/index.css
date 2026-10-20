@@ -1,4 +1,4 @@
-/* 课序 · shared visual tokens. System fonts work offline on every device. */
+/* Kexu · shared visual tokens. System fonts work offline on every device. */
 :root,
 :root[data-theme='light'] {
   color-scheme: light;

@@ -25,7 +25,7 @@ function setup({ native = true, kind = 'android', origin = 'https://appassets.an
   return { ...module.exports, requests, timers, listeners, anchors, revoked, reply(reply) { const event = { data: JSON.stringify(reply) }; if (kind === 'android') android.onmessage?.(event); else for (const callback of listeners) callback(event) } }
 }
 test('Android narrow channel waits for confirmed save and sends only bounded JSON fields', async () => {
-  const x = setup(), promise = x.saveJsonFile({ title: '临时事项', secret: 'local-only-fixture' }, 'Tangent-core.json')
+  const x = setup(), promise = x.saveJsonFile({ title: '临时事项', secret: 'local-only-fixture' }, 'Kexu-core.json')
   assert.equal(x.requests.length, 1)
   assert.deepEqual(Object.keys(x.requests[0]).sort(), ['filename', 'id', 'text', 'type'])
   assert.equal(x.requests[0].type, 'save-json')
@@ -35,7 +35,7 @@ test('Android narrow channel waits for confirmed save and sends only bounded JSO
   assert.equal(x.timers.size, 0)
 })
 test('Windows channel handles cancel without marking a credential exported', async () => {
-  const x = setup({ kind: 'windows' }), promise = x.saveJsonFile({ fixture: true }, 'Tangent-private-recovery.json')
+  const x = setup({ kind: 'windows' }), promise = x.saveJsonFile({ fixture: true }, 'Kexu-private-recovery.json')
   x.reply({ type: 'save-json-result', id: x.requests[0].id, ok: false, cancelled: true })
   assert.equal(await promise, false)
   assert.equal(x.listeners.size, 0)

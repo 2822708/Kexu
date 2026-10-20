@@ -1,4 +1,4 @@
-# Tangent timetable exchange format v1
+# Kexu exchange format v1
 
 This file is the portable JSON boundary for manual data transfer. It is separate from the Room database schema and must not contain Android local row IDs, server IDs, credentials, AI history, device permissions, reminder queues, or local device preferences.
 
@@ -6,7 +6,7 @@ This file is the portable JSON boundary for manual data transfer. It is separate
 
 ~~~json
 {
-  "format": "tangent-timetable-exchange",
+  "format": "kexu-exchange",
   "schemaVersion": 1,
   "sourceDatasetId": "stable UUID for the exporting dataset",
   "exportedAt": "2026-09-27T12:00:00Z",

@@ -4,7 +4,7 @@
   "platform": "android-36",
   "buildTools": "35.0.0",
   "systemImage": "system-images;android-36;google_apis;x86_64",
-  "avdName": "Tangent_API_36",
+  "avdName": "Kexu_API_36",
   "downloads": {
     "gradle": {
       "url": "https://services.gradle.org/distributions/gradle-8.13-bin.zip",

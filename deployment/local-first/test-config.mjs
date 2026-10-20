@@ -16,7 +16,7 @@ const directory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(directory, "..", "..");
 const read = (name) => readFile(path.join(directory, name), "utf8");
 const currentLocalBuild =
-  "/* tangent-timetable-local-v1 tangent-private-backup-v1 tangent-encrypted-snapshot core-with-daily-v2 */";
+  "/* kexu-local-snapshot kexu-cloud-recovery kexu-encrypted-snapshot core-with-daily-v2 */";
 function balancedConfig(value) {
   let level = 0,
     quote = null,
@@ -102,22 +102,22 @@ test("HTTPS template preserves API paths, private boundaries, security headers a
   assert.match(source, /alias \/var\/www\/timetable\/downloads\//);
 });
 test("systemd and environment isolate one unprivileged process with conservative private storage limits", async () => {
-  const unit = await read("tangent-snapshots.service"),
+  const unit = await read("kexu-snapshots.service"),
     env = Object.fromEntries(
       (await read("cloud.env.example"))
         .trim()
-        .split("\n")
+        .split(/\r?\n/)
         .map((line) => line.split("=")),
     );
-  assert.match(unit, /^User=tangent$/m);
-  assert.match(unit, /^Group=tangent$/m);
+  assert.match(unit, /^User=kexu$/m);
+  assert.match(unit, /^Group=kexu$/m);
   assert.match(unit, /^ProtectSystem=strict$/m);
-  assert.match(unit, /^ReadWritePaths=\/var\/lib\/tangent-snapshots$/m);
+  assert.match(unit, /^ReadWritePaths=\/var\/lib\/kexu-snapshots$/m);
   assert.match(unit, /^UMask=0077$/m);
   assert.match(unit, /^MemoryMax=256M$/m);
   assert.match(unit, /^NoNewPrivileges=true$/m);
   assert.match(unit, /current\/cloud\/server\.mjs/);
-  assert.equal(env.SNAPSHOT_DATA_DIR, "/var/lib/tangent-snapshots");
+  assert.equal(env.SNAPSHOT_DATA_DIR, "/var/lib/kexu-snapshots");
   assert.equal(env.PORT, "9001");
   assert.equal(env.SNAPSHOT_ALLOWED_ORIGIN, "https://timetable.zozovip.work");
   assert.equal(Number(env.SNAPSHOT_MAX_TOTAL_BYTES), 256 * 1024 * 1024);
@@ -182,6 +182,8 @@ async function fixture() {
   await mkdir(path.join(root, "src"), { recursive: true });
   // Copy only the runtime allowlist, not the real source's ignored test output.
   await mkdir(path.join(root, "src", "cloud", "test"), { recursive: true });
+  await mkdir(path.join(root, "src", "shared"), { recursive: true });
+  await cp(path.join(projectRoot, "src", "shared", "brandCompatibility.mjs"), path.join(root, "src", "shared", "brandCompatibility.mjs"));
   for (const file of [
     "server.mjs",
     "package.json",
@@ -260,7 +262,7 @@ test("packager refuses obsolete online/schema1 builds and source files that coul
     );
     await writeFile(
       path.join(f.web, "assets", "index.js"),
-      "/* tangent-timetable-local-v1 tangent-private-backup-v1 tangent-encrypted-snapshot */",
+      "/* kexu-local-snapshot kexu-cloud-recovery kexu-encrypted-snapshot */",
     );
     await assert.rejects(
       createLocalFirstPackage({

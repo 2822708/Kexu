@@ -1,13 +1,13 @@
-# 课序 Windows 本地版
+# Kexu Windows 本地版
 
 这是最新本地主数据 PWA 的 Windows x64 外壳，使用 .NET Framework 4.8 与 Microsoft Edge WebView2。它不启动 Java、Node、localhost 服务，也不连接旧 Java 桌面数据库。
 
 ## 使用
 
-1. 把整个 `Kexu-Windows-x64` 目录解压到可写位置，例如 `E:\Apps\课序`，双击 `Kexu.exe`。EXE、DLL 和 `app/` 必须放在一起。
+1. 把整个 `Kexu-Windows-x64` 目录解压到可写位置，例如 `E:\Apps\Kexu`，双击 `Kexu.exe`。EXE、DLL 和 `app/` 必须放在一起。
 2. 当前轻量包使用系统已安装的 WebView2 Runtime；没有安装时从 [微软官方下载页](https://developer.microsoft.com/microsoft-edge/webview2/#download-section) 安装 Evergreen x64 Runtime。这不是一个无依赖单文件 EXE。若包内提供 `webview2-runtime/`，则使用该固定运行时。
 3. 默认将主库、设置、AI 本机配置、浏览器缓存保存在同目录 `Data/WebView2/`。解压到 E 盘即可使这些数据也位于 E 盘。不把数据打入发行包。
-4. 需要独立固定数据目录时，在 EXE 同目录创建 `kexu-data-dir.txt`，只写一行绝对路径，如 `E:\课序数据`；或用 `Kexu.exe --data-dir="E:\课序数据"`。同一目录只允许一个实例，不会自动迁移旧目录。
+4. 需要独立固定数据目录时，在 EXE 同目录创建 `kexu-data-dir.txt`，只写一行绝对路径，如 `E:\Kexu数据`；或用 `Kexu.exe --data-dir="E:\Kexu数据"`。同一目录只允许一个实例，不会自动迁移旧目录。
 5. 升级前先从设置导出 JSON 备份，再关闭应用。保持原数据目录与固定 origin，替换程序文件，保留 `Data/` 或 `kexu-data-dir.txt`。不要删除 WebView2 用户数据目录来修复升级问题。
 
 浏览器版与 EXE 版有不同的浏览器存储，第一次使用需要从浏览器导出 JSON 并在 EXE 内导入。旧 Java/H2 数据同样不会自动迁入。数据仍留在本机，云只用于用户配置的快照与更新。AI 直连能力受供应商 CORS 支持约束。

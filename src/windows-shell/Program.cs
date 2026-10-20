@@ -25,7 +25,7 @@ namespace Kexu.Windows
             foreach (string arg in args) {
                 if (arg.StartsWith("--data-dir=", StringComparison.Ordinal)) data = Path.GetFullPath(arg.Substring(11));
                 else if (arg == "--smoke-test") smoke = true;
-                else { MessageBox.Show("无法识别启动参数。", "课序"); return; }
+                else { MessageBox.Show("无法识别启动参数。", "Kexu"); return; }
             }
             if (smoke && data == null) throw new ArgumentException("Smoke tests require an isolated --data-dir.");
             if (data == null && File.Exists(Path.Combine(application, "kexu-data-dir.txt"))) {
@@ -38,7 +38,7 @@ namespace Kexu.Windows
             using (SHA256 hash = SHA256.Create()) mutexKey = BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(data.TrimEnd('\\').ToUpperInvariant()))).Replace("-", "");
             bool first;
             using (Mutex mutex = new Mutex(true, "Local\\Kexu.LocalPwa." + mutexKey, out first)) {
-                if (!first) { if (!smoke) MessageBox.Show("这份课序数据已在另一个窗口打开。", "课序"); Environment.ExitCode = 2; return; }
+                if (!first) { if (!smoke) MessageBox.Show("这份Kexu数据已在另一个窗口打开。", "Kexu"); Environment.ExitCode = 2; return; }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new ShellForm(application, data, smoke));
@@ -61,7 +61,7 @@ namespace Kexu.Windows
         internal ShellForm(string application, string data, bool smoke)
         {
             this.application = application; this.data = data; this.smoke = smoke;
-            Text = "课序"; StartPosition = FormStartPosition.CenterScreen;
+            Text = "Kexu"; StartPosition = FormStartPosition.CenterScreen;
             AutoScaleMode = AutoScaleMode.Dpi; ClientSize = new Size(1200, 820); MinimumSize = new Size(390, 600);
             Icon = Icon.ExtractAssociatedIcon(Path.Combine(application, "Kexu.exe"));
             view.Dock = DockStyle.Fill; Controls.Add(view);
@@ -111,7 +111,7 @@ namespace Kexu.Windows
                 core.PermissionRequested += delegate(object sender, CoreWebView2PermissionRequestedEventArgs e) {
                     e.State = CoreWebView2PermissionState.Deny; e.SavesInProfile = false;
                     if (!smoke && ShellPolicy.IsAppDocument(e.Uri) && e.IsUserInitiated && e.PermissionKind == CoreWebView2PermissionKind.Microphone
-                        && MessageBox.Show(this, "是否允许本次使用麦克风输入？语音服务可能需要联网。", "课序", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                        && MessageBox.Show(this, "是否允许本次使用麦克风输入？语音服务可能需要联网。", "Kexu", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                         e.State = CoreWebView2PermissionState.Allow;
                 };
                 core.DownloadStarting += delegate(object sender, CoreWebView2DownloadStartingEventArgs e) { e.Cancel = true; e.Handled = true; };
@@ -152,7 +152,7 @@ namespace Kexu.Windows
         private void OpenExternal(string uri)
         {
             try { Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true }); }
-            catch { MessageBox.Show(this, "无法打开系统浏览器，请检查默认浏览器设置。", "课序"); }
+            catch { MessageBox.Show(this, "无法打开系统浏览器，请检查默认浏览器设置。", "Kexu"); }
         }
 
         private void OnMessage(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -199,7 +199,7 @@ namespace Kexu.Windows
                 for (int i = 0; i < 80; i++) {
                     var smokeCore = browser;
                     if (smokeCore == null) throw new InvalidOperationException("WebView2 control lost its CoreWebView2 after navigation.");
-                    var readiness = smokeCore.ExecuteScriptAsync("Boolean(document.getElementById('root') && document.getElementById('root').innerText.length > 30 && location.pathname === '/focus' && isSecureContext && typeof indexedDB === 'object')");
+                    var readiness = smokeCore.ExecuteScriptAsync("Boolean(document.querySelector('.daily-workspace') && document.querySelector('input[aria-label=\"快速记录任务\"]:not(:disabled)') && document.querySelector('button[aria-label=\"保存日任务\"]') && location.pathname === '/focus' && isSecureContext && typeof indexedDB === 'object')");
                     if (readiness == null) throw new InvalidOperationException("ExecuteScriptAsync returned no readiness task.");
                     if (await readiness == "true") { ready = true; break; }
                     await Task.Delay(250);
@@ -209,9 +209,14 @@ namespace Kexu.Windows
                 const string taskTitle = "Windows封装隔离验证任务";
                 bool taskPersisted = await browser.ExecuteScriptAsync("document.body.innerText.indexOf('" + taskTitle + "')>=0") == "true";
                 if (!taskPersisted) {
-                    await browser.ExecuteScriptAsync("(function(){var i=document.querySelector('input[aria-label=\"快速记录任务\"]');if(!i)throw Error('Daily input missing');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(i,'" + taskTitle + "');i.dispatchEvent(new Event('input',{bubbles:true}));})()");
-                    await Task.Delay(150);
-                    await browser.ExecuteScriptAsync("document.querySelector('button[aria-label=\"保存日任务\"]').click()");
+                    if (await browser.ExecuteScriptAsync("(function(){var i=document.querySelector('input[aria-label=\"快速记录任务\"]');if(!i||i.disabled)return false;Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(i,'" + taskTitle + "');i.dispatchEvent(new Event('input',{bubbles:true}));return true;})()") != "true") throw new InvalidOperationException("Rendered daily input was unavailable.");
+                    bool saveReady = false;
+                    for (int i = 0; i < 60; i++) {
+                        if (await browser.ExecuteScriptAsync("Boolean(document.querySelector('button[aria-label=\"保存日任务\"]:not(:disabled)'))") == "true") { saveReady = true; break; }
+                        await Task.Delay(100);
+                    }
+                    if (!saveReady) throw new InvalidOperationException("Daily form did not enable its save button after input.");
+                    await browser.ExecuteScriptAsync("document.querySelector('button[aria-label=\"保存日任务\"]:not(:disabled)').click()");
                     bool added = false;
                     for (int i = 0; i < 60; i++) {
                         if (await browser.ExecuteScriptAsync("document.body.innerText.indexOf('" + taskTitle + "')>=0") == "true") { added = true; break; }
@@ -258,7 +263,7 @@ namespace Kexu.Windows
             if (smoke) {
                 Directory.CreateDirectory(data);
                 File.WriteAllText(Path.Combine(data, "shell-smoke-result.json"), ShellPolicy.Json().Serialize(new { ok = false, stage = smokeStage, error = error.ToString() }), new UTF8Encoding(false));
-            } else MessageBox.Show(this, "课序无法启动。请保留Data目录，确认已完整解压且安装了Microsoft Edge WebView2 Runtime。\n\n" + error.Message, "课序", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            } else MessageBox.Show(this, "Kexu无法启动。请保留Data目录，确认已完整解压且安装了Microsoft Edge WebView2 Runtime。\n\n" + error.Message, "Kexu", MessageBoxButtons.OK, MessageBoxIcon.Error);
             Close();
         }
 

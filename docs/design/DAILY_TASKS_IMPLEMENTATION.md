@@ -1,4 +1,6 @@
-# 课序日任务实现与验收
+> 历史验收记录：产品名称已统一为 Kexu。以下运行包、哈希和测试结果属于改名前对应构建；当前命名更新不表示这些验证已再次执行。当前包请查阅发行目录的新清单。
+
+# Kexu日任务实现与验收
 
 日期：2026-10-19。范围为本地主数据PWA，已将[交互草案](daily-tasks-concept.html)接入实际业务。Java桌面路径继续使用原今日页，不开放未具备服务端接口的新日计划。
 
@@ -16,7 +18,7 @@
 
 ## 数据与兼容
 
-沿用数据库名称 `tangent-timetable-local-v1`，IndexedDB版本升级为2，业务schema2增加`dataGeneration`、`dayEntries`、`dailyEvents`和`dailyReviews`。迁移在同一事务中保存原始v1值到`migration:v1:recovery`并写入新状态；非法旧数据整体回滚。旧数值ID、UUID、数据集身份和原完成状态保留，不凭`updatedAt`补造完成事件。
+兼容既有本地数据库标识，IndexedDB版本升级为2，业务schema2增加`dataGeneration`、`dayEntries`、`dailyEvents`和`dailyReviews`。迁移在同一事务中保存原始v1值到`migration:v1:recovery`并写入新状态；非法旧数据整体回滚。旧数值ID、UUID、数据集身份和原完成状态保留，不凭`updatedAt`补造完成事件。
 
 日任务、事件和回顾都在主库。每个命令带操作UUID、恢复代次和目标版本；显式设置完成状态，拒绝过期撤销。循环接续不会因撤销再完成重复生成。自动考试结束为system来源，不计主动成果；课程确认单列统计。来源删除后保留事件和标题档案。
 
@@ -36,14 +38,14 @@
 
 | 实际页面 | 截图 |
 |---|---|
-| 手机390px | [日任务](evidence/daily-live-mobile-390.jpg) |
-| 桌面1280px | [日任务](evidence/daily-live-desktop-1280.jpg) |
-| 手动打开回顾390px | [本地回顾](evidence/daily-live-review-390.jpg) |
+| 手机390px | [日任务](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-live-mobile-390.jpg) |
+| 桌面1280px | [日任务](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-live-desktop-1280.jpg) |
+| 手动打开回顾390px | [本地回顾](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-live-review-390.jpg) |
 
 检查使用独立localhost测试站点与合成数据，没有读取真实用户数据库或密钥。开发时增加Hook后曾触发热更新旧组件状态不匹配，完整刷新恢复；发行构建不依赖热更新。
 
 ## 交付与后续边界
 
-[运行包、SHA256与发行记录](../../releases/mobile/kexu-2026.10.19-daily/README.md)已提供；本机同时保留普通 `app/` 目录。实际包8个路由与33个Web资源逐字节核对通过。应在原网站origin升级，另一个端口/域名会得到另一份本机数据，不会自动迁移。
+[运行包、SHA256与发行记录](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/releases/mobile/kexu-2026.10.19-daily/README.md)已提供；本机同时保留普通 `app/` 目录。实际包8个路由与33个Web资源逐字节核对通过。应在原网站origin升级，另一个端口/域名会得到另一份本机数据，不会自动迁移。
 
 本轮没有原生APK、系统后台通知、可靠专注会话账本、AI回顾润色或自动跨设备合并。考试在日程中显示真实时间，尚未新增独立的考试参加确认账本。真机、200%系统字体、真实午夜连续使用和正式HTTPS升级仍需外部验收；业务日期/迁移/恢复逻辑的自动测试不能代替这些设备验证。

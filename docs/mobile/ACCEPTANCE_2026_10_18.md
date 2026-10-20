@@ -1,3 +1,5 @@
+> 历史验收记录：产品名称已统一为 Kexu。以下运行包、哈希和测试结果属于改名前对应构建；当前命名更新不表示这些验证已再次执行。当前包请查阅发行目录的新清单。
+
 # 本地主数据版验收记录
 
 日期：2026-10-18。范围：`feature/local-first-snapshots`，React移动PWA、IndexedDB业务服务、独立Node密文快照、可选AI直连。原生Android保持暂停，原Java桌面实现未迁至云端。
@@ -34,7 +36,7 @@
 
 浏览器发现并修复：浮动安装按钮覆盖手机AI发送按钮；聊天页隐藏浮动安装/更新入口和重复快速导入入口，其他页面仍可安装更新。复验点击发送成功。
 
-[离线手机截图](evidence/offline-mobile-2026-10-18.jpg)、[AI逐项确认截图](evidence/ai-confirmation-mobile-2026-10-18.jpg)。合成Key、测试恢复凭证与云数据均未纳入发行或Git。
+[离线手机截图](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/mobile/evidence/offline-mobile-2026-10-18.jpg)、[AI逐项确认截图](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/mobile/evidence/ai-confirmation-mobile-2026-10-18.jpg)。合成Key、测试恢复凭证与云数据均未纳入发行或Git。
 
 ## 关键修复
 
@@ -62,9 +64,9 @@
 
 已生成 `2026.10.18-local-first-preview.1`，源码提交 `266fa5aebc5de51774246164d00dfc3ccedf8c00`，打包时工作区干净。43个发行文件加manifest/校验清单，共45个ZIP条目，CRC与逐文件字节比对通过。实际运行包同进程启动后9个HTTP路由和26个Web资源SHA256逐一通过，包含mjs MIME。
 
-[运行包](../../releases/mobile/local-first-2026.10.18/README.md)，ZIP SHA256：`52849d33cd0d8d8f0c01e9d4549843dd5f84b835c5286ba774ab40f2dd6f9925`。本轮最终包另开浏览器访问17827及跨进程健康检查超时；同进程运行包HTTP验收通过，前述5180源码构建的浏览器操作证据仍有效。未将这次超时写成最终包浏览器通过。
+[运行包](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/releases/mobile/local-first-2026.10.18/README.md)，ZIP SHA256：`52849d33cd0d8d8f0c01e9d4549843dd5f84b835c5286ba774ab40f2dd6f9925`。本轮最终包另开浏览器访问17827及跨进程健康检查超时；同进程运行包HTTP验收通过，前述5180源码构建的浏览器操作证据仍有效。未将这次超时写成最终包浏览器通过。
 
-GitHub已发布至私有仓库 [2822708/Timetable](https://github.com/2822708/Timetable/tree/feature/local-first-snapshots)。首次发布提交 `e220d0b9d47c963238cc87684b4e9fab7f5e9817` 的树为 `1ce93edc4fde15a843f8c574325e487fd7b3e70d`，与本地发布提交 `1fd735a` 的Git树逐字节一致。两张截图和ZIP的远端blob SHA也分别与本地一致，已读回分支及SHA256SUMS核验。
+GitHub已发布至私有仓库 [2822708/Kexu](https://github.com/2822708/Kexu/tree/feature/local-first-snapshots)。首次发布提交 `e220d0b9d47c963238cc87684b4e9fab7f5e9817` 的树为 `1ce93edc4fde15a843f8c574325e487fd7b3e70d`，与本地发布提交 `1fd735a` 的Git树逐字节一致。两张截图和ZIP的远端blob SHA也分别与本地一致，已读回分支及SHA256SUMS核验。
 
 包内 `sourceCommit` 是本地构建提交 `266fa5a`。GitHub通过连接器导入相同文件树，远端提交ID不同；文件树与ZIP散列用于此次交付内容核对。上传后再次跑AI32/32通过，真实12语义项仍not_run，不叠加进120项回归数量。
 

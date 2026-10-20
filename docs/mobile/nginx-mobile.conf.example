@@ -7,7 +7,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/timetable.example.invalid/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/timetable.example.invalid/privkey.pem;
 
-    root /srv/tangent-mobile/dist;
+    root /srv/kexu-mobile/dist;
     index index.html;
     client_max_body_size 16m;
 

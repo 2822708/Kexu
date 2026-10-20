@@ -11,7 +11,7 @@ Content-Transfer-Encoding: 8bit
 一条命令（desktop/build-desktop.ps1）产出可直接拷走运行的目录，零外部依赖：
 不需要用户安装 Java / Node / MySQL。
 
-- standalone profile：H2 文件库（数据在 %LOCALAPPDATA%\TangentTimetable）+
+- standalone profile：H2 文件库（数据在 %LOCALAPPDATA%\Kexu）+
   前端构建产物并入 jar，由后端直接提供
 - SPA 回退：React Router 的前端路由（/todos、/manual、/widget）直接访问不再 404，
   未知的 /api 路径仍返回 404（顺带修掉「未匹配路径被兜底成 500」的既有问题）
@@ -153,7 +153,7 @@ index 0000000..0ce7724
 +    private final Path file;
 +    private final Properties properties = new Properties();
 +
-+    public LocalSettings(@Value("${app.data-dir:~/.tangent-timetable}") String dataDir) {
++    public LocalSettings(@Value("${app.data-dir:~/.kexu}") String dataDir) {
 +        this.dataDir = resolve(dataDir);
 +        this.file = this.dataDir.resolve(FILE_NAME);
 +        load();
@@ -161,7 +161,7 @@ index 0000000..0ce7724
 +
 +    /** 把 {@code ~} 展开为 user.home，并创建数据目录 */
 +    public static Path resolve(String dir) {
-+        String value = dir == null || dir.isBlank() ? "~/.tangent-timetable" : dir.trim();
++        String value = dir == null || dir.isBlank() ? "~/.kexu" : dir.trim();
 +        if (value.startsWith("~")) {
 +            value = System.getProperty("user.home") + value.substring(1);
 +        }
@@ -203,7 +203,7 @@ index 0000000..0ce7724
 +        try {
 +            Files.createDirectories(dataDir);
 +            try (OutputStream out = Files.newOutputStream(file)) {
-+                properties.store(out, "Tangent Timetable local settings");
++                properties.store(out, "Kexu local settings");
 +            }
 +        } catch (IOException e) {
 +            throw new IllegalStateException("无法写入本地设置：" + file, e);
@@ -505,7 +505,7 @@ index 0000000..60dc55e
 +#
 +# 特点：不依赖外部 MySQL —— 用 H2 文件库，数据落在用户目录下；前端构建产物由本服务直接提供。
 +# 启动方式见打包产物中的启动器，或：
-+#   java -jar timetable-backend-1.0.0.jar --spring.profiles.active=standalone
++#   java -jar kexu-backend-1.0.0.jar --spring.profiles.active=standalone
 +
 +spring:
 +  datasource:
@@ -524,11 +524,11 @@ index 0000000..60dc55e
 +
 +# 本机专用端口：避开常见的 8080，减少与其它软件冲突的概率
 +server:
-+  port: ${TANGENT_PORT:17817}
++  port: ${KEXU_PORT:17817}
 +
 +app:
 +  # 数据目录（H2 库文件与本地设置都放这里）
-+  data-dir: ${TANGENT_DATA_DIR:~/.tangent-timetable}
++  data-dir: ${KEXU_DATA_DIR:~/.kexu}
 +  # 桌面版首次启动不写死任何账号，由 ApiKeyBootstrap 生成随机 Key 并打印
 +
 +logging:
@@ -690,13 +690,13 @@ index 0000000..5cb84a6
 @@ -0,0 +1,171 @@
 +﻿<#
 +.SYNOPSIS
-+    构建「大切课程表」Windows 免安装桌面版。
++    构建「Kexu」Windows 免安装桌面版。
 +
 +.DESCRIPTION
 +    一条命令完成：前端构建 → 打包含前端的 Spring Boot fat jar → jlink 裁剪 JRE →
 +    下载/解出 WebView2 SDK → 用系统自带 csc 编译 WinForms+WebView2 外壳 → 组装免安装目录。
 +
-+    产物是一个可直接拷走运行的目录（默认 <仓库>/desktop/app-image/TangentTimetable），
++    产物是一个可直接拷走运行的目录（默认 <仓库>/desktop/app-image/Kexu），
 +    零外部依赖：不需要用户安装 Java、Node 或数据库。
 +
 +.PARAMETER OutputDir
@@ -722,7 +722,7 @@ index 0000000..5cb84a6
 +$frontend   = Join-Path $repoRoot 'frontend'
 +$shellDir   = Join-Path $desktopDir 'shell'
 +if (-not $OutputDir) { $OutputDir = Join-Path $desktopDir 'app-image' }
-+$dist = Join-Path $OutputDir 'TangentTimetable'
++$dist = Join-Path $OutputDir 'Kexu'
 +
 +# H2 之外还需要这些 JDK 模块：Spring Boot 用到 sql/naming/net.http/management，
 +# Rhino 与 Jackson 用到 unsupported/compiler，jdk.zipfs 供 H2/资源读取。
@@ -772,7 +772,7 @@ index 0000000..5cb84a6
 +    & .\mvnw.cmd -q -B -ntp package -Pstandalone -DskipTests
 +    if ($LASTEXITCODE -ne 0) { throw '后端打包失败' }
 +} finally { Pop-Location }
-+$jar = Join-Path $backend 'target\timetable-backend-1.0.0.jar'
++$jar = Join-Path $backend 'target\kexu-backend-1.0.0.jar'
 +if (-not (Test-Path $jar)) { throw "未生成 $jar" }
 +
 +# ---------- 3. jlink ----------
@@ -782,7 +782,7 @@ index 0000000..5cb84a6
 +& $jlink --add-modules $jlinkModules --strip-debug --no-header-files --no-man-pages `
 +    --compress=zip-6 --output (Join-Path $dist 'runtime')
 +if ($LASTEXITCODE -ne 0) { throw 'jlink 失败' }
-+Copy-Item $jar (Join-Path $dist 'app\timetable-backend.jar') -Force
++Copy-Item $jar (Join-Path $dist 'app\kexu-backend.jar') -Force
 +
 +# ---------- 4. WebView2 SDK ----------
 +Write-Step '4/7 准备 WebView2 SDK（仅编译期需要 net462 的程序集与原生 Loader）'
@@ -812,7 +812,7 @@ index 0000000..5cb84a6
 +$icon = Join-Path $shellDir 'app.ico'
 +$cscArgs = @(
 +    '/nologo', '/target:winexe', '/platform:x64', '/optimize+',
-+    "/out:$dist\TangentTimetable.exe",
++    "/out:$dist\Kexu.exe",
 +    '/reference:System.dll', '/reference:System.Drawing.dll',
 +    '/reference:System.Windows.Forms.dll', '/reference:System.Core.dll',
 +    "/reference:$dist\Microsoft.Web.WebView2.Core.dll",
@@ -838,7 +838,7 @@ index 0000000..5cb84a6
 +
 +# ---------- 7. 冒烟 ----------
 +Write-Step '7/7 冒烟：启动外壳，等内置后端就绪，再关窗'
-+$proc = Start-Process -FilePath (Join-Path $dist 'TangentTimetable.exe') -PassThru
++$proc = Start-Process -FilePath (Join-Path $dist 'Kexu.exe') -PassThru
 +$ready = $false
 +for ($i = 1; $i -le 90; $i++) {
 +    Start-Sleep -Seconds 1
@@ -854,7 +854,7 @@ index 0000000..5cb84a6
 +    if ($left -eq 0) { Write-Host '关窗后后端已一并退出 ✓' -ForegroundColor Green }
 +    else { Write-Warning "关窗后仍有 $left 个 javaw 进程" }
 +} else {
-+    Write-Warning '冒烟未通过：内置后端未在 90 秒内就绪，请查看 %LOCALAPPDATA%\TangentTimetable\logs\timetable.log'
++    Write-Warning '冒烟未通过：内置后端未在 90 秒内就绪，请查看 %LOCALAPPDATA%\Kexu\logs\timetable.log'
 +}
 +
 +Write-Host "`n完成。产物目录：$dist" -ForegroundColor Green
@@ -865,7 +865,7 @@ index 0000000..e5222ea
 --- /dev/null
 +++ b/desktop/shell/Program.cs
 @@ -0,0 +1,403 @@
-+// 大切课程表 —— Windows 桌面外壳（.NET Framework 4.8 + WebView2）
++// Kexu —— Windows 桌面外壳（.NET Framework 4.8 + WebView2）
 +//
 +// 职责：
 +//   1. 单实例：已有实例在跑就直接提示退出
@@ -894,12 +894,12 @@ index 0000000..e5222ea
 +using Microsoft.Web.WebView2.Core;
 +using Microsoft.Web.WebView2.WinForms;
 +
-+namespace TangentTimetable
++namespace Kexu
 +{
 +    internal static class Program
 +    {
 +        internal const int Port = 17817;
-+        private const string MutexName = "TangentTimetable.SingleInstance.v1";
++        private const string MutexName = "Kexu.SingleInstance.v1";
 +
 +        [STAThread]
 +        private static void Main()
@@ -909,7 +909,7 @@ index 0000000..e5222ea
 +            {
 +                if (!createdNew)
 +                {
-+                    MessageBox.Show("大切课程表已经在运行了。", "大切课程表",
++                    MessageBox.Show("Kexu已经在运行了。", "Kexu",
 +                        MessageBoxButtons.OK, MessageBoxIcon.Information);
 +                    return;
 +                }
@@ -934,7 +934,7 @@ index 0000000..e5222ea
 +
 +        internal MainForm()
 +        {
-+            this.Text = "大切课程表";
++            this.Text = "Kexu";
 +            this.Width = 1180;
 +            this.Height = 820;
 +            this.MinimumSize = new Size(760, 560);
@@ -944,7 +944,7 @@ index 0000000..e5222ea
 +
 +            this.dataDir = Path.Combine(
 +                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-+                "TangentTimetable");
++                "Kexu");
 +        }
 +
 +        protected override void OnLoad(EventArgs e)
@@ -958,7 +958,7 @@ index 0000000..e5222ea
 +            }
 +            catch (Exception ex)
 +            {
-+                MessageBox.Show(ex.Message, "大切课程表 - 启动失败",
++                MessageBox.Show(ex.Message, "Kexu - 启动失败",
 +                    MessageBoxButtons.OK, MessageBoxIcon.Error);
 +                Close();
 +                return;
@@ -1012,11 +1012,11 @@ index 0000000..e5222ea
 +
 +            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
 +            string java = Path.Combine(baseDir, Path.Combine("runtime", Path.Combine("bin", "javaw.exe")));
-+            string jar = Path.Combine(baseDir, Path.Combine("app", "timetable-backend.jar"));
++            string jar = Path.Combine(baseDir, Path.Combine("app", "kexu-backend.jar"));
 +            if (!File.Exists(java) || !File.Exists(jar))
 +            {
 +                throw new FileNotFoundException(
-+                    "安装不完整：缺少 runtime\\bin\\javaw.exe 或 app\\timetable-backend.jar。\r\n"
++                    "安装不完整：缺少 runtime\\bin\\javaw.exe 或 app\\kexu-backend.jar。\r\n"
 +                    + "请重新解压完整的安装目录后运行。");
 +            }
 +
@@ -1114,7 +1114,7 @@ index 0000000..e5222ea
 +                MessageBox.Show(
 +                    "无法初始化 WebView2 组件：\r\n\r\n" + ex.Message
 +                    + "\r\n\r\n请先安装 Microsoft Edge WebView2 Runtime（Win10/11 通常已自带）。",
-+                    "大切课程表", MessageBoxButtons.OK, MessageBoxIcon.Error);
++                    "Kexu", MessageBoxButtons.OK, MessageBoxIcon.Error);
 +                Close();
 +            }
 +        }
@@ -1143,7 +1143,7 @@ index 0000000..e5222ea
 +                + accountKey
 +                + (copied ? "\r\n\r\n（已复制到剪贴板）" : "")
 +                + "\r\n\r\n该 Key 也保存在：" + keyFile,
-+                "大切课程表 - 首次运行", MessageBoxButtons.OK, MessageBoxIcon.Information);
++                "Kexu - 首次运行", MessageBoxButtons.OK, MessageBoxIcon.Information);
 +        }
 +
 +        protected override void OnFormClosing(FormClosingEventArgs e)
@@ -1470,7 +1470,7 @@ Content-Transfer-Encoding: 8bit
 
 - 新增 desktop/shell/app.manifest：permonitorv2 / permonitor / true-pm 逐级回退
 - Main 里再调用 SetProcessDpiAwarenessContext 兜底（清单被忽略时仍生效）
-- 随包发布 TangentTimetable.exe.config（WinForms 的 PerMonitorV2 需要该开关）
+- 随包发布 Kexu.exe.config（WinForms 的 PerMonitorV2 需要该开关）
 - 窗口尺寸改为按窗口所在显示器 DPI 换算，并用 SetWindowPos 落物理像素，
   绕开 WinForms 首次显示时的二次缩放
 - build-desktop.ps1 接入清单与 exe.config
@@ -1480,10 +1480,10 @@ Content-Transfer-Encoding: 8bit
 ---
  desktop/build-desktop.ps1                 |  7 ++
  desktop/shell/Program.cs                  | 83 ++++++++++++++++++++++-
- desktop/shell/TangentTimetable.exe.config | 12 ++++
+ desktop/shell/Kexu.exe.config | 12 ++++
  desktop/shell/app.manifest                | 36 ++++++++++
  4 files changed, 135 insertions(+), 3 deletions(-)
- create mode 100644 desktop/shell/TangentTimetable.exe.config
+ create mode 100644 desktop/shell/Kexu.exe.config
  create mode 100644 desktop/shell/app.manifest
 
 diff --git a/desktop/build-desktop.ps1 b/desktop/build-desktop.ps1
@@ -1497,7 +1497,7 @@ index 5cb84a6..6a34a2f 100644
 +$manifest = Join-Path $shellDir 'app.manifest'
  $cscArgs = @(
      '/nologo', '/target:winexe', '/platform:x64', '/optimize+',
-     "/out:$dist\TangentTimetable.exe",
+     "/out:$dist\Kexu.exe",
 @@ -129,10 +130,16 @@ $cscArgs = @(
      "/reference:$dist\Microsoft.Web.WebView2.WinForms.dll"
  )
@@ -1509,8 +1509,8 @@ index 5cb84a6..6a34a2f 100644
  if ($LASTEXITCODE -ne 0) { throw '外壳编译失败' }
  
 +# WinForms 的 PerMonitorV2 需要这份配置才生效（必须与 exe 同名 + .config）
-+$exeConfig = Join-Path $shellDir 'TangentTimetable.exe.config'
-+if (Test-Path $exeConfig) { Copy-Item $exeConfig "$dist\TangentTimetable.exe.config" -Force }
++$exeConfig = Join-Path $shellDir 'Kexu.exe.config'
++if (Test-Path $exeConfig) { Copy-Item $exeConfig "$dist\Kexu.exe.config" -Force }
 +
  # ---------- 6. 汇总 ----------
  Write-Step '6/7 体积汇总'
@@ -1519,9 +1519,9 @@ diff --git a/desktop/shell/Program.cs b/desktop/shell/Program.cs
 index e5222ea..d30643a 100644
 --- a/desktop/shell/Program.cs
 +++ b/desktop/shell/Program.cs
-@@ -34,9 +34,47 @@ namespace TangentTimetable
+@@ -34,9 +34,47 @@ namespace Kexu
          internal const int Port = 17817;
-         private const string MutexName = "TangentTimetable.SingleInstance.v1";
+         private const string MutexName = "Kexu.SingleInstance.v1";
  
 +        private static readonly IntPtr DpiAwarenessPerMonitorV2 = new IntPtr(-4);
 +        private static readonly IntPtr DpiAwarenessPerMonitor = new IntPtr(-3);
@@ -1567,10 +1567,10 @@ index e5222ea..d30643a 100644
              bool createdNew;
              using (Mutex mutex = new Mutex(true, MutexName, out createdNew))
              {
-@@ -68,10 +106,12 @@ namespace TangentTimetable
+@@ -68,10 +106,12 @@ namespace Kexu
          internal MainForm()
          {
-             this.Text = "大切课程表";
+             this.Text = "Kexu";
 -            this.Width = 1180;
 -            this.Height = 820;
 -            this.MinimumSize = new Size(760, 560);
@@ -1583,8 +1583,8 @@ index e5222ea..d30643a 100644
              this.webView.Dock = DockStyle.Fill;
              this.Controls.Add(this.webView);
  
-@@ -80,6 +120,41 @@ namespace TangentTimetable
-                 "TangentTimetable");
+@@ -80,6 +120,41 @@ namespace Kexu
+                 "Kexu");
          }
  
 +        /// <summary>
@@ -1625,7 +1625,7 @@ index e5222ea..d30643a 100644
          protected override void OnLoad(EventArgs e)
          {
              base.OnLoad(e);
-@@ -256,6 +331,8 @@ namespace TangentTimetable
+@@ -256,6 +331,8 @@ namespace Kexu
          protected override void OnShown(EventArgs e)
          {
              base.OnShown(e);
@@ -1634,15 +1634,15 @@ index e5222ea..d30643a 100644
              if (!freshAccount)
              {
                  return;
-diff --git a/desktop/shell/TangentTimetable.exe.config b/desktop/shell/TangentTimetable.exe.config
+diff --git a/desktop/shell/Kexu.exe.config b/desktop/shell/Kexu.exe.config
 new file mode 100644
 index 0000000..be06a5b
 --- /dev/null
-+++ b/desktop/shell/TangentTimetable.exe.config
++++ b/desktop/shell/Kexu.exe.config
 @@ -0,0 +1,12 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<!--
-+  随 exe 一起发布的运行时配置（构建脚本会把它复制成 TangentTimetable.exe.config）。
++  随 exe 一起发布的运行时配置（构建脚本会把它复制成 Kexu.exe.config）。
 +
 +  .NET Framework 4.7+ 的 WinForms 需要这个开关才会按 PerMonitorV2 处理 DPI 变化；
 +  与 app.manifest 里的 dpiAwareness 配合使用。
@@ -1667,7 +1667,7 @@ index 0000000..ac6917d
 +  permonitorv2 需要 Windows 10 1703+；旧系统回退到 permonitor / true/pm。
 +-->
 +<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-+  <assemblyIdentity version="1.0.0.0" name="TangentTimetable.app" />
++  <assemblyIdentity version="1.0.0.0" name="Kexu.app" />
 +
 +  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
 +    <security>

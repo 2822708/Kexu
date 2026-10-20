@@ -2,7 +2,8 @@
 agp = "8.13.2"
 kotlin = "2.3.20"
 ksp = "2.3.10"
-compose-bom = "2026.09.00"
+# Keep Compose compatible with the pinned SDK 36 / AGP 8.13 toolchain.
+compose-bom = "2026.03.00"
 navigation = "2.9.8"
 activity-compose = "1.12.1"
 lifecycle = "2.10.0"

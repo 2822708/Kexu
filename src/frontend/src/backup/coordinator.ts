@@ -1,3 +1,4 @@
+import { legacyNames } from '../../../shared/brandCompatibility.mjs'
 import { readLocalState, subscribeLocalChanges } from '../local/db'
 import { createLogicalSnapshot } from '../local/snapshots/codec'
 import { encryptSnapshot, generateBackupKey, sha256 } from '../local/snapshots/crypto'
@@ -23,7 +24,7 @@ const owner = crypto.randomUUID()
 let statusChannel: BroadcastChannel | undefined
 function setupStatusChannel() {
   if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined' && !statusChannel) {
-    statusChannel = new BroadcastChannel('tangent-private-backup-v1:changed')
+    statusChannel = new BroadcastChannel(`${legacyNames.backupDatabase}:changed`)
     statusChannel.onmessage = () => listeners.forEach((callback) => callback())
   }
 }
@@ -41,7 +42,7 @@ export async function createBackupSpace(serverUrl: string): Promise<void> {
   const origin = validateServerUrl(serverUrl)
   const vault = await registerVault(origin)
   const credential = validateCredential({
-    format: 'tangent-cloud-recovery',
+    format: 'kexu-cloud-recovery',
     version: 1,
     serverUrl: origin,
     vaultId: vault.vaultId,

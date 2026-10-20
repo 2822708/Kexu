@@ -1,6 +1,7 @@
+import { legacyNames, readCompatiblePreference } from '../../../shared/brandCompatibility.mjs'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
-const SPEECH_CONSENT_KEY = 'tangent_speech_consent_v1'
+const SPEECH_CONSENT_KEY = 'kexu_speech_consent_v1'
 const consentListeners = new Set<() => void>()
 let consent = false
 let consentLoaded = false
@@ -8,7 +9,7 @@ let sessionOnlyConsent = false
 
 function readStoredConsent(): boolean | undefined {
   try {
-    return typeof window === 'undefined' ? undefined : window.localStorage.getItem(SPEECH_CONSENT_KEY) === 'true'
+    return typeof window === 'undefined' ? undefined : readCompatiblePreference(window.localStorage, SPEECH_CONSENT_KEY) === 'true'
   } catch {
     return undefined
   }
@@ -27,11 +28,16 @@ function notifyConsentListeners() {
 }
 
 function handleConsentStorage(event: StorageEvent) {
-  if (event.key !== SPEECH_CONSENT_KEY && event.key !== null) return
+  if (event.key !== SPEECH_CONSENT_KEY && event.key !== legacyNames.speechConsent && event.key !== null) return
+  // A revocation in an older still-open tab must also revoke consent in this release.
+  if (event.key === legacyNames.speechConsent && event.newValue === 'true') return
   try {
     if (event.storageArea && event.storageArea !== window.localStorage) return
   } catch {
     return
+  }
+  if (event.key === legacyNames.speechConsent) {
+    try { window.localStorage.setItem(SPEECH_CONSENT_KEY, 'false') } catch { /* Revoke in memory even if storage is full. */ }
   }
   consent = event.key !== null && event.newValue === 'true'
   consentLoaded = true
@@ -80,7 +86,7 @@ interface SpeechInputOptions {
 }
 
 interface SpeechRun {
-  recognition: TangentSpeechRecognition
+  recognition: KexuSpeechRecognition
   stopping: boolean
   stopTimeout?: ReturnType<typeof setTimeout>
 }

@@ -1,12 +1,12 @@
 # 项目空间建立记录
 
-日期：2026-09-26。
+日期：2026-09-26（历史建立记录）。2026-10-19 可见名称与示例统一为 Kexu；本页的源文件一致性结论仅描述初次导入时，原始记录在 Git 历史。
 
 ## 来源与布局
 
-- 来源交付目录：`E:\deepseek work\Tangent-Timetable-交付`。
-- 新项目目录：`E:\codex work\projects\Tangent-Timetable`。
-- 文档在 `docs`，源码在 `src/backend`、`src/frontend`、`src/desktop`，桌面成品在 `releases/windows/TangentTimetable`。
+- 来源：用户提供的原始交付目录（保留在原位置，不随工程改名而移动）。
+- 新项目目录：`E:\codex work\projects\Kexu`。
+- 文档在 `docs`，源码在 `src/backend`、`src/frontend`、`src/desktop`，桌面成品在 `releases/windows/Kexu`。
 - 根目录使用一个独立 Git 仓库，无嵌套源码仓库。
 
 ## 初始导入
@@ -19,7 +19,7 @@
 - 移动源码到 src；移动原产品文档到 docs/project，并增加迁移提示。
 - 新增项目入口、开发说明、当前问题清单和编辑器工作区。
 - 更新 CI 中的工作目录与缓存依赖路径。
-- 原交付材料复制到 docs/archive，保留其历史文字，不重复应用补丁。
+- 原交付材料复制到 docs/archive，不重复应用补丁；2026-10-19 阅读副本已统一名称，原始字节保存在 Git 历史。
 - 没有配置远程，也没有推送或部署。
 
 ## 初始验证

@@ -82,10 +82,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           >
             <MenuOutlined />
           </button>
-          <Link to="/timetable" className="app-brand" aria-label="课序，返回课表">
+          <Link to="/timetable" className="app-brand" aria-label="Kexu，返回课表">
             <span className="app-brand-mark" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}pwa/icon.svg`} alt="" /></span>
             <span className="app-brand-copy">
-              <span className="app-topbar-title">课序</span>
+              <span className="app-topbar-title">Kexu</span>
               <span className="app-brand-subtitle">课表 · 待办 · 专注</span>
             </span>
           </Link>
