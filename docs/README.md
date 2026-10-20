@@ -6,6 +6,7 @@
 
 | 文件 | 用途 |
 |---|---|
+| [install/README.md](install/README.md) | Windows / Android 安装页面、GitHub Releases 下载与升级步骤 |
 | [design/UI_REDESIGN_PLAN.md](design/UI_REDESIGN_PLAN.md) | Kexu浅色蓝绿UI、命名依据、页面架构与实施顺序 |
 | [design/UI_IMPLEMENTATION_2026_10_19.md](design/UI_IMPLEMENTATION_2026_10_19.md) | 新界面落实、实际截图、周表与移动布局复验、preview.2交付 |
 | [design/DAILY_TASKS_PRODUCT_PLAN.md](design/DAILY_TASKS_PRODUCT_PLAN.md) | 今日任务、自选重点、完成正反馈、每日回顾、临时事项与数据迁移策划 |

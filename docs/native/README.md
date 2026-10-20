@@ -1,5 +1,7 @@
 # Kexu APK 与 Windows EXE（2026-10-20）
 
+[安装指南与 GitHub 下载](../install/README.md)提供 APK、Windows 完整便携包及升级步骤。
+
 [下载安装包与SHA256](../../releases/native/kexu-2026.10.20-native.2/README.md)。本机普通便携目录另放在项目空间的 `releases/native/kexu-2026.10.20-native.2/`，不含开发依赖或测试数据。
 
 本次把最新本地主数据前端封装为 Android 安装包和 Windows 便携程序。课表、待办、日任务、完成撤销、回顾和草稿共用现有 IndexedDB 业务逻辑；界面资源随包携带，打开应用不需要 Java 服务、Node 或网页服务器。AI 和云快照需要另外配置 HTTPS 服务，且服务端必须允许来自 `https://appassets.androidplatform.net` 的跨域请求。

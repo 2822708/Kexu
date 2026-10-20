@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="下载 Kexu Android APK 与 Windows 便携版，查看安装、升级与本地数据迁移说明。">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>安装 Kexu · 课表、待办与今日任务</title>
+  <style>
+    :root { --ink:#183349; --muted:#526779; --line:#dce5ec; --paper:#fff; --blue:#235bc6; --teal:#087b79; --bg:#f5f8fb; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; color:var(--ink); background:var(--bg); font:16px/1.65 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+    a { color:var(--blue); text-underline-offset:3px; }
+    a:focus-visible, summary:focus-visible { outline:3px solid #e09220; outline-offset:4px; }
+    .skip { position:absolute; left:16px; top:-70px; padding:10px 16px; background:#fff; z-index:2; }
+    .skip:focus { top:10px; }
+    .wrap { width:min(100% - 40px,1000px); margin-inline:auto; }
+    header { border-bottom:1px solid var(--line); background:#ffffffdc; }
+    .topbar { min-height:76px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .brand { display:flex; align-items:center; gap:11px; text-decoration:none; color:var(--ink); font-size:23px; font-weight:760; letter-spacing:-.5px; }
+    .brandmark { width:34px; height:34px; color:var(--teal); }
+    nav { display:flex; gap:22px; align-items:center; font-size:14px; }
+    nav a { color:var(--muted); text-decoration:none; padding:10px 0; }
+    nav a:hover { color:var(--blue); text-decoration:underline; }
+    main { padding-top:40px; padding-bottom:38px; }
+    .intro { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:24px; }
+    .eyebrow { margin:0 0 7px; color:var(--teal); font-size:13px; font-weight:700; letter-spacing:.1em; }
+    h1 { margin:0 0 10px; font-size:clamp(28px,4vw,38px); line-height:1.25; font-weight:750; letter-spacing:-1px; }
+    .intro p:last-child { margin:0; color:var(--muted); max-width:650px; }
+    .version { flex:none; padding:6px 12px; border:1px solid var(--line); border-radius:100px; font-size:13px; background:#fff; color:var(--muted); white-space:nowrap; }
+    .access { margin:0 0 22px; padding:12px 16px; background:#eaf0fb; border-left:3px solid #4779d4; border-radius:4px; color:#324e71; font-size:14px; }
+    .downloads { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    .card { background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:25px; box-shadow:0 5px 18px #19354e05; }
+    .platform { display:flex; align-items:center; gap:12px; }
+    .platform-icon { display:grid; place-items:center; width:46px; height:46px; border-radius:12px; background:#e8f5f2; color:var(--teal); flex:none; }
+    .windows .platform-icon { background:#ebf1fc; color:var(--blue); }
+    .platform-icon svg { width:25px; height:25px; }
+    h2 { font-size:22px; margin:0; line-height:1.3; }
+    .subtitle { margin:3px 0 0; color:var(--muted); font-size:13px; }
+    .download { display:flex; align-items:center; justify-content:center; gap:9px; min-height:48px; margin:22px 0 10px; padding:11px 16px; background:var(--teal); border-radius:8px; color:#fff; text-decoration:none; font-weight:650; }
+    .windows .download { background:var(--blue); }
+    .download:hover { filter:brightness(.9); }
+    .download svg { width:18px; height:18px; }
+    .file-meta { margin:0 0 20px; text-align:center; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+    ol { padding-left:22px; margin:0; }
+    li { padding-left:3px; margin-bottom:7px; }
+    .steps { font-size:14px; }
+    .upgrade { margin:20px 0 0; padding-top:15px; border-top:1px solid var(--line); font-size:13px; color:var(--muted); }
+    code { background:#f0f4f8; border-radius:4px; padding:2px 5px; font-size:.88em; color:var(--ink); overflow-wrap:anywhere; }
+    .essentials { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:26px; padding:23px 2px 25px; border-bottom:1px solid var(--line); }
+    .essentials h3 { margin:0 0 7px; font-size:16px; }
+    .essentials p { margin:0; color:var(--muted); font-size:14px; }
+    details { margin-top:20px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+    summary { cursor:pointer; padding:14px 18px; font-weight:600; font-size:14px; }
+    .details-body { padding:0 18px 18px; color:var(--muted); font-size:13px; }
+    .details-body p { margin:0 0 10px; }
+    .details-body p:last-child { margin-bottom:0; }
+    .hash { display:block; margin:6px 0 12px; padding:9px 11px; font-size:12px; word-break:break-all; }
+    .validation { margin-top:22px; color:var(--muted); font-size:12px; }
+    footer { border-top:1px solid var(--line); padding:19px 0 calc(19px + env(safe-area-inset-bottom)); color:var(--muted); font-size:12px; }
+    .footer-row { display:flex; justify-content:space-between; gap:15px; flex-wrap:wrap; }
+    footer a { color:var(--muted); }
+    @media (max-width:680px) {
+      .wrap { width:calc(100% - 32px); }
+      .topbar { min-height:66px; }
+      nav { gap:16px; font-size:13px; }
+      main { padding-top:29px; }
+      .intro { display:block; }
+      .version { display:inline-block; margin-top:15px; }
+      .downloads,.essentials { grid-template-columns:1fr; }
+      .card { padding:22px; }
+      .essentials { gap:20px; }
+      .file-meta { font-size:11px; }
+    }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#downloads">跳到下载</a>
+  <header>
+    <div class="wrap topbar">
+      <a class="brand" href="https://github.com/2822708/Kexu" aria-label="Kexu 项目首页">
+        <svg class="brandmark" viewBox="0 0 36 36" fill="none" aria-hidden="true"><rect x="1" y="1" width="34" height="34" rx="10" fill="currentColor"/><path d="M11 10v16m14-16L15 20l10 6M15 20h-4" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Kexu
+      </a>
+      <nav aria-label="相关链接">
+        <a href="https://github.com/2822708/Kexu/releases/tag/v2026.10.20.2">发行说明</a>
+        <a href="https://github.com/2822708/Kexu">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="intro">
+      <div>
+        <p class="eyebrow">KEXU · 本地预览版</p>
+        <h1>安排好课表，轻松开始今天。</h1>
+        <p>课表、待办与今日任务随手可用，核心数据保存在本机，安装后可以离线使用。</p>
+      </div>
+      <span class="version">预览版 2026.10.20.2</span>
+    </div>
+    <p class="access">下载需要登录有访问权限的 GitHub 账号。当前仓库为私有仓库；若显示 404，请先确认登录与仓库权限。</p>
+    <section class="downloads" id="downloads" aria-label="选择设备下载安装包">
+      <article class="card android" aria-labelledby="android-title">
+        <div class="platform">
+          <span class="platform-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 5h4M10 19h4" stroke-linecap="round"/></svg></span>
+          <div><h2 id="android-title">Android</h2><p class="subtitle">Android 8.0 及以上 · APK 安装包</p></div>
+        </div>
+        <a class="download" href="https://github.com/2822708/Kexu/releases/download/v2026.10.20.2/Kexu-Android-2026.10.20.apk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5" stroke-linecap="round" stroke-linejoin="round"/></svg>下载 Android APK</a>
+        <p class="file-meta">Kexu-Android-2026.10.20.apk · 3.0 MB</p>
+        <ol class="steps">
+          <li>在手机上下载，完成后打开 APK 文件。</li>
+          <li>按系统提示允许当前来源安装应用，再完成安装。</li>
+          <li>打开 <strong>Kexu</strong>，建立课表和今日任务。</li>
+        </ol>
+        <p class="upgrade"><strong>已有版本？</strong>直接覆盖安装。升级前导出 JSON 备份，勿先卸载或清除应用数据。本版沿用原应用 ID 与发布签名。</p>
+      </article>
+      <article class="card windows" aria-labelledby="windows-title">
+        <div class="platform">
+          <span class="platform-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m2 4 8.7-1.2v8.3H2V4Zm10-1.4L22 1.3v9.8H12V2.6ZM2 12.7h8.7v8.4L2 19.8v-7.1Zm10 0h10v10l-10-1.4v-8.6Z"/></svg></span>
+          <div><h2 id="windows-title">Windows</h2><p class="subtitle">Windows 10 / 11 · 64 位便携版</p></div>
+        </div>
+        <a class="download" href="https://github.com/2822708/Kexu/releases/download/v2026.10.20.2/Kexu-Windows-x64.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5" stroke-linecap="round" stroke-linejoin="round"/></svg>下载 Windows 便携包</a>
+        <p class="file-meta">Kexu-Windows-x64.zip · 1.4 MB</p>
+        <ol class="steps">
+          <li>完整解压 ZIP，例如放在 <code>E:\Apps\Kexu</code>。</li>
+          <li>打开文件夹，双击 <strong>Kexu.exe</strong>；请保留其他文件。</li>
+          <li>若缺少 WebView2，从 <a href="https://developer.microsoft.com/microsoft-edge/webview2/#download-section">Microsoft 官网</a>安装 Evergreen Runtime 后重试。需要 .NET Framework 4.8。</li>
+        </ol>
+        <p class="upgrade"><strong>已有版本？</strong>先退出并备份旧文件夹；替换程序时保留 <code>Data</code> 和已有的 <code>kexu-data-dir.txt</code>。这是便携版，没有安装向导。</p>
+      </article>
+    </section>
+    <section class="essentials" aria-label="使用说明">
+      <div><h3>数据跟随设备</h3><p>Windows 默认保存在程序旁的 Data 文件夹，整个程序目录可放在 E 盘。Android 数据由手机系统管理。跨设备请导出 JSON，再在目标端预览并确认导入。</p></div>
+      <div><h3>核心功能离线可用</h3><p>原生程序无需 Java 或 Node。AI 与云快照需单独配置网络服务；原生云备份还需要服务端跨域配置与联调，本包不附带 API 密钥。</p></div>
+    </section>
+    <details>
+      <summary>文件校验与完整安装指南</summary>
+      <div class="details-body">
+        <p><a href="https://github.com/2822708/Kexu/releases/download/v2026.10.20.2/SHA256SUMS.txt">下载 SHA256SUMS.txt</a> · <a href="https://github.com/2822708/Kexu/releases/download/v2026.10.20.2/RELEASE_MANIFEST.json">下载发行清单</a> · <a href="https://github.com/2822708/Kexu/blob/fix/complete-optimization-plan/docs/install/README.md">完整安装指南</a></p>
+        <p>Android APK · 3,031,359 字节 · SHA-256</p>
+        <code class="hash">e26cb28187e3b1fb7b2c818bee9dccb6b8a43610eb6645057650eaec8bca9ecc</code>
+        <p>Windows ZIP · 1,396,062 字节 · SHA-256</p>
+        <code class="hash">3165358355f3dca36c5883c495f429fcc33fd26affeec5be95c47275e9746579</code>
+      </div>
+    </details>
+    <p class="validation">本次已核对发行包资源、签名与校验值，并完成 Windows 两次启动及既有测试任务保留验证。Android 真机、真实 AI 供应商及生产云服务尚未完成本次验收。</p>
+  </main>
+  <footer><div class="wrap footer-row"><span>Kexu · 让每一天更有条理</span><span><a href="https://github.com/2822708/Kexu">项目首页</a> · <a href="https://github.com/2822708/Kexu/releases">所有版本</a></span></div></footer>
+</body>
+</html>
