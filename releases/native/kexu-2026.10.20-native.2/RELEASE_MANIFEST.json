@@ -2,27 +2,27 @@
   "schemaVersion": 1,
   "product": "Kexu",
   "version": "2026.10.20-native.2",
-  "sourceCommit": "f3dd9dc35ffcb8239fed626d834dc5ba5568996e",
-  "sourceTree": "de31fbbadace47806447d110a899a9797544e5f4",
+  "sourceCommit": "3e2e1f9ef7625ee7d5ab69b3696cd103621fdad3",
+  "sourceTree": "525e17c6c6a241c79926c706e71a8bd8406aafcb",
   "artifacts": [
     {
       "path": "Kexu-Android-2026.10.20.apk",
-      "bytes": 3031355,
-      "sha256": "c405541140235e7d11f39aca4a34285d061ea883122360441525f237867e2772"
+      "bytes": 3031359,
+      "sha256": "e26cb28187e3b1fb7b2c818bee9dccb6b8a43610eb6645057650eaec8bca9ecc"
     },
     {
       "path": "Kexu-Windows-x64.zip",
-      "bytes": 1396056,
-      "sha256": "a18b8d9fe5e652395ea920df07837eeead254ffd34994bebebe0c29a4b2ac4fa"
+      "bytes": 1396062,
+      "sha256": "3165358355f3dca36c5883c495f429fcc33fd26affeec5be95c47275e9746579"
     },
     {
       "path": "Kexu-Windows-x64/Kexu.exe",
       "bytes": 50688,
-      "sha256": "d0ccb912615fa636937b020779b3e30f96ead0f643bfc8abffe39cff7170671d"
+      "sha256": "8863fe2da435c6b7295d41226de2952680370fe98e5b912a2d9c118dbc49011d"
     }
   ],
   "frontendFiles": 30,
-  "frontendIndexSha256": "e95ba51b3953589360002b91f1d8bb8786b57ba6365e1e85d1446808fb102a85",
+  "frontendIndexSha256": "cbbdf68711710de3ea90b626da118156da98814bb7bf28586df28c75b7673c3d",
   "windowsPackageFiles": 39,
   "android": {
     "applicationId": "com.kexu.local",
@@ -39,7 +39,7 @@
   "requiresJava": false,
   "requiresNode": false,
   "validation": {
-    "frontendTests": 172,
+    "frontendTests": 173,
     "cloudDeploymentTests": 18,
     "backendTests": 56,
     "composeJvmTests": 5,
