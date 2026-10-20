@@ -1,3 +1,4 @@
+import { legacyNames } from '../../shared/brandCompatibility.mjs'
 import assert from 'node:assert/strict'
 import { webcrypto } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -41,7 +42,9 @@ function setup(overrides = {}) {
     const module = { exports: {} }
     modules.set(url.href, module)
     const compiled = ts.transpileModule(readFileSync(url, 'utf8'), {
+      fileName: url.pathname.endsWith('.mjs') ? 'compat.js' : 'source.ts',
       compilerOptions: {
+        allowJs: true,
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         esModuleInterop: true,
@@ -51,7 +54,7 @@ function setup(overrides = {}) {
       filename: url.pathname,
     })(module, module.exports, (name) => {
       if (!name.startsWith('.')) return nativeRequire(name)
-      const target = new URL(`${name}.ts`, url)
+      const target = new URL(/\.[cm]?[jt]sx?$/.test(name) ? name : `${name}.ts`, url)
       if (target.pathname.endsWith('/local/mode.ts'))
         return { NATIVE_SHELL: true, LOCAL_MODE: true }
       return loadSource(target)
@@ -75,6 +78,55 @@ function setup(overrides = {}) {
   }
 }
 const normal = (value) => JSON.parse(JSON.stringify(value))
+
+test('Kexu keeps the original IndexedDB identities and reads old logical snapshots without replacing local data', async () => {
+  const x = setup()
+  const state = await populated(x)
+  assert.equal(x.LOCAL_DATABASE_NAME, legacyNames.localDatabase)
+  const snapshot = { ...normal(x.createLogicalSnapshot(state)), format: legacyNames.logicalSnapshot }
+  const preview = await x.previewRestore(snapshot)
+  assert.ok(preview)
+  assert.deepEqual(normal(await x.readLocalState()), normal(state))
+  await x.closeLocalStore()
+  assert.deepEqual(normal(await x.readLocalState()), normal(state))
+  assert.equal(x.createLogicalSnapshot(state).format, 'kexu-local-snapshot')
+})
+
+test('old encrypted snapshots authenticate their exact original AAD; renamed exports use Kexu identifiers', async () => {
+  const x = setup(), state = await populated(x), rawKey = x.generateBackupKey()
+  const snapshot = { ...normal(x.createLogicalSnapshot(state)), format: legacyNames.logicalSnapshot }
+  const bytes = x.fromBase64(rawKey)
+  const keyId = (await x.sha256(bytes)).slice(0, 32)
+  // Independent previous-release encoder: changing the format before decrypting would break GCM.
+  const header = {
+    format: legacyNames.encryptedSnapshot, version: 1, snapshotId: snapshot.snapshotId,
+    datasetId: snapshot.source.datasetId, revision: snapshot.source.revision,
+    createdAt: snapshot.createdAt, algorithm: 'AES-GCM-256', keyId,
+  }
+  const key = await webcrypto.subtle.importKey('raw', bytes, 'AES-GCM', false, ['encrypt'])
+  const iv = webcrypto.getRandomValues(new Uint8Array(12))
+  const ciphertext = await webcrypto.subtle.encrypt({ name: 'AES-GCM', iv,
+    additionalData: new TextEncoder().encode(JSON.stringify(header)), tagLength: 128 }, key,
+    new TextEncoder().encode(JSON.stringify(snapshot)))
+  const envelope = { ...header, iv: x.toBase64(iv), ciphertext: x.toBase64(new Uint8Array(ciphertext)) }
+  assert.deepEqual(normal(await x.decryptSnapshot(envelope, rawKey)), snapshot)
+  await assert.rejects(x.decryptSnapshot({ ...envelope, format: 'kexu-encrypted-snapshot' }, rawKey), /解密失败/)
+  const next = await x.encryptSnapshot(x.createLogicalSnapshot(state), rawKey)
+  assert.equal(next.format, 'kexu-encrypted-snapshot')
+  assert.equal((await x.decryptSnapshot(next, rawKey)).format, 'kexu-local-snapshot')
+})
+
+test('old recovery credentials retain their vault/token/key and export the new credential format', async () => {
+  const x = setup(), key = x.generateBackupKey()
+  const oldCredential = { format: legacyNames.cloudRecovery, version: 1,
+    serverUrl: 'https://backup.example.test', vaultId: webcrypto.randomUUID(), token: 'A'.repeat(43), key }
+  await x.importRecoveryCredential(oldCredential)
+  const current = await x.exportRecoveryCredential()
+  assert.deepEqual(normal(current), { ...oldCredential, format: 'kexu-cloud-recovery' })
+  const persisted = await x.storage.readBackupState()
+  assert.equal(persisted.config.key, key)
+  assert.equal(persisted.config.enabled, false, 'import never starts automatic restore or backup')
+})
 const scheduleBody = {
   name: '核心数据',
   periodStartDate: '2026-09-01',
@@ -195,7 +247,7 @@ test('H2 files, secrets, dangling UUIDs and invalid dates cannot pass restore pr
   const x = setup(),
     snapshot = x.createLogicalSnapshot(await populated(x)),
     before = await x.readLocalState()
-  await assert.rejects(x.previewRestore({ format: 'tangent-h2-backup' }), /核心逻辑快照/)
+  await assert.rejects(x.previewRestore({ format: 'kexu-h2-backup' }), /核心逻辑快照/)
   await assert.rejects(x.previewRestore({ ...snapshot, token: 'forbidden' }), /不支持的字段/)
   const dangling = structuredClone(snapshot)
   dangling.data.courses[0].scheduleId = webcrypto.randomUUID()
@@ -507,7 +559,7 @@ test('backup database v1 upgrade preserves retry state and recovery payload whil
     sha256: 'a'.repeat(64),
   }
   await new Promise((resolve, reject) => {
-    const request = x.indexedDB.open('tangent-private-backup-v1', 1)
+    const request = x.indexedDB.open(legacyNames.backupDatabase, 1)
     request.onupgradeneeded = () => {
       request.result.createObjectStore('state')
       request.result.createObjectStore('restorePoints', { keyPath: 'snapshotId' })

@@ -1,8 +1,9 @@
+import { legacyNames } from '../../../shared/brandCompatibility.mjs'
 import type { EncryptedSnapshot } from '../local/snapshots/crypto'
 import type { LogicalSnapshot } from '../local/snapshots/codec'
 
 export interface RecoveryCredential {
-  format: 'tangent-cloud-recovery'
+  format: 'kexu-cloud-recovery'
   version: 1
   serverUrl: string
   vaultId: string
@@ -52,7 +53,7 @@ export const initialBackupState = (): BackupState => ({
 let database: Promise<IDBDatabase> | undefined
 function openDatabase(): Promise<IDBDatabase> {
   database ??= new Promise((resolve, reject) => {
-    const request = indexedDB.open('tangent-private-backup-v1', 2)
+    const request = indexedDB.open(legacyNames.backupDatabase, 2)
     let failed = false
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains('state'))

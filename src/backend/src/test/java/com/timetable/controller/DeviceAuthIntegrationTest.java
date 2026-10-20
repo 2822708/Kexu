@@ -53,7 +53,7 @@ class DeviceAuthIntegrationTest {
     private static final String LEGACY = "legacy-test-account";
     private static final String BOOTSTRAP = "configured-bootstrap-test-account";
     private static final String TEST_DATA_DIR = Path.of(System.getProperty("java.io.tmpdir"),
-            "tangent-device-auth-" + UUID.randomUUID()).toString();
+            "kexu-device-auth-" + UUID.randomUUID()).toString();
 
     @DynamicPropertySource
     static void isolatedSettings(DynamicPropertyRegistry properties) {

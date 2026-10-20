@@ -14,7 +14,7 @@
 | 浏览器生成设备凭据并自动注册；注册限额是每个进程每分钟 60 个 | 属于本机自动进入工作区，不能证明两台设备属于同一人；不适合作为公网无限注册入口 | `src/backend/src/main/java/com/timetable/service/impl/ApiKeyServiceImpl.java`；[设备登录说明](DEVICE_AUTO_LOGIN.md) |
 | `period_config` 只有节次主键，修改需管理员权限 | 云端不同用户不能共用一张可修改作息表，必须先调整数据归属 | `src/backend/src/main/java/com/timetable/service/impl/PeriodConfigServiceImpl.java` |
 | Windows 使用本地 Java + H2，桌面凭据由 DPAPI 保护 | 可以保持离线能力；云端账号与本机进程访问凭据要分开保存和使用 | `src/backend/src/main/resources/application-standalone.yml`；`src/desktop/shell/DesktopSecurity.cs` |
-| Android 已有课表、课程、考试、待办及稳定 UUID，UI 从 Room 读取 | 可以复用本地模型，但现有 revision 不能直接充当服务器同步版本 | `src/android/app/src/main/java/com/tangent/timetable/core/database/Entities.kt`、`data/TimetableRepository.kt` |
+| Android 已有课表、课程、考试、待办及稳定 UUID，UI 从 Room 读取 | 可以复用本地模型，但现有 revision 不能直接充当服务器同步版本 | `src/android/app/src/main/java/com/kexu/timetable/core/database/Entities.kt`、`data/TimetableRepository.kt` |
 | Android JSON v1 支持上述实体，循环和提醒数组必须为空；桌面交换适配器尚缺 | 文件格式不是已经实现的跨端同步协议，需要字段对齐和实际往返验证 | [交换格式](../android/EXCHANGE_FORMAT_V1.md) |
 | 后端待办 ddl 必填；Android dueAt 可空且另有 details；Android 课程还有 note/colorHex | 直接照搬现有 REST DTO 会丢字段或拒绝合法手机数据，需要规范统一模型 | 后端 V1 迁移；Android `Entities.kt` |
 | AI 由服务端生成待确认提案；本机密钥设置受配置和权限限制 | 保留确认边界；多用户云端增加独立用量、额度和执行版本检查 | `src/backend/src/main/java/com/timetable/controller/AiController.java`、`service/impl/AiServiceImpl.java` |

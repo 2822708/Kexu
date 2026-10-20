@@ -1,5 +1,5 @@
 -- 不再内置固定的演示 API Key：公开仓库里的固定 Key 等于公开凭据。
--- api_key 表为空时由 ApiKeyBootstrap 在启动后创建首个账号（Key 取自 TANGENT_BOOTSTRAP_KEY，
+-- api_key 表为空时由 ApiKeyBootstrap 在启动后创建首个账号（Key 取自 KEXU_BOOTSTRAP_KEY，
 -- 未配置则随机生成并打印到日志）。
 
 INSERT IGNORE INTO period_config (period_number, start_time, end_time, category) VALUES

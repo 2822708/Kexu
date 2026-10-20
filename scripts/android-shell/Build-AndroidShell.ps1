@@ -2,6 +2,7 @@
 param(
     [string]$ToolRoot = 'E:\codex work\tools\android',
     [string]$JavaHome = 'C:\Program Files\Microsoft\jdk-21.0.7.6-hotspot',
+    [string]$SigningRoot,
     [switch]$Release,
     [switch]$SkipWebBuild,
     [switch]$Offline
@@ -37,19 +38,27 @@ $paths = @(Get-ChildItem -LiteralPath $assetDestination -File -Recurse | ForEach
 $gradle = Join-Path $ToolRoot 'gradle\gradle-8.13\bin\gradle.bat'
 $arguments = @('--no-daemon', '--console=plain', ('-Duser.home=' + $env:ANDROID_USER_HOME), 'testDebugUnitTest', 'assembleDebug')
 if ($Release) {
-    $privateRoot = Join-Path $repository 'work\private\android-shell'
+    $privateRoot = if ($SigningRoot) { [IO.Path]::GetFullPath($SigningRoot) } else { Join-Path $ToolRoot 'signing\Kexu' }
     $privateRootCreated = -not (Test-Path -LiteralPath $privateRoot)
     New-Item -ItemType Directory -Path $privateRoot -Force | Out-Null
     if ($privateRootCreated) {
-        $privateOwner = [Security.Principal.WindowsIdentity]::GetCurrent().User
-        $privateAcl = Get-Acl -LiteralPath $privateRoot
-        $privateAcl.SetAccessRuleProtection($true, $false)
-        $privateRule = New-Object Security.AccessControl.FileSystemAccessRule($privateOwner, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-        $privateAcl.AddAccessRule($privateRule)
-        Set-Acl -LiteralPath $privateRoot -AclObject $privateAcl
+        $privateOwner = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        & icacls.exe $privateRoot /inheritance:r /grant:r ("*$($privateOwner):(OI)(CI)F") | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot protect the private signing directory.' }
     }
     $env:KEXU_ANDROID_SIGNING_PROPERTIES = Join-Path $privateRoot 'signing.properties'
     $keyStore = Join-Path $privateRoot 'kexu-release.jks'
+    $previousRoot = Join-Path $repository 'work\private\android-shell'
+    $previousProperties = Join-Path $previousRoot 'signing.properties'
+    if (-not (Test-Path -LiteralPath $env:KEXU_ANDROID_SIGNING_PROPERTIES) -and (Test-Path -LiteralPath $previousProperties)) {
+        if (Test-Path -LiteralPath $keyStore) { throw 'Existing signing key requires its original configuration. Refusing to replace it.' }
+        Copy-Item -LiteralPath (Join-Path $previousRoot 'kexu-release.jks') -Destination $keyStore
+        $previousConfiguration = [IO.File]::ReadAllText($previousProperties)
+        $configuration = [regex]::Replace($previousConfiguration, '(?m)^storeFile=.*$', 'storeFile=' + $keyStore.Replace('\', '/'))
+        [IO.File]::WriteAllText($env:KEXU_ANDROID_SIGNING_PROPERTIES, $configuration, [Text.UTF8Encoding]::new($false))
+        $previousConfiguration = $null
+        $configuration = $null
+    }
     if (-not (Test-Path -LiteralPath $env:KEXU_ANDROID_SIGNING_PROPERTIES)) {
         if (Test-Path -LiteralPath $keyStore) { throw 'Existing keystore has no signing configuration. Restore the private configuration instead of replacing the key.' }
         $randomBytes = New-Object byte[] 32

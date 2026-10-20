@@ -4,8 +4,10 @@
 
 要求 Node.js 20+。生产使用同一 HTTPS 站点的 Nginx 将 `/api/v1/` 转发到本服务；不开放跨站 CORS，不对公网开放服务端口。源码无外部运行依赖。
 
+从源码运行时，在 `src/cloud/` 执行命令，并保留相邻的 `src/shared/brandCompatibility.mjs`。独立发行包已经包含对应的 `cloud/` 和 `shared/`，不可只复制 `server.mjs` 或 `cloud/` 目录；共享兼容注册表负责识别既有加密快照，服务不会重写已认证的快照格式。
+
 ```sh
-SNAPSHOT_DATA_DIR=/srv/tangent/private-snapshots \
+SNAPSHOT_DATA_DIR=/srv/kexu/private-snapshots \
 SNAPSHOT_ALLOWED_ORIGIN=https://your-timetable.example.com \
 PORT=9001 node server.mjs
 ```
@@ -39,7 +41,7 @@ location ^~ /api/ { return 404; }
 - `POST /api/v1/vaults`，JSON `{}`：创建空间，返回 `vaultId`、随机 `token` 和配额；服务器仅保存 token SHA-256。仅此次响应返回 token。
 - 以下全部使用 `Authorization: Bearer <vaultId>.<token>`，不接受查询参数中的凭据：
   - `GET /api/v1/snapshots`：当前空间快照元数据，至多 50 项，最新在前；包含已用容量和配额。
-  - `POST /api/v1/snapshots`：上传 `tangent-encrypted-snapshot` JSON。首次成功 201；相同 ID 与完全相同字节重试返回 200；相同 ID 不同内容返回 409。返回对象 ID、大小、SHA-256、来源数据集/修订及时间。
+  - `POST /api/v1/snapshots`：上传 `kexu-encrypted-snapshot` JSON。首次成功 201；相同 ID 与完全相同字节重试返回 200；相同 ID 不同内容返回 409。返回对象 ID、大小、SHA-256、来源数据集/修订及时间。
   - `GET /api/v1/snapshots/<uuid>/content`：下载该空间的密文 JSON。未知及外部空间对象均返回 404。
   - `DELETE /api/v1/snapshots/<uuid>`：明确删除当前空间对象；不修改设备主库。
 

@@ -1,47 +1,7 @@
 {
-  "version": "2026.10.12-mobile-mvp",
-  "createdAt": "2026-10-12T11:52:54.675813+00:00",
-  "sourceBranch": "feature/mobile-pwa-mvp",
-  "archive": {
-    "file": "releases/mobile/TangentTimetable-mobile-online-2026-10-12.zip",
-    "bytes": 32828985,
-    "sha256": "A7B74B8ADF07414B1250427837405CE5DAFF26AB52AAAAF87ACA677BC5B136A1",
-    "entries": 35,
-    "crcCheck": "PASS"
-  },
-  "jar": {
-    "file": "tangent-mobile.jar",
-    "bytes": 34867145,
-    "sha256": "1F10CA7B65E21C4E64142267740E72167036D8833A3A7C9F2D72664AEB45DE32",
-    "embeddedStaticFiles": 25,
-    "distHashMatch": true
-  },
-  "verification": {
-    "publicHttps": "Not deployed",
-    "browserUi": "Not passed: CUA timeout; headless Edge named-pipe permission failure",
-    "backendSuitePassed": 52,
-    "httpApiChecks": 29,
-    "backendSuiteError": "DesktopBackupServiceTest: restricted Windows process reports existing H2 file read-only",
-    "backendSuiteErrors": 1,
-    "backendSuiteTests": 53,
-    "physicalPhone": "Not tested",
-    "httpApiResult": "PASS",
-    "aiProvider": "Not tested; disabled status tested",
-    "httpApiAt": "2026-10-12T11:51:24.667Z",
-    "httpApiArtifactSha256": "1F10CA7B65E21C4E64142267740E72167036D8833A3A7C9F2D72664AEB45DE32",
-    "embeddedMobileShell": "PASS: /todos, manifest, sw.js",
-    "frontendTests": {
-      "dayAgenda": 7,
-      "pwa": 11,
-      "deviceIdentity": 8,
-      "passed": 26
-    },
-    "frontendTypecheck": "PASS",
-    "frontendLint": {
-      "errors": 0,
-      "existingWarnings": 7
-    },
-    "mobileBuild": "PASS",
-    "desktopBuild": "PASS; no manifest or Service Worker emitted"
-  }
+  "schemaVersion": 1,
+  "product": "Kexu",
+  "historical": true,
+  "originalDirectory": "https://github.com/2822708/Kexu/tree/c6c26a13ec812833cf74c374c4c9f5867d8169e6/releases/mobile",
+  "note": "Original immutable packages and checksums remain in Git history. Current Kexu packages are indexed in releases/mobile and releases/native."
 }

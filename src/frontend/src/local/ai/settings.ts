@@ -1,6 +1,7 @@
+import { readCompatiblePreference, removeCompatiblePreference } from '../../../../shared/brandCompatibility.mjs'
 /** Private AI connection settings. This key is deliberately outside the local snapshot database. */
-export const AI_SETTINGS_KEY = 'tangent_private_ai_connection_v1'
-export const AI_SETTINGS_EVENT = 'tangent-ai-settings-changed'
+export const AI_SETTINGS_KEY = 'kexu_private_ai_connection_v1'
+export const AI_SETTINGS_EVENT = 'kexu-ai-settings-changed'
 
 export interface AiConnectionSettings {
   endpoint: string
@@ -63,7 +64,7 @@ export function validateAiSettings(value: AiConnectionSettings): AiConnectionSet
 
 export function getAiSettings(): AiConnectionSettings {
   try {
-    const raw: unknown = JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) ?? 'null')
+    const raw: unknown = JSON.parse(readCompatiblePreference(localStorage, AI_SETTINGS_KEY) ?? 'null')
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_AI_SETTINGS }
     const item = raw as Record<string, unknown>
     return validateAiSettings({
@@ -91,7 +92,7 @@ export function saveAiSettings(value: AiConnectionSettings): AiConnectionSetting
 }
 
 export function clearAiSettings(): void {
-  localStorage.removeItem(AI_SETTINGS_KEY)
+  removeCompatiblePreference(localStorage, AI_SETTINGS_KEY)
   window.dispatchEvent(new Event(AI_SETTINGS_EVENT))
 }
 

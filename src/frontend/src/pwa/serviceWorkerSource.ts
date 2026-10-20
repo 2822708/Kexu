@@ -1,3 +1,4 @@
+import { legacyNames } from '../../../shared/brandCompatibility.mjs'
 /** Cache only complete public builds; business data lives in the device's IndexedDB. */
 export function createServiceWorkerSource(options: {
   version: string
@@ -6,8 +7,10 @@ export function createServiceWorkerSource(options: {
   assets: string[]
 }): string {
   const { version, base, precache, assets } = options
-  return `/* Tangent Timetable mobile shell ${version}; generated at build time. */
-const CACHE_PREFIX = 'tangent-mobile-shell-' + ${JSON.stringify(base)} + '-';
+  return `/* Kexu mobile shell ${version}; generated at build time. */
+const CACHE_PREFIX = 'kexu-mobile-shell-' + ${JSON.stringify(base)} + '-';
+const LEGACY_CACHE_PREFIX = ${`String.fromCharCode(${Array.from(legacyNames.cachePrefix, (character) => character.charCodeAt(0)).join(",")})`} + ${JSON.stringify(base)} + '-';
+const ownedCache = (key) => key.startsWith(CACHE_PREFIX) || key.startsWith(LEGACY_CACHE_PREFIX);
 const CACHE_NAME = CACHE_PREFIX + ${JSON.stringify(version)};
 const BASE = ${JSON.stringify(base)};
 const SHELL = BASE + 'index.html';
@@ -19,7 +22,7 @@ const ASSETS = new Set(${JSON.stringify(assets)});
 async function previousBuildAsset(path) {
   const keys = await caches.keys();
   for (const key of keys.reverse()) {
-    if (!key.startsWith(CACHE_PREFIX) || key === CACHE_NAME) continue;
+    if (!ownedCache(key) || key === CACHE_NAME) continue;
     const cached = await caches.match(path, { cacheName: key });
     if (cached) return cached;
   }
@@ -37,7 +40,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    const oldKeys = keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME);
+    const oldKeys = keys.filter((key) => ownedCache(key) && key !== CACHE_NAME);
     let previous = '';
     let lastActivation = 0;
     // A newer waiting/failed install must not displace the build still running
@@ -99,7 +102,7 @@ self.addEventListener('fetch', (event) => {
         return await fetch(request);
       } catch {
         const shell = await caches.match(SHELL, { cacheName: CACHE_NAME });
-        return shell || new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><p>本机课表数据仍保存在浏览器中，但离线页面资源尚未准备完整。请联网后重新打开课序；不要清除网站数据。</p>',
+        return shell || new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><p>本机课表数据仍保存在浏览器中，但离线页面资源尚未准备完整。请联网后重新打开Kexu；不要清除网站数据。</p>',
           { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
       }
     })());

@@ -1,3 +1,4 @@
+import { legacyNames } from '../../shared/brandCompatibility.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -11,7 +12,7 @@ const compiled = ts.transpileModule(
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
 ).outputText
 const exported = {}
-vm.runInNewContext(compiled, { exports: exported })
+vm.runInNewContext(compiled, { exports: exported, require: () => ({ legacyNames }) })
 const { createServiceWorkerSource } = exported
 const pluginExports = {}
 const nativeRequire = createRequire(import.meta.url)
@@ -243,7 +244,7 @@ test('offline readiness requires all public resources and detects later cache ev
   await query()
   assert.equal(states.at(-1).ready, true)
   assert.equal(states.at(-1).assetCount, 3)
-  f.storage.get('tangent-mobile-shell-/-v2').delete('/assets/lazy-456.js')
+  f.storage.get('kexu-mobile-shell-/-v2').delete('/assets/lazy-456.js')
   await query()
   assert.equal(states.at(-1).ready, false)
   assert.equal(states.at(-1).missingCount, 1)
@@ -264,7 +265,7 @@ test('a failed lazy resource installation never reports complete offline readine
     ],
   })
   assert.equal(status.ready, false)
-  assert.equal(f.storage.get('tangent-mobile-shell-/-v2').has('/__pwa_ready__'), false)
+  assert.equal(f.storage.get('kexu-mobile-shell-/-v2').has('/__pwa_ready__'), false)
   assert.equal(f.skipWaitingCalls(), 0)
 })
 
@@ -337,7 +338,7 @@ test('online navigation responses are never put into cache', async () => {
 
 test('updates wait for an explicit saved-update command and clean only their own shell caches', async () => {
   const f = fixture()
-  f.storage.set('tangent-mobile-shell-/-v1', new Map())
+  f.storage.set('kexu-mobile-shell-/-v1', new Map())
   f.storage.set('unrelated-cache', new Map())
   await f.lifetime('install')
   assert.equal(f.skipWaitingCalls(), 0)
@@ -347,7 +348,7 @@ test('updates wait for an explicit saved-update command and clean only their own
   assert.equal(f.skipWaitingCalls(), 1)
   await f.lifetime('activate')
   assert.equal(f.claims(), 1)
-  assert.equal(f.storage.has('tangent-mobile-shell-/-v1'), false)
+  assert.equal(f.storage.has('kexu-mobile-shell-/-v1'), false)
   assert.equal(f.storage.has('unrelated-cache'), true)
 })
 
@@ -362,11 +363,11 @@ test('the claimed new worker serves an already cached old lazy chunk while keepi
   const f = fixture({ offline: true })
   const oldPath = '/assets/TodosPage-oldAbC12.js'
   f.storage.set(
-    'tangent-mobile-shell-/-v0',
+    'kexu-mobile-shell-/-v0',
     new Map([['/index.html', new Response('older shell')]]),
   )
   f.storage.set(
-    'tangent-mobile-shell-/-v1',
+    'kexu-mobile-shell-/-v1',
     new Map([
       ['/index.html', new Response('previous shell')],
       [oldPath, new Response('old lazy chunk')],
@@ -374,13 +375,13 @@ test('the claimed new worker serves an already cached old lazy chunk while keepi
     ]),
   )
   // A newer failed installation must not displace the usable previous version.
-  f.storage.set('tangent-mobile-shell-/-failed', new Map())
+  f.storage.set('kexu-mobile-shell-/-failed', new Map())
   await f.lifetime('install')
   await f.lifetime('activate')
   assert.equal(f.claims(), 1)
-  assert.equal(f.storage.has('tangent-mobile-shell-/-v0'), false)
-  assert.equal(f.storage.has('tangent-mobile-shell-/-failed'), false)
-  assert.equal(f.storage.has('tangent-mobile-shell-/-v1'), true)
+  assert.equal(f.storage.has('kexu-mobile-shell-/-v0'), false)
+  assert.equal(f.storage.has('kexu-mobile-shell-/-failed'), false)
+  assert.equal(f.storage.has('kexu-mobile-shell-/-v1'), true)
   assert.equal(await (await f.request(oldPath)).response.text(), 'old lazy chunk')
   assert.equal(f.fetches.length, 0)
   assert.equal((await f.request('/api/todos')).intercepted, false)
@@ -389,7 +390,7 @@ test('the claimed new worker serves an already cached old lazy chunk while keepi
     (await f.request(oldPath, { headers: { 'X-API-Key': 'private' } })).intercepted,
     false,
   )
-  assert.equal(f.storage.get('tangent-mobile-shell-/-v2').has(oldPath), false)
+  assert.equal(f.storage.get('kexu-mobile-shell-/-v2').has(oldPath), false)
 })
 
 test('an unknown hashed asset is passed to the network and never added to any cache', async () => {
@@ -404,11 +405,28 @@ test('an unknown hashed asset is passed to the network and never added to any ca
   assert.equal((await f.request('/exports/Unknown-AbCd1234.js')).intercepted, false)
 })
 
+test('branding update retains the activated previous-name cache for existing tabs and writes only new-name caches', async () => {
+  const f = fixture({ offline: true })
+  const previousName = `${legacyNames.cachePrefix}/-previous`
+  const oldPath = '/assets/SettingsPage-oldAbC12.js'
+  f.storage.set(previousName, new Map([
+    ['/index.html', new Response('previous release')],
+    ['/__pwa_activation__', new Response('8')],
+    [oldPath, new Response('old chunk retained')],
+  ]))
+  await f.lifetime('install')
+  await f.lifetime('activate')
+  assert.equal(f.storage.has(previousName), true)
+  assert.equal(f.storage.has('kexu-mobile-shell-/-v2'), true)
+  assert.equal(await (await f.request(oldPath)).response.text(), 'old chunk retained')
+  assert.equal((await f.request('/api/todos')).intercepted, false)
+})
+
 test('a newer waiting install does not evict the previously activated build still used by old tabs', async () => {
   const f = fixture({ version: 'v3', offline: true })
   const oldPath = '/assets/SettingsPage-oldAbC12.js'
   f.storage.set(
-    'tangent-mobile-shell-/-v1',
+    'kexu-mobile-shell-/-v1',
     new Map([
       ['/index.html', new Response('active old shell')],
       ['/__pwa_activation__', new Response('4')],
@@ -416,16 +434,16 @@ test('a newer waiting install does not evict the previously activated build stil
     ]),
   )
   f.storage.set(
-    'tangent-mobile-shell-/-v2',
+    'kexu-mobile-shell-/-v2',
     new Map([['/index.html', new Response('completed but never activated waiting shell')]]),
   )
   await f.lifetime('install')
   await f.lifetime('activate')
-  assert.equal(f.storage.has('tangent-mobile-shell-/-v1'), true)
-  assert.equal(f.storage.has('tangent-mobile-shell-/-v2'), false)
+  assert.equal(f.storage.has('kexu-mobile-shell-/-v1'), true)
+  assert.equal(f.storage.has('kexu-mobile-shell-/-v2'), false)
   assert.equal(await (await f.request(oldPath)).response.text(), 'active old lazy chunk')
   assert.equal(
-    await f.storage.get('tangent-mobile-shell-/-v3').get('/__pwa_activation__').text(),
+    await f.storage.get('kexu-mobile-shell-/-v3').get('/__pwa_activation__').text(),
     '5',
   )
 })

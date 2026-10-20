@@ -1,6 +1,8 @@
+> 名称整理说明（2026-10-19）：本页为历史资料的 Kexu 阅读副本，名称与示例已统一，原始字节和原始补丁保存在 [Git 历史](https://github.com/2822708/Kexu/tree/c6c26a13ec812833cf74c374c4c9f5867d8169e6)。下文测试、路径及运行包均描述当时版本，不代表当前发行包或本轮重新验证。
+
 > 迁移说明（2026-09-26）：本文件来自修复版 `32de25c`。正文中的目录树和启动命令仍描述原布局；当前后端为 `src/backend`，前端为 `src/frontend`。当前入口见 [文档导航](../README.md) 和 [开发命令](../DEVELOPMENT.md)。
 
-# AGENTS.md — TimeTable 项目开发指南
+# AGENTS.md — Kexu 项目开发指南
 
 > 面向接手的 AI Agent，快速了解项目全貌、约定和当前进度。
 
@@ -36,7 +38,7 @@
 ## 3. 项目结构
 
 ```
-Tangent-Timetable/
+Kexu/
 ├── .gitignore / .editorconfig / .env.example
 ├── README.md / LICENSE / CONTRIBUTING.md
 ├── docs/
@@ -210,7 +212,7 @@ npm run build        # tsc -b && vite build → dist/
 ### MySQL 连接
 
 **Host**: `localhost:3306` / **Database**: `timetable`
-- 本地开发用 `application-local.yml`（datasource 密码读环境变量 `TANGENT_COMMON_PASSWORD`，且 `sql.init.mode=never`，
+- 本地开发用 `application-local.yml`（datasource 密码读环境变量 `KEXU_COMMON_PASSWORD`，且 `sql.init.mode=never`，
   故本地 schema 变更需**手动 ALTER**）
 - 生产用 `application-prod.yml`（`sql.init.mode=always`，启动自动建表）
 
@@ -221,7 +223,7 @@ npm run build        # tsc -b && vite build → dist/
 
 - 12 节作息时间 (08:00–21:05, MORNING/AFTERNOON/EVENING)
 - **不再内置演示 API Key**：`api_key` 表为空时，`ApiKeyBootstrap` 在启动后创建首个账号
-  （label `管理员`）；Key 取 `TANGENT_BOOTSTRAP_KEY`，未配置则随机生成并**只在创建那一次**打印到日志
+  （label `管理员`）；Key 取 `KEXU_BOOTSTRAP_KEY`，未配置则随机生成并**只在创建那一次**打印到日志
 
 ---
 
@@ -633,4 +635,4 @@ Rhino 提供 `ClassShutter` + 指令计数 + 栈深限制，可在进程内安�
 6. **考试不关联课程**: `exam` 表已删除 `course_id` 列（本地与生产库均已 ALTER），
    考试只含名称/日期/起止时间/地点，网格中统一渲染为独立红色块
 7. **文档**: 用户使用手册见 `docs/USER_MANUAL.md`（给非技术朋友），前端内置「用户手册」页 `/manual`
-   
+

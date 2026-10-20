@@ -13,7 +13,7 @@ $workPrefix = [IO.Path]::GetFullPath((Join-Path $projectRoot 'work')).TrimEnd('\
 if (-not $TestRoot.StartsWith($workPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Smoke data must be under this repository work directory.' }
 if (Test-Path -LiteralPath $TestRoot) { throw 'Smoke data directory must be new; existing data is never reused.' }
 $PackageDir = [IO.Path]::GetFullPath($PackageDir)
-$shellExe = Join-Path $PackageDir 'TangentTimetable.exe'
+$shellExe = Join-Path $PackageDir 'Kexu.exe'
 if (-not (Test-Path -LiteralPath $shellExe)) { throw 'Desktop executable missing.' }
 if (Get-NetTCPConnection -LocalPort 17817 -State Listen -ErrorAction SilentlyContinue) {
     throw 'Port 17817 is already occupied; no existing service will be stopped or reused.'

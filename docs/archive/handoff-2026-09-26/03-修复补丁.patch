@@ -15,7 +15,7 @@ Content-Transfer-Encoding: 8bit
   失控线程数设硬上限（被遗弃的线程不归还许可）；区分「沙箱不可用」与
   「脚本错误」，前者不再自动停用用户规则
 - 凭据：移除 data.sql 内置的 demo-key-001，改为 api_key 为空时创建首个
-  账号并把 Key 只打印一次（可用 TANGENT_BOOTSTRAP_KEY 指定）
+  账号并把 Key 只打印一次（可用 KEXU_BOOTSTRAP_KEY 指定）
 - AI：提案指纹改在调用模型前、用与 Prompt 同一份已加载数据计算
 - 小组件：凭据从 URL 路径改为 X-API-Key 请求头，恢复拦截器覆盖
 - AI 流：客户端断连时中断上游调用且不落库；线程池 core=max 且可配置
@@ -60,7 +60,7 @@ index 2f3ed97..bd5b9da 100644
 -- API Key: `demo-key-001` (label: 默认用户)
  - 12 节作息时间 (08:00–21:05, MORNING/AFTERNOON/EVENING)
 +- **不再内置演示 API Key**：`api_key` 表为空时，`ApiKeyBootstrap` 在启动后创建首个账号
-+  （label `管理员`）；Key 取 `TANGENT_BOOTSTRAP_KEY`，未配置则随机生成并**只在创建那一次**打印到日志
++  （label `管理员`）；Key 取 `KEXU_BOOTSTRAP_KEY`，未配置则随机生成并**只在创建那一次**打印到日志
  
  ---
  
@@ -123,7 +123,7 @@ index f0bbe98..ffc2f1a 100644
  
 -首次启动会自动执行 `db/schema.sql` 建表并写入默认数据（含演示账号 `demo-key-001`）。
 +首次启动会自动执行 `db/schema.sql` 建表并写入作息时间种子数据。`api_key` 表为空时会自动
-+创建首个账号并把 Key **只打印一次**到日志（也可用 `TANGENT_BOOTSTRAP_KEY` 指定自己的 Key）。
++创建首个账号并把 Key **只打印一次**到日志（也可用 `KEXU_BOOTSTRAP_KEY` 指定自己的 Key）。
  
  ### 前端
  
@@ -153,7 +153,7 @@ index 5938e49..a1b18d9 100644
 +
 +```bash
 +# 想让首个账号用你指定的 Key，就在启动前设置（不设则随机生成并打印到日志）
-+export TANGENT_BOOTSTRAP_KEY=your-custom-key
++export KEXU_BOOTSTRAP_KEY=your-custom-key
 +```
 +
 +后续新增账号见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)（`INSERT INTO api_key ...`）。
@@ -173,7 +173,7 @@ index 5938e49..a1b18d9 100644
  | `DEEPSEEK_MODEL` | 模型名（`deepseek-flash` = DeepSeek-V4.1-Flash） | `deepseek-flash` |
  | `CORS_ALLOWED_ORIGINS` | 允许跨域的来源（逗号分隔） | `*` |
  | `ADMIN_LABELS` | 可编辑全局作息表的账号 label（逗号分隔） | `Tangent0712` |
-+| `TANGENT_BOOTSTRAP_KEY` | 首次启动且 `api_key` 表为空时，用它创建首个账号 | 空（随机生成并打印） |
++| `KEXU_BOOTSTRAP_KEY` | 首次启动且 `api_key` 表为空时，用它创建首个账号 | 空（随机生成并打印） |
  | `VITE_API_BASE`（前端） | 前端 API 基地址 | `/api` |
  | `VITE_ADMIN_LABELS`（前端） | 前端 UI 管理员判断（仅 UI，后端以 `ADMIN_LABELS` 为准） | `Tangent0712` |
  
@@ -212,7 +212,7 @@ index 0000000..0a24396
 + *
 + * 应用没有注册页与账号管理接口，账号只能由部署者预先写入数据库。若什么都不做，
 + * 全新部署会连一个能登录的账号都没有，因此这里在表为空时补一个：
-+ * 优先使用配置项（环境变量 {@code TANGENT_BOOTSTRAP_KEY}），否则生成随机 Key 并打印到日志。
++ * 优先使用配置项（环境变量 {@code KEXU_BOOTSTRAP_KEY}），否则生成随机 Key 并打印到日志。
 + *
 + * <p>刻意不再内置任何固定 Key —— 公开仓库里的固定 Key 等于公开凭据；随机 Key 只在
 + * 创建的那一次输出，之后不再打印。运维应把它换成一个自己保管的值（见 docs/DEPLOYMENT.md）。
@@ -252,7 +252,7 @@ index 0000000..0a24396
 +            log.warn(" 未发现任何 API Key，已创建首个账号（label=管理员）");
 +            log.warn(" 登录用 Key：{}", key);
 +            log.warn(" 该 Key 只在此处输出一次，请立即妥善保存；如非本意，请在启动前设置");
-+            log.warn(" TANGENT_BOOTSTRAP_KEY 指定自己的 Key。");
++            log.warn(" KEXU_BOOTSTRAP_KEY 指定自己的 Key。");
 +            log.warn("======================================================================");
 +        } catch (DuplicateKeyException e) {
 +            // 并发启动（多实例）时另一个实例已创建，忽略
@@ -1379,7 +1379,7 @@ index a7bbdd1..a165eab 100644
    # 可编辑全局作息时间表的账号 label（逗号分隔）
    admin-labels: ${ADMIN_LABELS:Tangent0712}
 +  # 首次启动且 api_key 表为空时，用它创建首个管理员账号；留空则随机生成并打印到日志
-+  bootstrap-key: ${TANGENT_BOOTSTRAP_KEY:}
++  bootstrap-key: ${KEXU_BOOTSTRAP_KEY:}
  
  deepseek:
    api:
@@ -1390,7 +1390,7 @@ index 2f7ecd6..623ab81 100644
 @@ -1,4 +1,6 @@
 -INSERT IGNORE INTO api_key (api_key, label) VALUES ('demo-key-001', '默认用户');
 +-- 不再内置固定的演示 API Key：公开仓库里的固定 Key 等于公开凭据。
-+-- api_key 表为空时由 ApiKeyBootstrap 在启动后创建首个账号（Key 取自 TANGENT_BOOTSTRAP_KEY，
++-- api_key 表为空时由 ApiKeyBootstrap 在启动后创建首个账号（Key 取自 KEXU_BOOTSTRAP_KEY，
 +-- 未配置则随机生成并打印到日志）。
  
  INSERT IGNORE INTO period_config (period_number, start_time, end_time, category) VALUES
@@ -1504,18 +1504,18 @@ index 4b1d159..cf27ca0 100644
  
  ### 2.3 systemd 服务
  
-+先创建环境文件。`application-prod.yml` 里的 `${TANGENT_COMMON_PASSWORD}` 就是从这里读的；
++先创建环境文件。`application-prod.yml` 里的 `${KEXU_COMMON_PASSWORD}` 就是从这里读的；
 +systemd 的 `EnvironmentFile` 只认 `KEY=value` 行，**不能写 `export`**：
 +
 +```bash
 +sudo tee <APP_DIR>/.env >/dev/null <<'EOF'
-+TANGENT_COMMON_PASSWORD=你的数据库密码
++KEXU_COMMON_PASSWORD=你的数据库密码
 +DEEPSEEK_API_KEY=sk-xxx
 +EOF
 +sudo chmod 600 <APP_DIR>/.env
 +```
 +
- `/etc/systemd/system/timetable-backend.service`：
+ `/etc/systemd/system/kexu-backend.service`：
  
  ```ini
 @@ -163,11 +174,17 @@ INSERT IGNORE INTO api_key (api_key, label, avatar_url)
@@ -1523,7 +1523,7 @@ index 4b1d159..cf27ca0 100644
  ```
  
 +> 首次部署时 `api_key` 表为空，应用启动后会**自动创建首个账号**并把 Key 打印到日志
-+> （也可用环境变量 `TANGENT_BOOTSTRAP_KEY` 预先指定）。建议用 ≥128 位随机串作为 Key，
++> （也可用环境变量 `KEXU_BOOTSTRAP_KEY` 预先指定）。建议用 ≥128 位随机串作为 Key，
 +> 不要沿用任何文档里的示例值。仓库不再内置演示 Key。
 +
  > **schema 变更需手动 ALTER**：`CREATE TABLE IF NOT EXISTS` 只会创建不存在的表，

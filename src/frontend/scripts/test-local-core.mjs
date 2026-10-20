@@ -27,7 +27,9 @@ function setup(indexedDB = new IDBFactory()) {
     const module = { exports: {} }
     modules.set(url.href, module)
     const compiled = ts.transpileModule(readFileSync(url, 'utf8'), {
+      fileName: url.pathname.endsWith('.mjs') ? 'compat.js' : 'source.ts',
       compilerOptions: {
+        allowJs: true,
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         esModuleInterop: true,
@@ -37,7 +39,7 @@ function setup(indexedDB = new IDBFactory()) {
       filename: url.pathname,
     })
     fn(module, module.exports, (name) =>
-      name.startsWith('.') ? loadSource(new URL(`${name}.ts`, url)) : nativeRequire(name),
+      name.startsWith('.') ? loadSource(new URL(/\.[cm]?[jt]sx?$/.test(name) ? name : `${name}.ts`, url)) : nativeRequire(name),
     )
     return module.exports
   }

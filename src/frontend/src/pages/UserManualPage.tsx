@@ -61,7 +61,7 @@ function LocalUserManual() {
         title={
           <Space>
             <BookOutlined />
-            <span>课序 · 本地版使用手册</span>
+            <span>Kexu · 本地版使用手册</span>
           </Space>
         }
       >
@@ -220,7 +220,7 @@ export default function UserManualPage() {
         title={
           <Space>
             <BookOutlined />
-            <span>课序 · 使用手册</span>
+            <span>Kexu · 使用手册</span>
           </Space>
         }
         extra={<Text type="secondary">给非技术朋友的白话教程</Text>}

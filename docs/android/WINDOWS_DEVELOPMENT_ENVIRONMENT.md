@@ -6,9 +6,9 @@
 
 ## 一次安装，日常使用几个入口
 
-先在 Windows 文件管理器中进入 `E:\codex work\projects\Tangent-Timetable\src\android`，双击 **Setup-Android.cmd**。脚本会要求你查看并自行接受 Google 的下载条款，再由官方 SDK Manager 显示尚需确认的 SDK 许可。安装过程需要普通 Windows 终端能够访问 Google、Gradle、Maven Central 和 Gradle Plugin Portal。
+先在 Windows 文件管理器中进入 `E:\codex work\projects\Kexu\src\android`，双击 **Setup-Android.cmd**。脚本会要求你查看并自行接受 Google 的下载条款，再由官方 SDK Manager 显示尚需确认的 SDK 许可。安装过程需要普通 Windows 终端能够访问 Google、Gradle、Maven Central 和 Gradle Plugin Portal。
 
-安装流程会下载并校验固定版本的软件包，展开 Android Studio、SDK 命令行工具和 Gradle，安装 API 36 平台/源码、Build Tools 35.0.0、adb、模拟器及系统镜像，建立 `Tangent_API_36` 虚拟设备，生成官方 Gradle Wrapper，最后执行单元测试与 Debug APK 构建。任何命令失败都会停止；成功消息不会替代实际构建结果。
+安装流程会下载并校验固定版本的软件包，展开 Android Studio、SDK 命令行工具和 Gradle，安装 API 36 平台/源码、Build Tools 35.0.0、adb、模拟器及系统镜像，建立 `Kexu_API_36` 虚拟设备，生成官方 Gradle Wrapper，最后执行单元测试与 Debug APK 构建。任何命令失败都会停止；成功消息不会替代实际构建结果。
 
 | 入口 | 用途 |
 |---|---|
@@ -16,7 +16,7 @@
 | [Open-AndroidStudio.cmd](../../src/android/Open-AndroidStudio.cmd) | 使用隔离配置打开 Android 工程 |
 | [Open-AndroidTerminal.cmd](../../src/android/Open-AndroidTerminal.cmd) | 打开已载入 Java/SDK/Gradle 环境的 PowerShell |
 | [Build-Android.cmd](../../src/android/Build-Android.cmd) | 运行 `testDebugUnitTest` 和 `assembleDebug` |
-| [Start-AndroidEmulator.cmd](../../src/android/Start-AndroidEmulator.cmd) | 检查硬件加速并启动 `Tangent_API_36` |
+| [Start-AndroidEmulator.cmd](../../src/android/Start-AndroidEmulator.cmd) | 检查硬件加速并启动 `Kexu_API_36` |
 
 首轮下载和依赖解析通常需要数 GB 空间及可用网络；本次检查 E 盘约有 549 GiB 可用。安装包缓存可复用。已存在但校验不符的 ZIP 会停止安装，并明确指出文件；脚本不会悄悄使用损坏缓存。
 
@@ -29,9 +29,9 @@
 | Android 字节码目标 | Java 17，保持项目现有设置 |
 | Gradle / AGP | Gradle 8.13 / AGP 8.13.2 |
 | SDK | Android API 36、Build Tools 35.0.0、platform-tools、sources;android-36 |
-| 模拟器 | `system-images;android-36;google_apis;x86_64`，AVD 名 `Tangent_API_36` |
+| 模拟器 | `system-images;android-36;google_apis;x86_64`，AVD 名 `Kexu_API_36` |
 | 工具根目录 | `E:\codex work\tools\android` |
-| 项目根目录 | `E:\codex work\projects\Tangent-Timetable\src\android` |
+| 项目根目录 | `E:\codex work\projects\Kexu\src\android` |
 
 软件包 URL 与 SHA-256 保存在 [toolchain.json](../../scripts/android/toolchain.json)。Studio 与命令行工具来源为 [Android 官方下载页](https://developer.android.com/studio?authuser=31)，Gradle 包及 Wrapper JAR 校验值来自 [Gradle 官方列表](https://gradle.org/release-checksums/)。Java/Gradle/SDK 的组合依据 [AGP 8.13 兼容表](https://developer.android.com/build/releases/agp-8-13-0-release-notes)及 [Gradle Java 兼容表](https://docs.gradle.org/current/userguide/compatibility.html)。
 
@@ -56,7 +56,7 @@ E:\codex work\tools\android\
 
 安装后使用 `Open-AndroidStudio.cmd` 打开项目，等待 Gradle Sync 成功。在 Settings → Build, Execution, Deployment → Build Tools → Gradle 中确认 Gradle JDK 为 `GRADLE_LOCAL_JAVA_HOME` 或本机 JDK 21；在 SDK Manager 中确认路径是本工具目录下的 `sdk`。
 
-当前 UI 位于 `app/src/main/java/com/tangent/timetable/feature`，主题在 `ui/theme/TangentTheme.kt`。Compose 的 Split/Design 预览需要先成功同步依赖，并为目标 Composable 提供 `@Preview` 和示例参数。现有页面包含 ViewModel/Room 数据流，不能把“Studio 已安装”当成这些页面的预览已经通过。
+当前 UI 位于 `app/src/main/java/com/kexu/timetable/feature`，主题在 `ui/theme/KexuTheme.kt`。Compose 的 Split/Design 预览需要先成功同步依赖，并为目标 Composable 提供 `@Preview` 和示例参数。现有页面包含 ViewModel/Room 数据流，不能把“Studio 已安装”当成这些页面的预览已经通过。
 
 使用 `Start-AndroidEmulator.cmd` 启动设备，或连接已开启 USB 调试并在手机上确认授权的真机，然后在 Studio 选择 `app` 并 Run。设备测试命令为：
 

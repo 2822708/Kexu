@@ -1,3 +1,4 @@
+import { readCompatiblePreference } from '../../../shared/brandCompatibility.mjs'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, DatePicker, Dropdown, Input, Modal, Spin, message } from 'antd'
 import {
@@ -243,7 +244,7 @@ export default function LocalDailyPage() {
     const key = `${reviewState.datasetId}:${today}`
     let prompted = asked.current.has(key)
     try {
-      prompted ||= localStorage.getItem(`tangent.daily.review.asked:${key}`) === 'yes'
+      prompted ||= readCompatiblePreference(localStorage, `kexu.daily.review.asked:${key}`) === 'yes'
     } catch {
       /* Preference only. */
     }
@@ -255,7 +256,7 @@ export default function LocalDailyPage() {
     ) {
       asked.current.add(key)
       try {
-        localStorage.setItem(`tangent.daily.review.asked:${key}`, 'yes')
+        localStorage.setItem(`kexu.daily.review.asked:${key}`, 'yes')
       } catch {
         /* Session marker remains. */
       }

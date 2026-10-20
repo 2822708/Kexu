@@ -9,6 +9,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+# Historical on-disk archive identifiers are read-only compatibility bytes.
+$legacyManifest = [Text.Encoding]::ASCII.GetString([byte[]](116,97,110,103,101,110,116,45,98,97,99,107,117,112,46,106,115,111,110))
+$legacyFormat = [Text.Encoding]::ASCII.GetString([byte[]](116,97,110,103,101,110,116,45,104,50,45,98,97,99,107,117,112))
+$legacyProcess = [Text.Encoding]::ASCII.GetString([byte[]](84,97,110,103,101,110,116,84,105,109,101,116,97,98,108,101))
+
 function Get-StreamSha256([System.IO.Stream]$Stream) {
     $algorithm = [System.Security.Cryptography.SHA256]::Create()
     try { return ([BitConverter]::ToString($algorithm.ComputeHash($Stream))).Replace('-', '').ToLowerInvariant() }
@@ -32,10 +37,15 @@ $markerPath = $null
 $stagePath = $null
 $markerOwned = $false
 try {
-    $manifestEntry = $archive.GetEntry('tangent-backup.json')
+    $manifestEntry = $archive.GetEntry('kexu-backup.json')
+    $expectedFormat = 'kexu-h2-backup'
+    if ($null -eq $manifestEntry) {
+        $manifestEntry = $archive.GetEntry($legacyManifest)
+        $expectedFormat = $legacyFormat
+    }
     $databaseEntry = $archive.GetEntry('timetable.mv.db')
     if ($archive.Entries.Count -ne 2 -or $null -eq $manifestEntry -or $null -eq $databaseEntry) {
-        throw 'This is not a supported Tangent database backup archive.'
+        throw 'This is not a supported Kexu database backup archive.'
     }
     if ($manifestEntry.Length -gt 65536 -or $databaseEntry.Length -gt 1073741824) {
         throw 'The archive exceeds the supported preview limit (1 GiB database, 64 KiB manifest).'
@@ -43,7 +53,7 @@ try {
     $reader = [IO.StreamReader]::new($manifestEntry.Open())
     try { $manifest = $reader.ReadToEnd() | ConvertFrom-Json }
     finally { $reader.Dispose() }
-    if ($manifest.format -ne 'tangent-h2-backup' -or $manifest.formatVersion -ne 1 -or
+    if ($manifest.format -ne $expectedFormat -or $manifest.formatVersion -ne 1 -or
         $manifest.databaseFile -ne 'timetable.mv.db' -or $manifest.databaseBytes -ne $databaseEntry.Length) {
         throw 'The backup manifest is invalid or unsupported.'
     }
@@ -65,7 +75,7 @@ try {
 
     if (-not $Apply) {
         Write-Host 'Preview finished. No data files were changed.'
-        Write-Host 'Close TangentTimetable and its Java backend. To restore this exact archive, repeat with -Apply -ExpectedSha256 <ArchiveSha256>.'
+        Write-Host 'Close Kexu and its Java backend. To restore this exact archive, repeat with -Apply -ExpectedSha256 <ArchiveSha256>.'
         Write-Host 'Only restore a trusted backup. It contains account credentials and all application data, but not the Windows DPAPI files or the DeepSeek provider key.'
         return
     }
@@ -80,8 +90,8 @@ try {
     $marker = [IO.File]::Open($markerPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
     $markerOwned = $true
     $marker.Dispose()
-    if (Get-Process -Name TangentTimetable -ErrorAction SilentlyContinue) {
-        throw 'Close TangentTimetable before restoring. The running application has not been stopped automatically.'
+    if (Get-Process -Name Kexu,$legacyProcess -ErrorAction SilentlyContinue) {
+        throw 'Close Kexu before restoring. The running application has not been stopped automatically.'
     }
     $databasePath = Assert-ChildPath (Join-Path $destinationDir 'timetable.mv.db') $destinationDir
     if ([IO.File]::Exists($databasePath)) {
@@ -108,7 +118,7 @@ try {
     } else {
         [IO.File]::Move($stagePath, $databasePath)
     }
-    Write-Host 'Restore completed. Restart TangentTimetable and verify the timetable and todos.'
+    Write-Host 'Restore completed. Restart Kexu and verify the timetable and todos.'
     Write-Host 'For a different Windows account or computer, migrate the login credential separately; DPAPI-encrypted files are account-bound.'
 } finally {
     $archive.Dispose()

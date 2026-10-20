@@ -1,4 +1,4 @@
-# Tangent-Timetable 项目结构与当前架构
+# Kexu 项目结构与当前架构
 
 更新日期：2026-09-28。本文描述当前工作分支中的项目结构和优化后的主要边界；过往源码审阅记录在 `docs/archive/handoff-2026-09-26/`。详细问题修复与验证结果见 [优化实施状态](OPTIMIZATION_STATUS.md)，风险和建议见 [优化方案](OPTIMIZATION_PROPOSAL.md)。
 

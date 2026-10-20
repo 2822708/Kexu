@@ -10,7 +10,7 @@ Builds into a fresh repository work directory, runs an isolated smoke test,
 and publishes only after all gates pass. Never opens real user data or
 recursively deletes an existing output folder.
 .PARAMETER OutputDir
-Parent of the new TangentTimetable output folder; an existing package is preserved.
+Parent of the new Kexu output folder; an existing package is preserved.
 .PARAMETER SdkPackage
 Optional existing .nupkg; its SHA256 must match toolchain.json.
 .PARAMETER SkipWebView2Download
@@ -45,10 +45,10 @@ $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json
 $buildId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
 $workRoot = Join-Path $projectRoot 'work\desktop-build'
 $buildRoot = Join-Path $workRoot $buildId
-$staging = Join-Path $buildRoot 'TangentTimetable'
+$staging = Join-Path $buildRoot 'Kexu'
 if (-not $OutputDir) { $OutputDir = Join-Path $desktopDir 'app-image' }
 $outputRoot = [IO.Path]::GetFullPath($OutputDir)
-$destination = [IO.Path]::GetFullPath((Join-Path $outputRoot 'TangentTimetable'))
+$destination = [IO.Path]::GetFullPath((Join-Path $outputRoot 'Kexu'))
 
 function Assert-ChildPath([string]$Path, [string]$Parent) {
     $absolute = [IO.Path]::GetFullPath($Path)
@@ -110,7 +110,7 @@ $cscVersion = (Get-Item -LiteralPath $csc).VersionInfo.ProductVersion
 if ($cscVersion -ne $lock.cscVersion) { throw "C# compiler $cscVersion differs from locked $($lock.cscVersion)" }
 $netRelease = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').Release
 if ($netRelease -lt $lock.dotNetMinimumRelease) { throw '.NET Framework 4.8 or later required.' }
-foreach ($required in @('app.manifest', 'app.ico', 'TangentTimetable.exe.config', 'Program.cs', 'DesktopSecurity.cs')) {
+foreach ($required in @('app.manifest', 'app.ico', 'Kexu.exe.config', 'Program.cs', 'DesktopSecurity.cs')) {
     if (-not (Test-Path -LiteralPath (Join-Path $shellDir $required))) { throw "Required shell input missing: $required" }
 }
 $runtimeMode = 'fixed'
@@ -144,12 +144,13 @@ try {
 Write-Host 'Verifying and packaging standalone backend...'
 Push-Location $backendDir
 try {
-    & .\mvnw.cmd -B -ntp verify -Pstandalone
+    # Remove resources from older builds before copying the current frontend bundle.
+    & .\mvnw.cmd -B -ntp clean verify -Pstandalone
     Assert-Exit 'Backend verify'
 } finally { Pop-Location }
-$jar = Join-Path $backendDir 'target\timetable-backend-1.0.0.jar'
+$jar = Join-Path $backendDir 'target\kexu-backend-1.0.0.jar'
 if (-not (Test-Path -LiteralPath $jar)) { throw 'Standalone backend JAR missing.' }
-Copy-Item -LiteralPath $jar -Destination (Join-Path $staging 'app\timetable-backend.jar')
+Copy-Item -LiteralPath $jar -Destination (Join-Path $staging 'app\kexu-backend.jar')
 
 Write-Host 'Creating trimmed Java runtime...'
 $modules = 'java.base,java.compiler,java.desktop,java.instrument,java.management,java.naming,java.net.http,java.prefs,java.rmi,java.scripting,java.security.jgss,java.sql,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.unsupported,jdk.jfr,jdk.zipfs'
@@ -186,13 +187,13 @@ if ($FixedWebView2RuntimeDir) {
 
 Write-Host 'Compiling desktop shell...'
 $cscArgs = @('/nologo', '/target:winexe', '/platform:x64', '/optimize+',
-    "/out:$staging\TangentTimetable.exe", '/reference:System.dll', '/reference:System.Drawing.dll',
+    "/out:$staging\Kexu.exe", '/reference:System.dll', '/reference:System.Drawing.dll',
     '/reference:System.Windows.Forms.dll', '/reference:System.Core.dll', '/reference:System.Security.dll',
     "/reference:$staging\Microsoft.Web.WebView2.Core.dll", "/reference:$staging\Microsoft.Web.WebView2.WinForms.dll",
     "/win32icon:$shellDir\app.ico", "/win32manifest:$shellDir\app.manifest",
     (Join-Path $shellDir 'Program.cs'), (Join-Path $shellDir 'DesktopSecurity.cs'))
 & $csc @cscArgs; Assert-Exit 'Desktop shell compilation'
-Copy-Item -LiteralPath (Join-Path $shellDir 'TangentTimetable.exe.config') -Destination $staging
+Copy-Item -LiteralPath (Join-Path $shellDir 'Kexu.exe.config') -Destination $staging
 New-Item -ItemType Directory -Path (Join-Path $staging 'tools') | Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot 'scripts\desktop\Restore-DesktopBackup.ps1') -Destination (Join-Path $staging 'tools\Restore-DesktopBackup.ps1')
 Copy-Item -LiteralPath (Join-Path $desktopDir 'verify-package.ps1') -Destination (Join-Path $staging 'tools\Verify-Package.ps1')

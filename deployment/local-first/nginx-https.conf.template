@@ -1,10 +1,10 @@
 # Apply only after certbot has issued this domain's actual certificate.
 # The bootstrap and HTTPS templates replace the SAME site file; never enable both.
-log_format tangent_private '$remote_addr [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent';
-limit_req_zone $binary_remote_addr zone=tangent_api_rate:1m rate=60r/m;
-limit_req_zone $binary_remote_addr zone=tangent_registration_rate:1m rate=1r/m;
-limit_conn_zone $binary_remote_addr zone=tangent_api_connections:1m;
-map "$status:$uri" $tangent_cache_control {
+log_format kexu_private '$remote_addr [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent';
+limit_req_zone $binary_remote_addr zone=kexu_api_rate:1m rate=60r/m;
+limit_req_zone $binary_remote_addr zone=kexu_registration_rate:1m rate=1r/m;
+limit_conn_zone $binary_remote_addr zone=kexu_api_connections:1m;
+map "$status:$uri" $kexu_cache_control {
     default "no-cache";
     ~^[45][0-9][0-9]: "no-store";
     ~^[0-9][0-9][0-9]:/index\.html$ "no-store";
@@ -19,7 +19,7 @@ server {
     listen 80;
     listen [::]:80;
     server_name timetable.zozovip.work;
-    access_log /var/log/nginx/timetable.access.log tangent_private;
+    access_log /var/log/nginx/timetable.access.log kexu_private;
     error_log /var/log/nginx/timetable.error.log error;
     add_header Cache-Control "no-store" always;
     location ^~ /.well-known/acme-challenge/ {
@@ -37,7 +37,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/timetable.zozovip.work/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/timetable.zozovip.work/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_session_cache shared:TangentTLS:1m;
+    ssl_session_cache shared:KexuTLS:1m;
     ssl_session_timeout 1d;
     ssl_session_tickets off;
 
@@ -52,7 +52,7 @@ server {
     default_type application/octet-stream;
     server_tokens off;
     autoindex off;
-    access_log /var/log/nginx/timetable.access.log tangent_private;
+    access_log /var/log/nginx/timetable.access.log kexu_private;
     error_log /var/log/nginx/timetable.error.log error;
 
     add_header X-Content-Type-Options nosniff always;
@@ -61,11 +61,11 @@ server {
     add_header Permissions-Policy "camera=(), microphone=(self), geolocation=()" always;
     add_header Strict-Transport-Security "max-age=86400" always;
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'" always;
-    add_header Cache-Control $tangent_cache_control always;
+    add_header Cache-Control $kexu_cache_control always;
 
     location = /api/v1/vaults {
-        limit_req zone=tangent_registration_rate burst=2 nodelay;
-        limit_conn tangent_api_connections 4;
+        limit_req zone=kexu_registration_rate burst=2 nodelay;
+        limit_conn kexu_api_connections 4;
         client_max_body_size 1k;
         client_body_timeout 20s;
         proxy_pass http://127.0.0.1:9001;
@@ -78,8 +78,8 @@ server {
         proxy_cache off;
     }
     location ^~ /api/v1/ {
-        limit_req zone=tangent_api_rate burst=20 nodelay;
-        limit_conn tangent_api_connections 4;
+        limit_req zone=kexu_api_rate burst=20 nodelay;
+        limit_conn kexu_api_connections 4;
         client_max_body_size 10m;
         client_body_timeout 20s;
         proxy_pass http://127.0.0.1:9001;

@@ -1,3 +1,4 @@
+import { legacyNames as brandLegacyNames } from '../../../../shared/brandCompatibility.mjs'
 import { createEmptyLocalState, newPublicId, type LocalState } from '../types'
 import { validateLocalState } from '../validation'
 
@@ -102,7 +103,7 @@ export const COLLECTION_FIELDS = {
 export type CollectionName = keyof typeof COLLECTION_FIELDS
 type LegacyCollectionName = keyof typeof LEGACY_COLLECTION_FIELDS
 interface SnapshotBase {
-  format: 'tangent-local-snapshot'
+  format: 'kexu-local-snapshot' | typeof brandLegacyNames.logicalSnapshot
   snapshotId: string
   createdAt: string
   source: { datasetId: string; revision: number }
@@ -238,7 +239,7 @@ export function createLogicalSnapshot(state: LocalState): LogicalSnapshotV2 {
     ]),
   ) as LogicalSnapshotV2['data']
   return validateLogicalSnapshot({
-    format: 'tangent-local-snapshot',
+    format: 'kexu-local-snapshot',
     version: 2,
     schemaVersion: 2,
     scope: SNAPSHOT_SCOPE,
@@ -264,7 +265,7 @@ export function validateLogicalSnapshot(input: unknown): LogicalSnapshot {
   const legacy =
     value.version === 1 && value.schemaVersion === 1 && value.scope === LEGACY_SNAPSHOT_SCOPE
   const current = value.version === 2 && value.schemaVersion === 2 && value.scope === SNAPSHOT_SCOPE
-  if (value.format !== 'tangent-local-snapshot' || (!legacy && !current))
+  if (!['kexu-local-snapshot', brandLegacyNames.logicalSnapshot].includes(value.format as string) || (!legacy && !current))
     throw new Error('仅支持本应用核心逻辑快照 v1/v2；旧 H2 备份不能在此恢复')
   if (
     !uuid.test(String(value.snapshotId)) ||

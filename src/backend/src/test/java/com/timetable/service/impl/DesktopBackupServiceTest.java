@@ -1,6 +1,7 @@
 package com.timetable.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.timetable.config.LegacyIdentifiers;
 import com.timetable.dto.BackupInfo;
 import com.timetable.dto.BackupPreview;
 import com.timetable.entity.ApiKey;
@@ -21,6 +22,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,10 +57,31 @@ class DesktopBackupServiceTest {
         assertThatThrownBy(() -> service.create("ordinary-account"))
                 .isInstanceOf(BusinessException.class).extracting("code").isEqualTo(403);
         BackupInfo backup = service.create("fixture-admin");
+        assertThat(backup.name()).startsWith("kexu-backup-");
         BackupPreview preview = service.preview(backup.name(), "fixture-admin");
         assertThat(preview.integrityVerified()).isTrue();
         assertThat(preview.sha256()).hasSize(64);
         assertThat(preview.databaseBytes()).isPositive();
+        Path legacyArchive = live.resolve("backups").resolve(LegacyIdentifiers.BACKUP_PREFIX
+                + backup.name().substring("kexu-backup-".length()));
+        try (ZipFile currentArchive = new ZipFile(service.download(backup.name(), "fixture-admin").toFile());
+             ZipOutputStream legacy = new ZipOutputStream(Files.newOutputStream(legacyArchive))) {
+            legacy.putNextEntry(new ZipEntry("timetable.mv.db"));
+            try (InputStream input = currentArchive.getInputStream(currentArchive.getEntry("timetable.mv.db"))) {
+                input.transferTo(legacy);
+            }
+            legacy.closeEntry();
+            legacy.putNextEntry(new ZipEntry(LegacyIdentifiers.BACKUP_MANIFEST));
+            try (InputStream input = currentArchive.getInputStream(currentArchive.getEntry("kexu-backup.json"))) {
+                String header = new String(input.readAllBytes(), StandardCharsets.UTF_8)
+                        .replace("kexu-h2-backup", LegacyIdentifiers.BACKUP_FORMAT);
+                legacy.write(header.getBytes(StandardCharsets.UTF_8));
+            }
+            legacy.closeEntry();
+        }
+        assertThat(service.preview(legacyArchive.getFileName().toString(), "fixture-admin").integrityVerified()).isTrue();
+        assertThat(service.download(legacyArchive.getFileName().toString(), "fixture-admin")).isEqualTo(legacyArchive);
+        Files.delete(legacyArchive);
         assertThat(preview.schemaVersion()).isEqualTo(Flyway.configure().dataSource(source)
                 .locations("classpath:db/migration/h2").load().info().current().getVersion().toString());
         assertThatThrownBy(() -> service.download("../timetable.mv.db", "fixture-admin"))

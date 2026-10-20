@@ -1,70 +1,42 @@
-# Tangent-Timetable 项目空间
+# Kexu
 
-大学生课程表、考试、待办与 AI 助手，包含 Web 和 Windows 桌面版。此目录是后续开发使用的独立项目，文档与源码由同一个 Git 仓库管理。
+大学生课程表、考试、待办、日任务与 AI 助手。核心数据优先保存在设备本地，云端只提供加密快照、应用更新和下载。
 
-## 当前手机端版本（2026-10-19）
+仓库：[2822708/Kexu](https://github.com/2822708/Kexu)。项目空间示例：`E:\codex work\projects\Kexu`。使用 [Kexu.code-workspace](Kexu.code-workspace) 打开源码与文档。
 
-[本地主数据PWA](docs/mobile/README.md) 已实现设备离线读写、自动加密云快照和手动确认恢复；云只存快照与发行文件。应用显示名现为“课序”，采用浅色蓝绿UI，周课表遮挡已修复，日任务、完成反馈与回顾已经接入真实本地数据。源码在 `feature/local-first-snapshots`，[当前PWA运行包](releases/mobile/kexu-2026.10.19-daily/README.md)、[UI落实与截图](docs/design/UI_IMPLEMENTATION_2026_10_19.md)、[本地版验收](docs/mobile/ACCEPTANCE_2026_10_18.md)、[AI评测与优化](docs/ai/EVALUATION_2026-10-18.md)。最新前端另有 [APK与Windows EXE封装](docs/native/README.md)，不需要Java服务；独立Compose重写方案仍保持暂停。以下工作区建立记录保留历史背景。
+## 使用与下载
 
-## 目录
+- [PWA 运行与部署](docs/mobile/README.md)：离线读写，自动加密云备份，恢复前预览并手动确认。
+- [Android APK 与 Windows EXE](docs/native/README.md)：界面资源随包携带，核心业务不需要 Java、Node 或网页服务器。
+- [日任务实现](docs/design/DAILY_TASKS_IMPLEMENTATION.md)：快速录入临时任务、完成反馈、撤销和手动打开每日回顾。
+- [AI 配置与评测](docs/ai/EVALUATION_2026-10-18.md)：可选的自带密钥连接；业务修改逐项确认后执行。
+
+手机网页正式部署需要可信 HTTPS；原生包的 AI 与云快照需要另行配置服务并验证跨域。浏览器、APK、EXE 的数据相互隔离，可通过 JSON 导出、预览与确认导入迁移。设备、真实模型和生产部署的验证范围以对应验收记录为准。
+
+## 源码与文档
 
 ```text
-Tangent-Timetable/
-├── .git/                           # 独立 Git 对象库，保留上游历史
-├── .github/workflows/ci.yml         # 已适配 src 下的新路径
-├── AGENTS.md                       # 当前项目的开发约定
-├── README.md                       # 项目入口
-├── Tangent-Timetable.code-workspace # 编辑器工作区
-├── docs/
-│   ├── README.md                   # 文档导航
-│   ├── DEVELOPMENT.md              # 当前目录的开发和 Git 操作
-│   ├── WORKSPACE_SETUP.md          # 来源、迁移范围和验证结果
-│   ├── desktop/                   # 桌面版结构、运行与打包说明
-│   ├── android/                   # Android 离线单机版实施方案
-│   ├── project/                    # 产品、架构、部署、手册等原项目文档
-│   ├── reviews/                    # 项目理解与当前问题清单
-│   ├── releases/                   # 成品文件校验清单（纳入 Git）
-│   └── archive/handoff-2026-09-26/  # 原交付包说明、会话、审查报告、补丁
+Kexu/
+├── Kexu.code-workspace       # 编辑器工作区
+├── AGENTS.md                # 开发约定
+├── docs/                    # 产品、架构、设计、部署和历史记录
 ├── src/
-│   ├── android/                    # Android 原生离线单机版 Kotlin/Compose 工程
-│   ├── android-shell/              # 最新本地前端的 Android APK 外壳
-│   ├── backend/                    # 共享后端，MySQL 与 standalone/H2 两种配置
-│   ├── frontend/                   # Web 与桌面版共享 React 前端
-│   ├── windows-shell/              # 最新本地前端的 Windows EXE 外壳
-│   └── desktop/                    # WinForms/WebView2 外壳和打包脚本
-└── releases/windows/TangentTimetable/ # 现成桌面程序（忽略，不提交大文件）
+│   ├── frontend/            # 共用 React 界面与本地业务
+│   ├── shared/              # 跨端兼容标识
+│   ├── android-shell/       # 当前 Android APK 外壳
+│   ├── windows-shell/       # 当前 Windows EXE 外壳
+│   ├── backend/             # 兼容 Java REST/SSE 与 H2/MySQL 模式
+│   ├── desktop/             # 历史 Java 服务桌面外壳
+│   └── android/             # 暂停中的独立 Kotlin/Compose 重写工程
+├── scripts/                 # 构建、检查和打包入口
+├── deployment/              # 快照服务与部署配置
+└── releases/                # 运行包、安装包、校验与发布说明
 ```
 
-## 从哪里开始
+[文档导航](docs/README.md)、[开发命令](docs/DEVELOPMENT.md)、[项目架构](docs/reviews/PROJECT_UNDERSTANDING.md)、[当前问题](docs/reviews/CURRENT_ISSUES.md)。版本对比使用 Git 提交与既有 `baseline/*` 标签；原交付文件和历史提交保留。
 
-- [文档导航](docs/README.md)
-- [开发与 Git 使用](docs/DEVELOPMENT.md)
-- [项目理解](docs/reviews/PROJECT_UNDERSTANDING.md)
-- [当前问题清单](docs/reviews/CURRENT_ISSUES.md)
-- [项目建立记录](docs/WORKSPACE_SETUP.md)
-- [桌面版说明](docs/desktop/README.md)
-- [Android 移动端实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)
-- [Android 实施状态](docs/android/ANDROID_IMPLEMENTATION_STATUS.md)
-- [Android/桌面交换 JSON v1](docs/android/EXCHANGE_FORMAT_V1.md)
+## 命名与兼容
 
-## Git 基线
+当前产品、仓库、工程、构建产物及文档统一使用英文名称 **Kexu**。已安装应用和已有数据的稳定身份由兼容层保留；改名不清空数据库，不更换恢复密钥，也不伪造历史测试结果。原作者许可证与历史用户身份保持原样。
 
-- 日常主分支：`main`。
-- 原版标签：`baseline/upstream-57313b1`。
-- 修复版标签：`baseline/fixed-32de25c`。
-- 桌面版标签：`baseline/desktop-8f4f686`（包含桌面打包和高 DPI 修复）。
-- 工作区建立标签：`workspace/initial-2026-09-26`。
-
-原版和修复版可直接用标签比较，无需在日常目录内保存两套源码。历史提交仍使用原目录名 `backend/`、`frontend/`；工作区建立提交将它们迁入 `src/`。
-
-仓库已上传至私有GitHub `2822708/Timetable`。当前本地版使用独立分支，原交付目录保持原状；生产部署状态见最新验收报告。
-
-## Android 移动端规划
-
-Android Compose原生工程及首个离线业务切片已建立在 src/android/，包括课表/考试/待办本地功能和 JSON 文件交换。该独立重写工程仍暂停，其历史工具链限制及后续待办见 [Android 实施状态](docs/android/ANDROID_IMPLEMENTATION_STATUS.md)。本次APK封装使用独立的 `src/android-shell/` 和当前本地前端，详见 [封装说明](docs/native/README.md)。完整原生产品边界、AI/提醒/小组件架构仍见 [Android 实施架构方案](docs/android/ANDROID_IMPLEMENTATION_PLAN.md)。
-
-## 本轮范围
-
-本轮完成项目归档、目录分离、CI 路径调整、桌面版纳入和 Git 基线建立。`src` 内已有文件与桌面版基线 `8f4f686` 内容一致；已知业务问题列在 reviews 中，尚未在本轮修复。
-
-启动命令请使用 [DEVELOPMENT.md](docs/DEVELOPMENT.md)。`docs/project` 中保留了原项目文档的原始内容和路径示例，阅读时注意文档顶部的迁移说明。
+归档文档的名称已经统一，原始字节、原始补丁、旧安装包及其校验记录可在 Git 历史中查阅。完整边界见 [Kexu 命名说明](docs/BRANDING.md)。

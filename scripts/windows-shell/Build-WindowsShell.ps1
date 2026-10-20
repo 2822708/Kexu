@@ -63,7 +63,7 @@ $inventory = @(Get-ChildItem -LiteralPath $staging -Recurse -File | Sort-Object 
     [ordered]@{ path = $_.FullName.Substring($prefix.Length).Replace('\','/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
 })
 $manifest = [ordered]@{
-    schemaVersion = 1; product = '课序本地PWA Windows'; builtAtUtc = [DateTime]::UtcNow.ToString('o')
+    schemaVersion = 1; product = 'Kexu本地PWA Windows'; builtAtUtc = [DateTime]::UtcNow.ToString('o')
     gitHead = (& git -C $root rev-parse HEAD).Trim(); workingTreeDirty = [bool](& git -C $root status --porcelain)
     origin = $lock.origin; data = 'app-directory/Data, or explicit --data-dir / kexu-data-dir.txt; never bundled'
     sdk = $lock.webView2Sdk; runtime = @{ mode = $runtimeMode; version = $runtimeVersion }

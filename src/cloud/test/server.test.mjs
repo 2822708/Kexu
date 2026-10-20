@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import http from 'node:http'
 import { createSnapshotServer, limitsFromEnv } from '../server.mjs'
+import { legacyNames } from '../../shared/brandCompatibility.mjs'
 
 async function fixture(limits = {}, allowedOrigin) {
   const parent = path.resolve('work', 'snapshot-service-tests')
@@ -30,7 +31,18 @@ async function fixture(limits = {}, allowedOrigin) {
   }
   return { request, register, dataDir, server, close }
 }
-const envelope = (extra = {}) => ({ format: 'tangent-encrypted-snapshot', version: 1, snapshotId: randomUUID(), datasetId: randomUUID(), revision: 5, createdAt: new Date().toISOString(), algorithm: 'AES-GCM-256', keyId: 'a'.repeat(32), iv: 'A'.repeat(16), ciphertext: 'A'.repeat(48), ...extra })
+const envelope = (extra = {}) => ({ format: 'kexu-encrypted-snapshot', version: 1, snapshotId: randomUUID(), datasetId: randomUUID(), revision: 5, createdAt: new Date().toISOString(), algorithm: 'AES-GCM-256', keyId: 'a'.repeat(32), iv: 'A'.repeat(16), ciphertext: 'A'.repeat(48), ...extra })
+
+test('legacy encrypted snapshots upload and download without rewriting authenticated fields', async () => {
+  const f = await fixture()
+  try {
+    const vault = await f.register(), item = envelope({ format: legacyNames.encryptedSnapshot })
+    const upload = await f.request('POST', '/api/v1/snapshots', vault, item)
+    assert.equal(upload.status, 201)
+    assert.deepEqual((await f.request('GET', `/api/v1/snapshots/${item.snapshotId}/content`, vault)).body, item)
+    assert.equal(upload.body.sha256, createHash('sha256').update(JSON.stringify(item)).digest('hex'))
+  } finally { await f.close() }
+})
 
 test('health and registration expose no business CRUD; tokens are only stored hashed', async () => {
   const f = await fixture()
@@ -97,7 +109,7 @@ test('unexpected fields, malformed envelopes, query credentials and foreign orig
   try {
     const vault = await f.register()
     assert.equal((await f.request('POST', '/api/v1/snapshots', vault, { ...envelope(), token: 'must-not-store' })).status, 400)
-    assert.equal((await f.request('POST', '/api/v1/snapshots', vault, { format: 'tangent-h2-backup' })).status, 400)
+    assert.equal((await f.request('POST', '/api/v1/snapshots', vault, { format: 'kexu-h2-backup' })).status, 400)
     assert.equal((await f.request('GET', '/api/v1/snapshots?token=bad', vault)).status, 400)
     assert.equal((await f.request('POST', '/api/v1/vaults', null, {}, { Origin: 'https://foreign.example.test' })).status, 403)
     assert.equal((await f.request('GET', '/api/v1/snapshots', vault)).body.items.length, 0)

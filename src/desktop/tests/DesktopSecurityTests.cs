@@ -3,7 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using TangentTimetable;
+using System.Security.Cryptography;
+using System.Text;
+using Kexu;
 
 internal static class DesktopSecurityTests
 {
@@ -88,8 +90,25 @@ internal static class DesktopSecurityTests
             bool created;
             string key = AccountKeyStore.LoadOrCreate(keyDir, out created);
             Check(created && key.Length == 64, "First-run account not generated");
+            Check(File.ReadAllText(Path.Combine(keyDir, "desktop-key.dpapi")).StartsWith("DPAPI2:"), "New output must use the current credential format");
             Check(!File.ReadAllText(Path.Combine(keyDir, "desktop-key.dpapi")).Contains(key), "Account persisted in plaintext");
             Check(AccountKeyStore.LoadOrCreate(keyDir, out created) == key && !created, "DPAPI round-trip changed account");
+            string protectedLegacyDir = Path.Combine(directory, Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(protectedLegacyDir);
+            string protectedLegacyPath = Path.Combine(protectedLegacyDir, "desktop-key.dpapi");
+            byte[] protectedLegacy = ProtectedData.Protect(Encoding.UTF8.GetBytes(hostileKey), LegacyIdentifiers.KeyEntropy, DataProtectionScope.CurrentUser);
+            File.WriteAllText(protectedLegacyPath, "DPAPI1:" + Convert.ToBase64String(protectedLegacy));
+            Check(AccountKeyStore.LoadOrCreate(protectedLegacyDir, out created) == hostileKey && !created, "Protected legacy migration changed the account");
+            Check(File.ReadAllText(protectedLegacyPath).StartsWith("DPAPI2:"), "Protected legacy account was not rewrapped");
+            Check(AccountKeyStore.LoadOrCreate(protectedLegacyDir, out created) == hostileKey && !created, "Rewrapped account failed to decrypt");
+            string portable = Path.Combine(directory, "portable");
+            string localData = Path.Combine(directory, "local-data");
+            string oldData = Path.Combine(localData, LegacyIdentifiers.DataDirectory);
+            Check(DesktopSecurity.DefaultDataDirectory(portable, localData) == Path.Combine(portable, "Data"), "New data default must remain next to the portable package");
+            Directory.CreateDirectory(oldData);
+            Check(DesktopSecurity.DefaultDataDirectory(portable, localData) == oldData, "Existing legacy data was abandoned");
+            Directory.CreateDirectory(Path.Combine(portable, "Data"));
+            Check(DesktopSecurity.DefaultDataDirectory(portable, localData) == Path.Combine(portable, "Data"), "Explicit portable data must take precedence");
             string legacyDir = Path.Combine(directory, Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(legacyDir);
             File.WriteAllText(Path.Combine(legacyDir, "desktop-key.txt"), hostileKey);

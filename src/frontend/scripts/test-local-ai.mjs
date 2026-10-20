@@ -15,6 +15,106 @@ import {
   semanticEvalCases,
 } from './ai-eval-fixtures.mjs'
 import { createMockOpenAiServer } from './mock-openai.mjs'
+import { legacyNames, readCompatiblePreference, removeCompatiblePreference } from '../../shared/brandCompatibility.mjs'
+
+test('renamed private settings migrate old values, retain secrets locally and clear both identifiers', () => {
+  const settings = { endpoint: 'https://ai.example.test/v1', model: 'test-model', apiKey: 'private-fixture-key', enabled: true, allowContext: true, visionEnabled: false }
+  const values = new Map([[legacyNames.aiSettings, JSON.stringify(settings)]])
+  const x = setup({ storage: values })
+  assert.deepEqual(normal(x.getAiSettings()), settings)
+  assert.equal(values.get(x.AI_SETTINGS_KEY), JSON.stringify(settings))
+  x.saveAiSettings({ ...settings, model: 'new-model' })
+  assert.equal(x.getAiSettings().model, 'new-model')
+  x.clearAiSettings()
+  assert.equal(values.has(legacyNames.aiSettings), false)
+  assert.equal(values.has(x.AI_SETTINGS_KEY), false)
+  assert.equal(x.getAiSettings().enabled, false)
+})
+
+test('daily timer, selection and speech preferences survive branding; failed migration writes keep the old value readable', () => {
+  for (const [key, previous] of [['kexu.daily.timer.v2', legacyNames.dailyTimer], ['kexu.local.activeSchedulePublicId', legacyNames.activeSchedule], ['kexu_speech_consent_v1', legacyNames.speechConsent]]) {
+    const map = new Map([[previous, 'existing-value']])
+    const storage = { getItem: (key) => map.get(key) ?? null, setItem: () => { throw new Error('quota') }, removeItem: (key) => map.delete(key) }
+    assert.equal(readCompatiblePreference(storage, key), 'existing-value')
+    assert.equal(map.get(previous), 'existing-value')
+    removeCompatiblePreference(storage, key)
+    assert.equal(readCompatiblePreference(storage, key), null)
+  }
+})
+
+test('speech consent revoked in an older tab also revokes the renamed preference', () => {
+  const values = new Map([[legacyNames.speechConsent, 'true']])
+  const localStorage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+  const window = new EventTarget()
+  window.localStorage = localStorage
+  let updates = 0
+  const hooks = {
+    useCallback: (fn) => fn, useEffect: () => {}, useRef: (current) => ({ current }),
+    useState: (initial) => [initial, () => {}],
+    useSyncExternalStore: (subscribe, getSnapshot) => { subscribe(() => updates++); return getSnapshot() },
+  }
+  const module = { exports: {} }
+  const compiled = ts.transpileModule(readFileSync(new URL('../src/hooks/useSpeechInput.ts', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  vm.runInNewContext(compiled, { module, exports: module.exports, window, localStorage,
+    require: (name) => name === 'react' ? hooks : { legacyNames, readCompatiblePreference } })
+  assert.equal(module.exports.useSpeechConsent()[0], true)
+  const event = new Event('storage')
+  Object.assign(event, { key: legacyNames.speechConsent, newValue: 'false', storageArea: localStorage })
+  window.dispatchEvent(event)
+  assert.equal(values.get('kexu_speech_consent_v1'), 'false')
+  assert.equal(module.exports.useSpeechConsent()[0], false)
+  assert.ok(updates >= 1)
+})
+
+test('revoking speech consent notifies an older tab even if the new preference write fails, without mirroring grants', () => {
+  for (const blockedKey of [null, 'kexu_speech_consent_v1', legacyNames.speechConsent]) {
+    const values = new Map([['kexu_speech_consent_v1', 'true'], [legacyNames.speechConsent, 'true']])
+    const olderTab = new EventTarget()
+    let olderConsent = true
+    olderTab.addEventListener('storage', (event) => {
+      // A still-open previous release only understands its original preference.
+      if (event.key === legacyNames.speechConsent) olderConsent = event.newValue === 'true'
+    })
+    const writes = []
+    const localStorage = {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => {
+        writes.push([key, value])
+        if (key === blockedKey) throw new Error('storage unavailable')
+        values.set(key, value)
+        const event = new Event('storage')
+        Object.assign(event, { key, newValue: value, storageArea: localStorage })
+        olderTab.dispatchEvent(event)
+      },
+    }
+    const window = new EventTarget()
+    window.localStorage = localStorage
+    const hooks = {
+      useCallback: (fn) => fn, useEffect: () => {}, useRef: (current) => ({ current }),
+      useState: (initial) => [initial, () => {}],
+      useSyncExternalStore: (subscribe, getSnapshot) => { subscribe(() => {}); return getSnapshot() },
+    }
+    const module = { exports: {} }
+    const compiled = ts.transpileModule(readFileSync(new URL('../src/hooks/useSpeechInput.ts', import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText
+    vm.runInNewContext(compiled, { module, exports: module.exports, window, localStorage,
+      require: (name) => name === 'react' ? hooks : { legacyNames, readCompatiblePreference } })
+    const [, setConsent] = module.exports.useSpeechConsent()
+    assert.doesNotThrow(() => setConsent(false))
+    assert.equal(module.exports.useSpeechConsent()[0], false)
+    assert.ok(writes.some(([key, value]) => key === legacyNames.speechConsent && value === 'false'))
+    if (blockedKey !== legacyNames.speechConsent) {
+      assert.equal(olderConsent, false)
+      assert.equal(values.get(legacyNames.speechConsent), 'false')
+    }
+    assert.doesNotThrow(() => setConsent(true))
+    assert.equal(module.exports.useSpeechConsent()[0], true)
+    assert.equal(writes.some(([key, value]) => key === legacyNames.speechConsent && value === 'true'), false)
+  }
+})
 
 const syntheticKey = 'synthetic-only-eval-key-12345678'
 const scheduleBody = {
@@ -59,7 +159,9 @@ function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fe
     const module = { exports: {} }
     modules.set(url.href, module)
     const compiled = ts.transpileModule(readFileSync(url, 'utf8'), {
+      fileName: url.pathname.endsWith('.mjs') ? 'compat.js' : 'source.ts',
       compilerOptions: {
+        allowJs: true,
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         esModuleInterop: true,
@@ -69,7 +171,7 @@ function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fe
       filename: url.pathname,
     })
     fn(module, module.exports, (name) =>
-      name.startsWith('.') ? loadSource(new URL(`${name}.ts`, url)) : nativeRequire(name),
+      name.startsWith('.') ? loadSource(new URL(/\.[cm]?[jt]sx?$/.test(name) ? name : `${name}.ts`, url)) : nativeRequire(name),
     )
     return module.exports
   }

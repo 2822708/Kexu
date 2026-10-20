@@ -1,3 +1,4 @@
+import { legacyNames } from '../../../shared/brandCompatibility.mjs'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Alert,
@@ -139,7 +140,7 @@ export default function LocalBackupSettings() {
                 if (
                   await saveJsonFile(
                     snapshot,
-                    `Tangent-core-${new Date().toISOString().slice(0, 10)}.json`,
+                    `Kexu-core-${new Date().toISOString().slice(0, 10)}.json`,
                   )
                 )
                   message.success('已生成本地数据文件，请确认文件已保存')
@@ -169,7 +170,7 @@ export default function LocalBackupSettings() {
               if (file.size > ENCRYPTED_MAX_BYTES) throw new Error('快照文件过大')
               const text = await file.text()
               const input = JSON.parse(text) as { format?: string }
-              if (input.format === 'tangent-encrypted-snapshot') {
+              if (['kexu-encrypted-snapshot', legacyNames.encryptedSnapshot].includes(input.format as string)) {
                 if (!config) throw new Error('请先导入对应的云恢复凭证')
                 await showPreview(await decryptSnapshot(input, config.key))
               } else {
@@ -289,7 +290,7 @@ export default function LocalBackupSettings() {
                     if (
                       await saveJsonFile(
                         await exportRecoveryCredential(),
-                        'Tangent-private-recovery.json',
+                        'Kexu-private-recovery.json',
                       )
                     )
                       setCredentialExported(true)

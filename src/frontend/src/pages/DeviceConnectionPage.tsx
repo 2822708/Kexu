@@ -13,7 +13,7 @@ export default function DeviceConnectionPage() {
           className="login-card-header"
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
         >
-          <span>课序</span>
+          <span>Kexu</span>
           <Button type="text" size="small" onClick={toggle}>
             {mode === 'dark' ? '浅色' : '深色'}
           </Button>

@@ -104,7 +104,7 @@ public final class MainActivity extends ComponentActivity {
             String line;
             while ((line = reader.readLine()) != null) if (!line.trim().isEmpty()) assetPaths.add(line);
         } catch (Exception ex) {
-            new AlertDialog.Builder(this).setTitle("安装包资源不完整").setMessage("请重新安装完整的课序安装包；本机数据不会在此处清除。")
+            new AlertDialog.Builder(this).setTitle("安装包资源不完整").setMessage("请重新安装完整的Kexu安装包；本机数据不会在此处清除。")
                     .setPositiveButton("关闭", (dialog, which) -> finish()).setCancelable(false).show();
             return;
         }

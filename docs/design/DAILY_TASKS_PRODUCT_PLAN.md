@@ -1,8 +1,8 @@
-# 课序：日任务、正反馈与每日回顾策划
+# Kexu：日任务、正反馈与每日回顾策划
 
 日期：2026-10-19。状态：本地PWA日任务首版已落地，实际范围与验收见[日任务实现记录](DAILY_TASKS_IMPLEMENTATION.md)。本文第2节记录开发前基线，第11–14节保留草案阶段记录，其“未修改正式应用”仅描述当时状态。界面保留放大的单列任务主体，底部“日程／专注／今日回顾”收为一行轻工具条；用重点浅蓝绿底、细边条与轻量图标增加层次，不恢复大评价卡。
 
-用户已选择“具体鼓励＋简洁小结”。沿用课序浅色蓝绿、清晰专业的视觉；本方案不设置综合分、排名、扣分或中断连胜惩罚。体验草案见 [日任务交互原型](daily-tasks-concept.html)，原型只操作内存中的合成数据。
+用户已选择“具体鼓励＋简洁小结”。沿用Kexu浅色蓝绿、清晰专业的视觉；本方案不设置综合分、排名、扣分或中断连胜惩罚。体验草案见 [日任务交互原型](daily-tasks-concept.html)，原型只操作内存中的合成数据。
 
 ## 1. 页面要帮助用户完成什么
 
@@ -297,11 +297,11 @@ flowchart LR
 
 | 实际草案截图 | 查看 |
 |---|---|
-| 桌面概览 | [1280px](evidence/daily-concept-desktop-1280.jpg) |
-| 手机首屏与常驻快速入口 | [390px](evidence/daily-concept-mobile-390.jpg) |
-| 事实小结、个人感受与文字 | [390px回顾](evidence/daily-concept-review-390.jpg) |
-| 完成控件局部特效瞬间 | [390px小特效](evidence/daily-concept-completion-390.jpg) |
-| 今日无新记录时的手动询问 | [390px昨日询问](evidence/daily-concept-yesterday-question-390.jpg) |
+| 桌面概览 | [1280px](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-concept-desktop-1280.jpg) |
+| 手机首屏与常驻快速入口 | [390px](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-concept-mobile-390.jpg) |
+| 事实小结、个人感受与文字 | [390px回顾](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-concept-review-390.jpg) |
+| 完成控件局部特效瞬间 | [390px小特效](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-concept-completion-390.jpg) |
+| 今日无新记录时的手动询问 | [390px昨日询问](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-concept-yesterday-question-390.jpg) |
 
 ## 12. 极简版草案
 
@@ -315,7 +315,7 @@ flowchart LR
 - 底部回顾可询问昨日，昨日2项只读记录不计入今日0项；无昨日资料直接打开今日空态。保存感受与文字后，正文仍只显示一行保存状态。
 - “关于草案→示例场景”可操作；场景切换仅影响内存中的合成数据。脚本语法、60个唯一ID及引用、无网络/存储调用、文档链接静态检查通过。
 
-本节截图：[手机极简版390px](evidence/daily-minimal-mobile-390.jpg) · [桌面极简版1280px](evidence/daily-minimal-desktop-1280.jpg)。旧截图作为设计记录保留；最新比例调整见第13节。
+本节截图：[手机极简版390px](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-minimal-mobile-390.jpg) · [桌面极简版1280px](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-minimal-desktop-1280.jpg)。旧截图作为设计记录保留；最新比例调整见第13节。
 
 正式应用、数据模型和运行包仍未改动；物理手机键盘、辅助技术、减少动画偏好与正式持久化等验收边界继续保留。
 
@@ -334,7 +334,7 @@ flowchart LR
 
 320px下文档与可视宽度均为305px，无横向溢出，标题无裁切，行高可随文字增加，菜单右边界约288px、菜单按钮44px。菜单设重点与完成0→1仍正常，读取到1个局部特效、`pointer-events:none`。本轮只改HTML内样式，交互脚本与前一提交逐字比较（仅规范化行尾）一致，并通过语法检查。
 
-历史设计截图：[手机主内容放大390px](evidence/daily-proportion-mobile-390.jpg) · [桌面内容区加宽1280px](evidence/daily-proportion-desktop-1280.jpg)。本节记录上一轮比例调整，最新底部工具条与轻层次见第14节。比例是上述视口与合成数据的实测，不是强制占满屏幕的固定高度；正式应用和运行包仍未修改。
+历史设计截图：[手机主内容放大390px](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-proportion-mobile-390.jpg) · [桌面内容区加宽1280px](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-proportion-desktop-1280.jpg)。本节记录上一轮比例调整，最新底部工具条与轻层次见第14节。比例是上述视口与合成数据的实测，不是强制占满屏幕的固定高度；正式应用和运行包仍未修改。
 
 ## 14. 底部工具条与蓝绿轻层次
 
@@ -355,7 +355,7 @@ flowchart LR
 
 | 本轮实际草案截图 | 链接 |
 |---|---|
-| 手机工具条与轻层次390px | [390px](evidence/daily-tools-mobile-390.jpg) |
-| 桌面单列主体与工具条1280px | [1280px](evidence/daily-tools-desktop-1280.jpg) |
+| 手机工具条与轻层次390px | [390px](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-tools-mobile-390.jpg) |
+| 桌面单列主体与工具条1280px | [1280px](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/daily-tools-desktop-1280.jpg) |
 
 本轮仍限于策划与合成数据交互草案；正式业务功能、数据库与快照架构、运行包均未改动。第11至13节保留历史设计与当轮验证，不替代本轮验收。

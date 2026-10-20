@@ -1,19 +1,19 @@
-interface TangentSpeechResult {
+interface KexuSpeechResult {
   readonly [index: number]: { readonly transcript: string }
   readonly length: number
   readonly isFinal: boolean
 }
 
-interface TangentSpeechEvent extends Event {
+interface KexuSpeechEvent extends Event {
   readonly resultIndex: number
-  readonly results: ArrayLike<TangentSpeechResult>
+  readonly results: ArrayLike<KexuSpeechResult>
 }
 
-interface TangentSpeechRecognition extends EventTarget {
+interface KexuSpeechRecognition extends EventTarget {
   lang: string
   continuous: boolean
   interimResults: boolean
-  onresult: ((event: TangentSpeechEvent) => void) | null
+  onresult: ((event: KexuSpeechEvent) => void) | null
   onerror: ((event: Event & { error?: string }) => void) | null
   onend: (() => void) | null
   start(): void
@@ -22,6 +22,6 @@ interface TangentSpeechRecognition extends EventTarget {
 }
 
 interface Window {
-  SpeechRecognition?: new () => TangentSpeechRecognition
-  webkitSpeechRecognition?: new () => TangentSpeechRecognition
+  SpeechRecognition?: new () => KexuSpeechRecognition
+  webkitSpeechRecognition?: new () => KexuSpeechRecognition
 }

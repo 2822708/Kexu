@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.tangent.timetable"
+    namespace = "com.kexu.timetable"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.tangent.timetable.android"
+        applicationId = "com.kexu.timetable.android"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -30,10 +30,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -42,6 +38,12 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

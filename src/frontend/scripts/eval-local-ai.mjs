@@ -44,12 +44,13 @@ function load(url) {
   const module = { exports: {} }
   modules.set(url.href, module)
   const compiled = ts.transpileModule(readFileSync(url, 'utf8'), {
+      fileName: url.pathname.endsWith('.mjs') ? 'compat.js' : 'source.ts',
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText
   vm.runInContext(`(function(module,exports,require){${compiled}\n})`, context)(
     module,
     module.exports,
-    (name) => (name.startsWith('.') ? load(new URL(`${name}.ts`, url)) : nativeRequire(name)),
+    (name) => (name.startsWith('.') ? load(new URL(/\.[cm]?[jt]sx?$/.test(name) ? name : `${name}.ts`, url)) : nativeRequire(name)),
   )
   return module.exports
 }

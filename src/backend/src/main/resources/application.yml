@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/timetable?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
     username: root
-    password: ${TANGENT_COMMON_PASSWORD:}
+    password: ${KEXU_COMMON_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   sql:
@@ -32,7 +32,7 @@ app:
   # 可选的管理员 API Key 列表（逗号分隔）；优先使用数据库 account_role=ADMIN
   admin-api-keys: ${ADMIN_API_KEYS:}
   # 可选：空库的初始管理员凭据；未配置时由设备自动注册普通工作区
-  bootstrap-key: ${TANGENT_BOOTSTRAP_KEY:}
+  bootstrap-key: ${KEXU_BOOTSTRAP_KEY:}
 
 deepseek:
   api:

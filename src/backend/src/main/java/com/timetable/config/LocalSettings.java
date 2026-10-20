@@ -43,8 +43,8 @@ public class LocalSettings {
     private final String encryptionMasterKey;
     private final Properties properties = new Properties();
 
-    public LocalSettings(@Value("${app.data-dir:~/.tangent-timetable}") String dataDir,
-                         @Value("${TANGENT_SETTINGS_ENCRYPTION_KEY:}") String encryptionMasterKey) {
+    public LocalSettings(@Value("${app.data-dir:~/.kexu}") String dataDir,
+                         @Value("${KEXU_SETTINGS_ENCRYPTION_KEY:}") String encryptionMasterKey) {
         this.dataDir = resolve(dataDir);
         this.file = this.dataDir.resolve(FILE_NAME);
         this.encryptionMasterKey = encryptionMasterKey == null || encryptionMasterKey.isBlank()
@@ -54,7 +54,7 @@ public class LocalSettings {
 
     /** 把 {@code ~} 展开为 user.home，并创建数据目录 */
     public static Path resolve(String dir) {
-        String value = dir == null || dir.isBlank() ? "~/.tangent-timetable" : dir.trim();
+        String value = dir == null || dir.isBlank() ? "~/.kexu" : dir.trim();
         if (value.startsWith("~")) {
             value = System.getProperty("user.home") + value.substring(1);
         }
@@ -107,7 +107,7 @@ public class LocalSettings {
             Files.createDirectories(dataDir);
             Path temporary = Files.createTempFile(dataDir, "settings-", ".tmp");
             try (OutputStream out = Files.newOutputStream(temporary)) {
-                properties.store(out, "Tangent Timetable local settings");
+                properties.store(out, "Kexu local settings");
             }
             try {
                 Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE,

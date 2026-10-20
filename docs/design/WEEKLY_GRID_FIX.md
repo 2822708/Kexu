@@ -26,10 +26,10 @@
 
 ## 证据与草案
 
-- [实际组件：重叠课程与考试并列](evidence/weekly-grid-fixed-desktop.jpg)
-- [当前应用：手机周视图](evidence/weekly-grid-app-mobile.jpg)
+- [实际组件：重叠课程与考试并列](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/weekly-grid-fixed-desktop.jpg)
+- [当前应用：手机周视图](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/weekly-grid-app-mobile.jpg)
 - [UI与命名规划](UI_REDESIGN_PLAN.md)
 - [可点击界面草案](ui-concept.html)：桌面周表、手机今日、AI提案三个视图；合成数据，不执行真实保存或AI调用。
-- [桌面视觉草案](evidence/ui-concept-desktop.jpg)、[手机今日草案](evidence/ui-concept-mobile.jpg)、[AI提案草案](evidence/ui-concept-ai.jpg)
+- [桌面视觉草案](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/ui-concept-desktop.jpg)、[手机今日草案](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/ui-concept-mobile.jpg)、[AI提案草案](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/ui-concept-ai.jpg)
 
 此前 `releases/mobile/local-first-2026.10.18` 的preview.1发行包保持原状，不包含本次修复。当前源码与本机最新移动构建包含修复；不要把界面草案当作已发布皮肤。

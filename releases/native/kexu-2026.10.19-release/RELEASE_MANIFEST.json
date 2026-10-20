@@ -1,58 +1,7 @@
 {
   "schemaVersion": 1,
-  "product": "课序",
-  "version": "2026.10.19-native.1",
-  "sourceCommit": "1a80759c05995dc96c10ad82e9c88fb6faf2640a",
-  "sourceTree": "ce83e7b5cd6d12d4f1b077984eee8a4130e62309",
-  "artifacts": [
-    {
-      "path": "Kexu-Android-2026.10.19.apk",
-      "bytes": 3030691,
-      "sha256": "86a300a994e7277db08293f62b0aab372fa62e48de12cb9d4fe2c31d40bbe5d3"
-    },
-    {
-      "path": "Kexu-Windows-x64.zip",
-      "bytes": 1395184,
-      "sha256": "1698a5cfd29562507fb6eb43b8b529a4399667deb71280fda2ae1d021c440a7d"
-    },
-    {
-      "path": "Kexu-Windows-x64/Kexu.exe",
-      "bytes": 50176,
-      "sha256": "636465bc9ba6c1cf65d49104a04b96ad9f51ca62ae9ab6863a19bde2a6ef6bb4"
-    }
-  ],
-  "frontendFiles": 30,
-  "frontendIndexSha256": "f7a40f1bb35031113339dfb78b7b8d9e861bd87585e417b144c870a0c05eb490",
-  "windowsPackageFiles": 39,
-  "sourceFileSha256": {
-    "src/frontend/src/platform/saveJson.ts": "233160b80ac8869379fdc7a7f020ddcc5d3fb6dfb2c6a8b5ccb5fb232434716d",
-    "src/frontend/src/local/mode.ts": "edd8e003fe08cf080e42dd52a1e38580ab61951ee16d8e0381211f6b72094aba",
-    "src/frontend/src/components/LocalBackupSettings.tsx": "5c553fce961fe0496ffbb7b6f0f3e9d82b485547929d605f71be3542aadcc05e",
-    "src/android-shell/app/src/main/java/com/kexu/local/MainActivity.java": "179a08e39ea62493e4a218654c9eb4f7c6a8645f571f3f555b5e8d478705a432",
-    "src/android-shell/app/src/main/java/com/kexu/local/ShellPolicy.java": "4db996cd5c685953e1817f898217a65e3debea3036836ed8f05c11dae25f5cea",
-    "src/windows-shell/Program.cs": "f8edfa691fdd2060926ba6f668f8cd704120e4e99b878e6448b671a49bdb4a08",
-    "src/windows-shell/ShellPolicy.cs": "6e4075f9c9319e72ed9c26c710b3e8e900a8640c2f6ef913d84eab2b311974ec"
-  },
-  "android": {
-    "applicationId": "com.kexu.local",
-    "minSdk": 26,
-    "targetSdk": 36,
-    "versionCode": 2026101901,
-    "signatureScheme": "v2",
-    "certificateSha256": "74e5fa65a263abcfa3018b43813bb8eb13d6c9eb70498ea5cc5c1c9d37ccd332",
-    "deviceTested": false
-  },
-  "windowsRuntime": "installed-evergreen-required",
-  "requiresJava": false,
-  "requiresNode": false,
-  "validation": {
-    "frontendTests": 165,
-    "androidPolicyTests": 5,
-    "windowsPolicyAssertions": 31,
-    "windowsTwoLaunchSmoke": true,
-    "zipCRC": true,
-    "embeddedFrontendByteEquality": true,
-    "privateDataIncluded": false
-  },
-  "githubSourceCommit": "a881f23a5f906d4d8a4bddedc22ba07935c2d00f"
+  "product": "Kexu",
+  "historical": true,
+  "originalDirectory": "https://github.com/2822708/Kexu/tree/c6c26a13ec812833cf74c374c4c9f5867d8169e6/releases/native/kexu-2026.10.19-release",
+  "note": "Original immutable packages and checksums remain in Git history. Current Kexu packages are indexed in releases/mobile and releases/native."
 }

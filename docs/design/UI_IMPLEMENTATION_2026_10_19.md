@@ -1,12 +1,14 @@
-# 课序 UI 落实与验收
+> 历史验收记录：产品名称已统一为 Kexu。以下运行包、哈希和测试结果属于改名前对应构建；当前命名更新不表示这些验证已再次执行。当前包请查阅发行目录的新清单。
 
-日期：2026-10-19。已把 [界面规划](UI_REDESIGN_PLAN.md) 的首轮视觉、导航和主要页面落实到应用，显示名称采用“课序”。原概念HTML仍作为设计过程资料；本页截图来自实际运行的移动构建和隔离组件验收页。
+# Kexu UI 落实与验收
+
+日期：2026-10-19。已把 [界面规划](UI_REDESIGN_PLAN.md) 的首轮视觉、导航和主要页面落实到应用，显示名称采用“Kexu”。原概念HTML仍作为设计过程资料；本页截图来自实际运行的移动构建和隔离组件验收页。
 
 ## 已实现
 
 | 范围 | 结果 |
 |---|---|
-| 品牌 | 页面标题、顶栏、安装文案、PWA显示名、帮助、离线提示和应用图标改为课序；192/512图标由同一SVG生成，图形位于安全区域，背景不透明 |
+| 品牌 | 页面标题、顶栏、安装文案、PWA显示名、帮助、离线提示和应用图标改为Kexu；192/512图标由同一SVG生成，图形位于安全区域，背景不透明 |
 | 视觉 | 浅色蓝绿、系统中文无衬线、细分隔线、统一控件与表面；已有主题选择保留，新用户默认浅色；暗色使用相同品牌语义 |
 | 导航 | 桌面侧栏/手机底栏统一为课表、今日、待办、助手、我的；课表切换与帮助保留；关闭的手机侧栏不参与可见操作；页面切换回到内容顶部，编辑弹窗不重置课表位置 |
 | 课表 | 添加课程为主按钮，考试、导入及学期管理集中在更多菜单；日/周/全部入口保留；重叠课程和考试分别可点、长文本随行高增长 |
@@ -16,7 +18,7 @@
 | 助手 | 当前课表上下文和逐项确认提示明确，提案操作放在内容后；语音同意、附件、输入法和逐卡确认逻辑保留；例句只填草稿，不自动发送 |
 | 遮挡 | 安装/更新改为顶栏普通布局，手机收敛为有可访问名称的图标按钮；助手手机页仍隐藏这些入口与快速导入，输入区不被底栏盖住 |
 
-本轮不改变站点origin、路由、manifest `id`/`start_url`/`scope`、IndexedDB名称与版本、导出/快照格式、恢复凭证或密钥。核心数据仍先写本机，云端仍只保存加密快照和发布文件。仓库、原生工程和服务的技术标识沿用Tangent，避免品牌变更带出数据迁移。
+本轮不改变站点origin、路由、manifest `id`/`start_url`/`scope`、IndexedDB名称与版本、导出/快照格式、恢复凭证或密钥。核心数据仍先写本机，云端仍只保存加密快照和发布文件。该轮视觉改造没有迁移技术标识；后续 Kexu 统一命名采用兼容注册表保护既有数据、安装身份和旧恢复文件，详见 [命名说明](../BRANDING.md)。
 
 ## 本轮验证
 
@@ -31,20 +33,20 @@
 
 日志位于忽略的 `src/frontend/work/ui-redesign-*.txt`、`ui-redesign-tests.tap` 和根目录 `work/ui-redesign-{cloud,deployment}.tap`。自动回归与尺寸模拟不等于物理手机、生产HTTPS、系统安装或真实模型质量已通过；这些外部验收边界沿用 [本地版验收报告](../mobile/ACCEPTANCE_2026_10_18.md)。
 
-AI系统提示版本改为`local-planner-2026-10-18.2`，仅把助手自称替换为课序；协议、安全约束与上下文策略不变。本轮未宣称真实模型语义得分有提升。
+AI系统提示版本改为`local-planner-2026-10-18.2`，仅把助手自称替换为Kexu；协议、安全约束与上下文策略不变。本轮未宣称真实模型语义得分有提升。
 
 ## 实际界面
 
-- [桌面周课表](evidence/ui-implemented-week-desktop-2026-10-19.jpg)
-- [手机今日](evidence/ui-implemented-today-mobile-2026-10-19.jpg)
-- [手机助手](evidence/ui-implemented-assistant-mobile-2026-10-19.jpg)
-- [桌面设置](evidence/ui-implemented-settings-desktop-2026-10-19.jpg)
-- [重叠课程组件验收](evidence/ui-implemented-overlaps-2026-10-19.jpg)
-- [实际发行包启动](evidence/ui-release-startup-2026-10-19.jpg)
+- [桌面周课表](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/ui-implemented-week-desktop-2026-10-19.jpg)
+- [手机今日](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/ui-implemented-today-mobile-2026-10-19.jpg)
+- [手机助手](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/ui-implemented-assistant-mobile-2026-10-19.jpg)
+- [桌面设置](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/ui-implemented-settings-desktop-2026-10-19.jpg)
+- [重叠课程组件验收](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/ui-implemented-overlaps-2026-10-19.jpg)
+- [实际发行包启动](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/docs/design/evidence/ui-release-startup-2026-10-19.jpg)
 
 ## 运行与交付
 
-当前本机预览：`http://127.0.0.1:5180/timetable`。这只是本机服务。新运行包使用独立目录 [2026.10.19-preview.2](../../releases/mobile/kexu-2026.10.19/README.md)，旧preview.1保持原状。
+当前本机预览：`http://127.0.0.1:5180/timetable`。这只是本机服务。新运行包使用独立目录 [2026.10.19-preview.2](https://github.com/2822708/Kexu/blob/c6c26a13ec812833cf74c374c4c9f5867d8169e6/releases/mobile/kexu-2026.10.19/README.md)，旧preview.1保持原状。
 
 新包48个ZIP条目CRC与逐字节核对通过，46个内容文件有SHA256清单；实际包健康接口、12个路由及29个Web资源HTTP字节均通过。单独启动实际包并由浏览器打开17827，完成本机数据初始化，课表空状态与今日页可达。这个origin没有预置课程，未在其中写入示例业务数据；完整既有数据的界面验收使用上方5180隔离空间。
 

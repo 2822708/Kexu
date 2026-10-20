@@ -1,3 +1,4 @@
+import { readCompatiblePreference, removeCompatiblePreference } from '../../../shared/brandCompatibility.mjs'
 import {
   useCallback,
   useEffect,
@@ -14,7 +15,7 @@ import { runLocalMaintenance } from '../local/domain'
 import type { LocalState } from '../local/types'
 import { startAutoBackup } from '../backup/coordinator'
 
-const SELECTION_KEY = 'tangent.local.activeSchedulePublicId'
+const SELECTION_KEY = 'kexu.local.activeSchedulePublicId'
 const collections = [
   'schedules',
   'courses',
@@ -29,7 +30,7 @@ const collections = [
 ] as const
 function selectedPublicId() {
   try {
-    return localStorage.getItem(SELECTION_KEY)
+    return readCompatiblePreference(localStorage, SELECTION_KEY)
   } catch {
     return null
   }
@@ -57,7 +58,7 @@ export default function LocalAppProvider({
     setActiveId(selected?.id ?? null)
     try {
       if (selected) localStorage.setItem(SELECTION_KEY, selected.publicId)
-      else localStorage.removeItem(SELECTION_KEY)
+      else removeCompatiblePreference(localStorage, SELECTION_KEY)
     } catch {
       /* A preference failure must not invalidate a committed business write. */
     }

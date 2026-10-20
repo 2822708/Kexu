@@ -76,9 +76,9 @@ export async function createLocalFirstPackage({
     );
   const markers = new Map(
     [
-      "tangent-timetable-local-v1",
-      "tangent-private-backup-v1",
-      "tangent-encrypted-snapshot",
+      "kexu-local-snapshot",
+      "kexu-cloud-recovery",
+      "kexu-encrypted-snapshot",
       "core-with-daily-v2",
     ].map((marker) => [marker, false]),
   );
@@ -109,6 +109,7 @@ export async function createLocalFirstPackage({
       relative: `cloud/${file}`,
       absolute: path.join(root, "src", "cloud", file),
     });
+  inputs.push({ relative: "shared/brandCompatibility.mjs", absolute: path.join(root, "src", "shared", "brandCompatibility.mjs") });
   const deploymentFiles = await walkRegularFiles(
     path.join(root, "deployment", "local-first"),
   );
@@ -117,7 +118,7 @@ export async function createLocalFirstPackage({
     "preview.mjs",
     "verify-package.mjs",
     "healthcheck.mjs",
-    "tangent-snapshots.service",
+    "kexu-snapshots.service",
     "cloud.env.example",
     "nginx-http.conf",
     "nginx-https.conf.template",
@@ -138,7 +139,7 @@ export async function createLocalFirstPackage({
     prepared.push({ ...file, bytes });
   }
   const readme = Buffer.from(
-    `# 课序 · 本地主数据版 ${version}\n\n本包包含 PWA、私有密文快照服务与独立站点部署模板。课表、课程、考试、待办等主数据只在当前设备 IndexedDB 保存；云端没有业务 CRUD 或 AI 代理。\n\n## 在这台电脑运行\n\n安装/使用现有 Node.js 20+，在解压目录执行：\n\n\`\`\`sh\nnode deployment/preview.mjs --data-dir "E:/codex work/Tangent-local-data"\n\`\`\`\n\n打开 http://127.0.0.1:17827 。无需 Java、Android SDK 或 npm install。只监听本机，手机无法通过电脑 IP 访问。若省略 --data-dir，密文快照放包目录 data/（已在 .gitignore 排除）；此目录不是公开资源，不要重新打包上传。建议将数据目录放包外 E 盘。退出按 Ctrl+C。\n\n请固定使用 127.0.0.1 地址；localhost 和不同端口属于不同浏览器数据空间。本机 loopback 可测试离线/PWA，手机正式使用必须部署可信 HTTPS，不能用普通局域网 HTTP 替代。\n\n## 部署与校验\n\n先阅读 deployment/README.md。目标独立站点：https://timetable.zozovip.work 。HTTP bootstrap 只服务证书验证，拿到真实证书后再开启应用。\n\n原始包校验：node deployment/verify-package.mjs .\nLinux 文件哈希：sha256sum -c SHA256SUMS\n\n核心快照不含 AI 历史、附件、偏好或任何密钥。恢复需用户确认并先保存本机恢复点；AI 需用户单独连接推理服务。发布包校验不等于生产 HTTPS、手机安装与真机验收已经完成。\n`,
+    `# Kexu · 本地主数据版 ${version}\n\n本包包含 PWA、私有密文快照服务与独立站点部署模板。课表、课程、考试、待办等主数据只在当前设备 IndexedDB 保存；云端没有业务 CRUD 或 AI 代理。\n\n## 在这台电脑运行\n\n安装/使用现有 Node.js 20+，在解压目录执行：\n\n\`\`\`sh\nnode deployment/preview.mjs --data-dir "E:/codex work/Kexu-local-data"\n\`\`\`\n\n打开 http://127.0.0.1:17827 。无需 Java、Android SDK 或 npm install。只监听本机，手机无法通过电脑 IP 访问。若省略 --data-dir，密文快照放包目录 data/（已在 .gitignore 排除）；此目录不是公开资源，不要重新打包上传。建议将数据目录放包外 E 盘。退出按 Ctrl+C。\n\n请固定使用 127.0.0.1 地址；localhost 和不同端口属于不同浏览器数据空间。本机 loopback 可测试离线/PWA，手机正式使用必须部署可信 HTTPS，不能用普通局域网 HTTP 替代。\n\n## 部署与校验\n\n先阅读 deployment/README.md。目标独立站点：https://timetable.zozovip.work 。HTTP bootstrap 只服务证书验证，拿到真实证书后再开启应用。\n\n原始包校验：node deployment/verify-package.mjs .\nLinux 文件哈希：sha256sum -c SHA256SUMS\n\n核心快照不含 AI 历史、附件、偏好或任何密钥。恢复需用户确认并先保存本机恢复点；AI 需用户单独连接推理服务。发布包校验不等于生产 HTTPS、手机安装与真机验收已经完成。\n`,
   );
   prepared.push({ relative: "README.md", bytes: readme });
   prepared.push({
@@ -188,7 +189,7 @@ export async function createLocalFirstPackage({
     });
   }
   const manifest = {
-    format: "tangent-local-first-release",
+    format: "kexu-local-first-release",
     formatVersion: 1,
     version,
     createdAt: new Date().toISOString(),
