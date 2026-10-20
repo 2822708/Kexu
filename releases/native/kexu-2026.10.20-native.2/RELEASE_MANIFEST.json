@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "product": "Kexu",
+  "version": "2026.10.20-native.2",
+  "sourceCommit": "f3dd9dc35ffcb8239fed626d834dc5ba5568996e",
+  "sourceTree": "de31fbbadace47806447d110a899a9797544e5f4",
+  "artifacts": [
+    {
+      "path": "Kexu-Android-2026.10.20.apk",
+      "bytes": 3031355,
+      "sha256": "c405541140235e7d11f39aca4a34285d061ea883122360441525f237867e2772"
+    },
+    {
+      "path": "Kexu-Windows-x64.zip",
+      "bytes": 1396056,
+      "sha256": "a18b8d9fe5e652395ea920df07837eeead254ffd34994bebebe0c29a4b2ac4fa"
+    },
+    {
+      "path": "Kexu-Windows-x64/Kexu.exe",
+      "bytes": 50688,
+      "sha256": "d0ccb912615fa636937b020779b3e30f96ead0f643bfc8abffe39cff7170671d"
+    }
+  ],
+  "frontendFiles": 30,
+  "frontendIndexSha256": "e95ba51b3953589360002b91f1d8bb8786b57ba6365e1e85d1446808fb102a85",
+  "windowsPackageFiles": 39,
+  "android": {
+    "applicationId": "com.kexu.local",
+    "versionCode": 2026102002,
+    "versionName": "2026.10.20.2",
+    "minSdk": 26,
+    "targetSdk": 36,
+    "signatureScheme": "v2",
+    "certificateSha256": "74e5fa65a263abcfa3018b43813bb8eb13d6c9eb70498ea5cc5c1c9d37ccd332",
+    "samePreviousSigningCertificate": true,
+    "deviceTested": false
+  },
+  "windowsRuntime": "155.0.4283.62",
+  "requiresJava": false,
+  "requiresNode": false,
+  "validation": {
+    "frontendTests": 172,
+    "cloudDeploymentTests": 18,
+    "backendTests": 56,
+    "composeJvmTests": 5,
+    "androidShellPolicyTests": 5,
+    "windowsPolicyAssertions": 31,
+    "windowsTwoLaunchSmoke": true,
+    "windowsPriorSyntheticTaskRetained": true,
+    "zipCRC": true,
+    "embeddedFrontendByteEquality": true,
+    "privateDataIncluded": false,
+    "productionHttps": false,
+    "liveAiProvider": false
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "version": "2026.10.20-preview.4",
+  "sourceCommit": "f3dd9dc35ffcb8239fed626d834dc5ba5568996e",
+  "sourceTree": "de31fbbadace47806447d110a899a9797544e5f4",
+  "sourceDirty": false,
+  "zip": "Kexu-2026.10.20-preview.4.zip",
+  "bytes": 1131434,
+  "sha256": "bf34df16e23298084152c72a9b00b73dcaae3da50c849ce160e448512e623f5b",
+  "entries": 53,
+  "packageManifestSha256": "a7c1715bee20cb5f513f65528ce8c743ce033aca358830765924269e6d2604d4",
+  "localSchemaVersions": [
+    2
+  ],
+  "snapshotVersions": [
+    1,
+    2
+  ],
+  "snapshotScope": "core-with-daily-v2",
+  "validation": {
+    "zipCrc": true,
+    "allFilesByteEqual": true,
+    "frontendTests": 172,
+    "cloudDeploymentTests": 18,
+    "physicalPhone": false,
+    "productionHttps": false,
+    "liveAiProvider": false
+  }
+}
