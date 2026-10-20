@@ -1,0 +1,70 @@
+name: Publish Kexu installers
+
+on:
+  push:
+    tags: ['v20*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kexu-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      KEXU_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify and stage public installers
+        run: python3 scripts/prepare-github-release.py "$RUNNER_TEMP/Kexu-release" --tag "$KEXU_TAG"
+      - name: Create draft and attach installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          title=$(python3 -c "import json; print(json.load(open('deployment/release-current.json'))['title'])")
+          notes=$(python3 -c "import json; print(json.load(open('deployment/release-current.json'))['notes'])")
+          prerelease=$(python3 -c "import json; print(str(json.load(open('deployment/release-current.json'))['prerelease']).lower())")
+          if gh release view "$KEXU_TAG" --json isDraft >/dev/null 2>&1; then
+            if [[ $(gh release view "$KEXU_TAG" --json isDraft --jq '.isDraft') != true ]]; then
+              echo 'Existing published release preserved; verification only.'
+              exit 0
+            fi
+          else
+            options=(--verify-tag --draft --title "$title" --notes-file "$notes")
+            if [[ "$prerelease" == true ]]; then options+=(--prerelease); fi
+            gh release create "$KEXU_TAG" "${options[@]}"
+          fi
+          gh release view "$KEXU_TAG" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/Kexu-existing-assets.txt"
+          for file in "$RUNNER_TEMP/Kexu-release/"*; do
+            name=$(basename "$file")
+            if ! grep -Fxq "$name" "$RUNNER_TEMP/Kexu-existing-assets.txt"; then
+              gh release upload "$KEXU_TAG" "$file"
+            fi
+          done
+      - name: Verify uploaded files before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/Kexu-upload-verification"
+          gh release download "$KEXU_TAG" --dir "$RUNNER_TEMP/Kexu-upload-verification"
+          diff -r "$RUNNER_TEMP/Kexu-release" "$RUNNER_TEMP/Kexu-upload-verification"
+          cd "$RUNNER_TEMP/Kexu-upload-verification"
+          sha256sum --check SHA256SUMS.txt
+      - name: Publish installation page and downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ $(gh release view "$KEXU_TAG" --json isDraft --jq '.isDraft') == true ]]; then
+            gh release edit "$KEXU_TAG" --draft=false
+          fi
+          gh release view "$KEXU_TAG" --json url,isDraft,isPrerelease,assets --jq '{url,isDraft,isPrerelease,assets:[.assets[]|{name,size,url}]}'

@@ -1,0 +1,9 @@
+{
+  "tag": "v2026.10.20.2",
+  "title": "Kexu 2026.10.20.2 · Windows / Android 预览版",
+  "prerelease": true,
+  "directory": "releases/native/kexu-2026.10.20-native.2",
+  "apk": "Kexu-Android-2026.10.20.apk",
+  "windows": "Kexu-Windows-x64.zip",
+  "notes": "docs/install/release-notes.md"
+}
