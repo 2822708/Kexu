@@ -12,7 +12,7 @@ public final class ShellPolicy {
     public static final String HOST = "appassets.androidplatform.net";
     public static final String ORIGIN = "https://" + HOST;
     public static final int MAX_EXPORT_BYTES = 11 * 1024 * 1024;
-    private static final Set<String> ROUTES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("/", "/index.html", "/focus", "/timetable", "/todos", "/ai", "/settings", "/manual", "/widget")));
+    private static final Set<String> ROUTES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("/", "/index.html", "/focus", "/tasks", "/timetable", "/todos", "/ai", "/settings", "/manual", "/widget")));
     private ShellPolicy() { }
 
     public static boolean isLocal(String value) {

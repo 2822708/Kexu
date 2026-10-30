@@ -124,8 +124,8 @@ namespace Kexu.Windows
                 // Virtual-host mapping resolves physical files without an SPA fallback.
                 // Always load the physical index, then restore only an allowed logical
                 // route before React starts. The same bridge handles F5/deep links.
-                await core.AddScriptToExecuteOnDocumentCreatedAsync("if(location.origin==='" + ShellPolicy.Origin + "'&&location.pathname==='/index.html'){var t=new URLSearchParams(location.search).get('__kexu_route')||'/focus';var u=new URL(t,location.origin);if(u.origin===location.origin&&['/','/focus','/timetable','/todos','/ai','/settings','/manual','/import'].indexOf(u.pathname)>=0)history.replaceState(null,'',u.pathname+u.search+u.hash);else history.replaceState(null,'','/focus');}");
-                NavigateDocument("/focus");
+                await core.AddScriptToExecuteOnDocumentCreatedAsync("if(location.origin==='" + ShellPolicy.Origin + "'&&location.pathname==='/index.html'){var t=new URLSearchParams(location.search).get('__kexu_route')||'/tasks';var u=new URL(t,location.origin);if(u.origin===location.origin&&['/','/tasks','/timetable','/todos','/ai','/settings','/manual','/import'].indexOf(u.pathname)>=0)history.replaceState(null,'',u.pathname+u.search+u.hash);else history.replaceState(null,'','/tasks');}");
+                NavigateDocument("/tasks");
             } catch (Exception error) { Fail(error); }
         }
 
@@ -199,7 +199,7 @@ namespace Kexu.Windows
                 for (int i = 0; i < 80; i++) {
                     var smokeCore = browser;
                     if (smokeCore == null) throw new InvalidOperationException("WebView2 control lost its CoreWebView2 after navigation.");
-                    var readiness = smokeCore.ExecuteScriptAsync("Boolean(document.querySelector('.daily-workspace') && document.querySelector('input[aria-label=\"快速记录任务\"]:not(:disabled)') && document.querySelector('button[aria-label=\"保存日任务\"]') && location.pathname === '/focus' && isSecureContext && typeof indexedDB === 'object')");
+                    var readiness = smokeCore.ExecuteScriptAsync("Boolean(document.querySelector('.daily-workspace') && document.querySelector('input[aria-label=\"快速记录任务\"]:not(:disabled)') && document.querySelector('button[aria-label=\"保存日任务\"]') && location.pathname === '/tasks' && isSecureContext && typeof indexedDB === 'object')");
                     if (readiness == null) throw new InvalidOperationException("ExecuteScriptAsync returned no readiness task.");
                     if (await readiness == "true") { ready = true; break; }
                     await Task.Delay(250);
@@ -243,12 +243,12 @@ namespace Kexu.Windows
                 bool reloaded = false;
                 for (int i = 0; i < 100; i++) {
                     await Task.Delay(100);
-                    if (completedNavigations > previousNavigations && await browser.ExecuteScriptAsync("location.pathname==='/focus'&&document.body.innerText.indexOf('" + taskTitle + "')>=0") == "true") { reloaded = true; break; }
+                    if (completedNavigations > previousNavigations && await browser.ExecuteScriptAsync("location.pathname==='/tasks'&&document.body.innerText.indexOf('" + taskTitle + "')>=0") == "true") { reloaded = true; break; }
                 }
                 if (!reloaded) throw new InvalidOperationException("Logical /focus reload or real daily task persistence failed.");
                 smokeStage = "writing-smoke-result";
                 File.WriteAllText(Path.Combine(data, "shell-smoke-result.json"), ShellPolicy.Json().Serialize(new {
-                    ok = true, origin = ShellPolicy.Origin, route = "/focus", runtime = runtimeVersion,
+                    ok = true, origin = ShellPolicy.Origin, route = "/tasks", runtime = runtimeVersion,
                     rendered = true, secureContext = true, indexedDb = true, persistedAcrossLaunch = persisted,
                     realDailyTaskSaved = true, realDailyTaskPersistedAcrossLaunch = taskPersisted, logicalRouteReload = reloaded,
                     dataDirectory = data, requiresBackend = false, requiresNode = false
