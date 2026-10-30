@@ -535,7 +535,7 @@ export default function FocusPage() {
           <Card
             title={<Space><CheckOutlined />待办概要<Tag>{openTodos.length}</Tag></Space>}
             className="focus-list-card"
-            extra={<Button type="link" onClick={() => navigate('/todos')}>管理全部</Button>}
+            extra={<Button type="link" onClick={() => navigate('/tasks?view=all')}>管理全部</Button>}
           >
             <div className="today-todo-summary">
               <span>所选日期截止 <strong>{dueTodayCount}</strong></span>
@@ -566,7 +566,7 @@ export default function FocusPage() {
                 })}
               </div>
             )}
-            {openTodos.length > 5 && <Button type="link" onClick={() => navigate('/todos')}>查看其余 {openTodos.length - 5} 项待办</Button>}
+            {openTodos.length > 5 && <Button type="link" onClick={() => navigate('/tasks?view=all')}>查看其余 {openTodos.length - 5} 项待办</Button>}
           </Card>
 
           {completedTodos.length > 0 && (

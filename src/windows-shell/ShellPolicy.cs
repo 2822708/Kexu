@@ -13,7 +13,7 @@ namespace Kexu.Windows
         internal const string Origin = "https://" + Host;
         internal const int MaximumJsonBytes = 11 * 1024 * 1024;
         private static readonly HashSet<string> Routes = new HashSet<string>(StringComparer.Ordinal) {
-            "/", "/index.html", "/focus", "/timetable", "/todos", "/ai", "/settings", "/manual", "/import"
+            "/", "/index.html", "/focus", "/tasks", "/timetable", "/todos", "/ai", "/settings", "/manual", "/import"
         };
 
         internal static bool IsAppOrigin(string value)

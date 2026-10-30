@@ -1,0 +1,83 @@
+.tasks-page {
+  width: 100%;
+  max-width: 1240px;
+  min-width: 0;
+  margin: 0 auto;
+}
+.tasks-title {
+  margin: 0 28px 0 0;
+  color: var(--text-primary);
+  font-size: 27px;
+  line-height: 1.4;
+  font-weight: 650;
+}
+.tasks-views > .ant-tabs-nav {
+  margin-bottom: 20px;
+}
+.tasks-views > .ant-tabs-nav .ant-tabs-tab {
+  min-height: 48px;
+  padding: 10px 4px;
+  font-size: 16px;
+}
+.tasks-views .ant-tabs-content-holder {
+  min-width: 0;
+}
+.tasks-day-label {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 500;
+}
+.tasks-page .todo-filter-toolbar,
+.task-pool-actions {
+  row-gap: 12px;
+}
+.task-pool-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.tasks-page .daily-todos-page {
+  gap: 12px;
+}
+.task-pool .todo-record .ant-list-item-meta-title .ant-typography {
+  font-size: 16px;
+  font-weight: 500;
+}
+@media (max-width: 767px) {
+  .tasks-title {
+    margin-right: 20px;
+    font-size: 24px;
+  }
+  .tasks-views > .ant-tabs-nav {
+    margin-bottom: 16px;
+  }
+  .tasks-views > .ant-tabs-nav .ant-tabs-tab + .ant-tabs-tab {
+    margin-left: 24px;
+  }
+  .tasks-page .daily-heading {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .task-pool .todo-record {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 0;
+  }
+  .task-pool .todo-record .ant-list-item-meta {
+    width: 100%;
+    margin-bottom: 0;
+  }
+  .task-pool .todo-record .ant-list-item-meta-avatar {
+    margin-inline-end: 8px;
+  }
+  .task-pool .todo-record .ant-list-item-action {
+    align-self: flex-end;
+    margin: 4px 0 0;
+  }
+  .task-pool .todo-record-details {
+    flex-direction: row;
+    flex-wrap: wrap;
+    column-gap: 8px;
+  }
+}

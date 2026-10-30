@@ -46,7 +46,7 @@
   min-height: min-content;
   height: auto;
   border: 1px solid var(--border-light);
-  border-left-width: 4px;
+  border-left-width: 1px;
   border-radius: 4px;
   padding: 7px 6px;
   gap: 4px;

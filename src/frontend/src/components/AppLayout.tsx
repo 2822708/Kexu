@@ -5,11 +5,12 @@ import {
   BookOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
-  FieldTimeOutlined,
   MenuOutlined,
   MessageOutlined,
+  MoonOutlined,
   ReloadOutlined,
   SettingOutlined,
+  SunOutlined,
 } from '@ant-design/icons'
 import { useApp } from '../store/AppContext'
 import { useTheme } from '../theme'
@@ -22,8 +23,7 @@ import '../app-shell.css'
 
 const NAV_ITEMS = [
   { key: '/timetable', icon: <CalendarOutlined />, label: '课表' },
-  { key: '/focus', icon: <FieldTimeOutlined />, label: '今日' },
-  { key: '/todos', icon: <CheckSquareOutlined />, label: '待办' },
+  { key: '/tasks', icon: <CheckSquareOutlined />, label: '任务' },
   { key: '/ai', icon: <MessageOutlined />, label: '助手' },
   { key: '/settings', icon: <SettingOutlined />, label: '我的' },
 ]
@@ -86,7 +86,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <span className="app-brand-mark" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}pwa/icon.svg`} alt="" /></span>
             <span className="app-brand-copy">
               <span className="app-topbar-title">Kexu</span>
-              <span className="app-brand-subtitle">课表 · 待办 · 专注</span>
             </span>
           </Link>
           <span className="app-current-page">{isManual ? '使用帮助' : activeNav?.label}</span>
@@ -118,7 +117,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               className="icon-btn-round theme-toggle"
               onClick={toggle}
             >
-              <span aria-hidden="true">{mode === 'dark' ? '☀' : '☾'}</span>
+              {mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
             </button>
           </Tooltip>
         </div>
@@ -198,7 +197,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Link>
         ))}
       </nav>
-      {!location.pathname.startsWith('/ai') && !location.pathname.startsWith('/focus') && <QuickImportWidget />}
+      {!location.pathname.startsWith('/ai') && !location.pathname.startsWith('/tasks') && !location.pathname.startsWith('/settings') && <QuickImportWidget />}
     </div>
   )
 }

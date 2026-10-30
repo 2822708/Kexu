@@ -42,7 +42,7 @@ jobs:
         run: node scripts/check-brand.mjs
       - name: Local data, backup, AI and PWA regression
         working-directory: src/frontend
-        run: node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs scripts/test-daily-core.mjs scripts/test-daily-review.mjs scripts/test-native-export.mjs scripts/test-pwa.mjs scripts/test-day-agenda.mjs scripts/test-device-session.mjs scripts/test-timetable-layout.mjs scripts/test-chat-import.mjs
+        run: node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs scripts/test-ai-providers.mjs scripts/test-daily-core.mjs scripts/test-daily-review.mjs scripts/test-native-export.mjs scripts/test-pwa.mjs scripts/test-day-agenda.mjs scripts/test-device-session.mjs scripts/test-timetable-layout.mjs scripts/test-chat-import.mjs
       - name: Build
         working-directory: src/frontend
         run: npm run build
