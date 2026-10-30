@@ -1,5 +1,5 @@
 import { readCompatiblePreference } from '../../../shared/brandCompatibility.mjs'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, DatePicker, Dropdown, Input, Modal, Spin, message } from 'antd'
 import {
   CalendarOutlined,
@@ -31,9 +31,9 @@ const todayInShanghai = () => nowLocalDateTime().slice(0, 10)
 type Tool = 'schedule' | 'focus' | null
 type Undo = { entry: DailyResolvedEntry; eventId?: string; version: number; generation: string }
 
-export default function LocalDailyPage() {
+export default function LocalDailyPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
-  const [search] = useSearchParams()
+  const [search, setSearch] = useSearchParams()
   const { activeSchedule, activeScheduleId, courses, exams, periods } = useApp()
   const [date, setDate] = useState(() =>
     validDate(search.get('date')) ? search.get('date')! : todayInShanghai(),
@@ -158,7 +158,7 @@ export default function LocalDailyPage() {
       setBusy(new Set(busyRef.current))
     }
   }
-  const changeDate = (next: string) => {
+  const changeDate = useCallback((next: string, updateUrl = true) => {
     drafts.current.set(date, title)
     setDate(next)
     setBackfill(false)
@@ -169,7 +169,19 @@ export default function LocalDailyPage() {
     setUndo(null)
     setNotice('')
     setReviewDate(null)
-  }
+    if (updateUrl) {
+      setSearch((previous) => {
+        const params = new URLSearchParams(previous)
+        params.set('date', next)
+        params.set('view', 'today')
+        return params
+      }, { replace: true })
+    }
+  }, [date, title, setSearch])
+  const requestedDate = validDate(search.get('date')) ? search.get('date')! : today
+  useEffect(() => {
+    if (requestedDate !== date) changeDate(requestedDate, false)
+  }, [requestedDate, date, changeDate])
   const completed = async (entry: DailyResolvedEntry) => {
     const originalFocus = document.activeElement
     const expectedDate = date
@@ -244,7 +256,8 @@ export default function LocalDailyPage() {
     const key = `${reviewState.datasetId}:${today}`
     let prompted = asked.current.has(key)
     try {
-      prompted ||= readCompatiblePreference(localStorage, `kexu.daily.review.asked:${key}`) === 'yes'
+      prompted ||=
+        readCompatiblePreference(localStorage, `kexu.daily.review.asked:${key}`) === 'yes'
     } catch {
       /* Preference only. */
     }
@@ -323,12 +336,11 @@ export default function LocalDailyPage() {
   return (
     <div className="daily-workspace">
       <header className="daily-heading">
-        <h1>
-          <span className="daily-brand" aria-hidden="true">
-            ◩
-          </span>
-          {isPast ? '回顾' : isFuture ? '计划' : '今日'}
-        </h1>
+        {embedded ? (
+          <h2 className="tasks-day-label">{isPast ? '回顾' : isFuture ? '计划' : '今天'}</h2>
+        ) : (
+          <h1>{isPast ? '回顾' : isFuture ? '计划' : '今日'}</h1>
+        )}
         <div className="daily-date-control">
           <Button
             aria-label="前一天"
@@ -387,15 +399,58 @@ export default function LocalDailyPage() {
             <Button type="text" onClick={() => setPrioritiesOpen(true)} disabled={!canEdit}>
               重点
             </Button>
-            <Button
-              type="text"
-              icon={<PlusOutlined />}
-              aria-label="添加日任务"
-              onClick={() => inputRef.current?.focus()}
-              disabled={!canEdit}
-            />
           </div>
         </div>
+        {canEdit && (
+          <div
+            className={`daily-quick-composer${effectId === 'composer' ? ' is-celebrating' : ''}`}
+          >
+            <form
+              className="daily-quick-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                submitQuick()
+              }}
+            >
+              <Input
+                ref={inputRef}
+                aria-label="快速记录任务"
+                placeholder={backfill ? '记下一件已经做完的事' : '记下一件要做的事…'}
+                value={title}
+                disabled={busy.has('create')}
+                maxLength={500}
+                onChange={(event) => setTitle(event.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === 'Enter' &&
+                    (event.nativeEvent.isComposing || event.keyCode === 229)
+                  )
+                    event.preventDefault()
+                }}
+              />
+              <Button
+                htmlType="submit"
+                type="primary"
+                aria-label="保存日任务"
+                icon={<PlusOutlined />}
+                disabled={!title.trim()}
+                loading={busy.has('create')}
+              />
+            </form>
+            <div className="daily-composer-modes">
+              <button aria-pressed={!backfill} onClick={() => setBackfill(false)}>
+                待会要做
+              </button>
+              <button disabled={isFuture} aria-pressed={backfill} onClick={() => setBackfill(true)}>
+                刚刚做完
+              </button>
+              <button onClick={() => setPoolOpen(true)}>选择已有任务</button>
+            </div>
+            {entries.some((entry) => entry.title === title.trim()) && title.trim() && (
+              <p className="daily-muted">清单里已有同名事项，仍可继续创建。</p>
+            )}
+          </div>
+        )}
         <div
           className="daily-entry-list"
           role="tabpanel"
@@ -417,6 +472,7 @@ export default function LocalDailyPage() {
                   className="daily-check"
                   aria-label={`${entry.completed ? '恢复待做' : '完成'} ${entry.title}`}
                   aria-pressed={entry.completed}
+                  aria-busy={busy.has(entry.publicId)}
                   disabled={
                     !canEdit ||
                     isFuture ||
@@ -426,13 +482,13 @@ export default function LocalDailyPage() {
                   }
                   onClick={() => void run(entry.publicId, () => completed(entry))}
                 >
-                  {busy.has(entry.publicId) ? (
-                    <Spin size="small" />
-                  ) : entry.completed ? (
-                    <CheckOutlined />
-                  ) : (
-                    <span className="daily-empty-check" />
-                  )}
+                  <span className="daily-check-indicator" aria-hidden="true">
+                    {busy.has(entry.publicId) ? (
+                      <Spin size="small" />
+                    ) : entry.completed ? (
+                      <CheckOutlined />
+                    ) : null}
+                  </span>
                 </button>
                 {effectId === entry.publicId && (
                   <span className="daily-completion-effect" aria-hidden="true">
@@ -520,58 +576,12 @@ export default function LocalDailyPage() {
             </article>
           ))}
         </div>
-        {canEdit && (
-          <div
-            className={`daily-quick-composer${effectId === 'composer' ? ' is-celebrating' : ''}`}
-          >
-            <div className="daily-composer-modes">
-              <button aria-pressed={!backfill} onClick={() => setBackfill(false)}>
-                待会要做
-              </button>
-              <button disabled={isFuture} aria-pressed={backfill} onClick={() => setBackfill(true)}>
-                刚刚做完
-              </button>
-              <button onClick={() => setPoolOpen(true)}>从待办选入</button>
-            </div>
-            <form
-              className="daily-quick-form"
-              onSubmit={(event) => {
-                event.preventDefault()
-                submitQuick()
-              }}
-            >
-              <Input
-                ref={inputRef}
-                aria-label="快速记录任务"
-                placeholder={backfill ? '记下一件已经做完的事' : '记下一件要做的事…'}
-                value={title}
-                disabled={busy.has('create')}
-                maxLength={500}
-                onChange={(event) => setTitle(event.target.value)}
-                onKeyDown={(event) => {
-                  if (
-                    event.key === 'Enter' &&
-                    (event.nativeEvent.isComposing || event.keyCode === 229)
-                  )
-                    event.preventDefault()
-                }}
-              />
-              <Button
-                htmlType="submit"
-                type="primary"
-                aria-label="保存日任务"
-                icon={<PlusOutlined />}
-                disabled={!title.trim()}
-                loading={busy.has('create')}
-              />
-            </form>
-            {entries.some((entry) => entry.title === title.trim()) && title.trim() && (
-              <p className="daily-muted">清单里已有同名事项，仍可继续创建。</p>
-            )}
-          </div>
-        )}
       </section>
-      <div className="daily-feedback" role="status" aria-live="polite">
+      <div
+        className={`daily-feedback${notice || undo ? ' has-message' : ''}`}
+        role="status"
+        aria-live="polite"
+      >
         {notice}
         {undo && (
           <Button
@@ -636,6 +646,8 @@ export default function LocalDailyPage() {
               toolRefs.current.review = node
             }}
             aria-haspopup="dialog"
+            aria-describedby={reviewStatus ? 'daily-review-status' : undefined}
+            title={reviewStatus || undefined}
             disabled={isFuture}
             onClick={openReview}
           >
@@ -643,7 +655,11 @@ export default function LocalDailyPage() {
             {date === today ? '今日回顾' : '当日回顾'}
           </button>
         </div>
-        {reviewStatus && <p className="daily-review-status">{reviewStatus}</p>}
+        {reviewStatus && (
+          <span id="daily-review-status" className="daily-review-status">
+            {reviewStatus}
+          </span>
+        )}
         <div
           id="daily-schedule-panel"
           hidden={tool !== 'schedule'}

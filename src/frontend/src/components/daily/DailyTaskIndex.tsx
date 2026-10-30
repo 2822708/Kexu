@@ -24,7 +24,7 @@ export default function DailyTaskIndex() {
                 {entry.title}
                 <small>计划日 {entry.plannedDate}</small>
               </span>
-              <Button onClick={() => navigate(`/focus?date=${entry.plannedDate}`)}>打开</Button>
+              <Button onClick={() => navigate(`/tasks?date=${entry.plannedDate}`)}>打开</Button>
             </div>
           ))}
         </div>
@@ -32,7 +32,7 @@ export default function DailyTaskIndex() {
       <Button
         type="link"
         style={{ minHeight: 44, marginTop: 12 }}
-        onClick={() => navigate('/focus')}
+        onClick={() => navigate('/tasks')}
       >
         记录今天的日任务
       </Button>

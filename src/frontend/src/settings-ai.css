@@ -59,6 +59,95 @@
   max-width: 100%;
 }
 
+.ai-connection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 800px;
+  min-width: 0;
+}
+.ai-connection-form > .ant-typography {
+  margin-bottom: 0;
+}
+.ai-connection-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.ai-connection-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-connection-field-wide {
+  grid-column: 1 / -1;
+}
+.ai-connection-field .ant-select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  font-size: 16px;
+}
+.ai-connection-field .ant-select-selection-search-input {
+  font-size: 16px !important;
+}
+.ai-connection-field .ant-input,
+.ai-connection-field .ant-input-affix-wrapper {
+  min-height: 44px;
+  font-size: 16px;
+}
+.ai-connection-field .ant-input-affix-wrapper .ant-input {
+  min-height: 0;
+}
+.ai-provider-endpoint {
+  padding: 10px 0;
+  border-block: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.ai-provider-endpoint .ant-typography {
+  color: inherit;
+}
+.ai-provider-endpoint > .ant-typography {
+  display: block;
+  margin-top: 4px;
+}
+.ai-provider-endpoint p {
+  margin-bottom: 0;
+}
+.ai-provider-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+.ai-provider-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.ai-connection-help {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.ai-connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ai-connection-actions .ant-btn {
+  min-height: 44px;
+}
+@media (max-width: 767px) {
+  .ai-connection-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
 .settings-section {
   display: flex;
   flex-direction: column;

@@ -9,6 +9,8 @@
 | [install/README.md](install/README.md) | Windows / Android 安装页面、GitHub Releases 下载与升级步骤 |
 | [design/UI_REDESIGN_PLAN.md](design/UI_REDESIGN_PLAN.md) | Kexu浅色蓝绿UI、命名依据、页面架构与实施顺序 |
 | [design/UI_IMPLEMENTATION_2026_10_19.md](design/UI_IMPLEMENTATION_2026_10_19.md) | 新界面落实、实际截图、周表与移动布局复验、preview.2交付 |
+| [design/UI_REFINEMENT_2026_10_29.md](design/UI_REFINEMENT_2026_10_29.md) | 今日清单、日课表与公共界面精简，含桌面/手机截图与本轮验证边界 |
+| [design/TASKS_UNIFICATION_2026_10_29.md](design/TASKS_UNIFICATION_2026_10_29.md) | 今日与待办统一任务入口、完成联动、旧链接兼容及本轮验收 |
 | [design/DAILY_TASKS_PRODUCT_PLAN.md](design/DAILY_TASKS_PRODUCT_PLAN.md) | 今日任务、自选重点、完成正反馈、每日回顾、临时事项与数据迁移策划 |
 | [design/DAILY_TASKS_IMPLEMENTATION.md](design/DAILY_TASKS_IMPLEMENTATION.md) | 日任务正式实现、schema2迁移、回顾/草稿、运行包与验收边界 |
 | [native/README.md](native/README.md) | 最新本地前端封装 APK 与 Windows EXE 的工程、数据迁移、构建和验收边界 |
@@ -21,6 +23,7 @@
 | [mobile/ACCEPTANCE_2026_10_18.md](mobile/ACCEPTANCE_2026_10_18.md) | 本地版自动回归、浏览器断服测试与未完成的外部验收 |
 | [ai/EVALUATION_2026-10-18.md](ai/EVALUATION_2026-10-18.md) | AI契约、故障调试、真实模型评测边界 |
 | [ai/OPTIMIZATION_PLAN.md](ai/OPTIMIZATION_PLAN.md) | 提示词与AI能力后续优化门槛 |
+| [ai/PROVIDER_PRESETS_2026_10_30.md](ai/PROVIDER_PRESETS_2026_10_30.md) | AI 常用服务与模型选择、官方地址依据、Key 隔离和配置验收 |
 | [android/ANDROID_IMPLEMENTATION_PLAN.md](android/ANDROID_IMPLEMENTATION_PLAN.md) | Android 离线单机版实施架构、数据模型、提醒、AI、导入导出与验收计划 |
 | [android/ANDROID_IMPLEMENTATION_STATUS.md](android/ANDROID_IMPLEMENTATION_STATUS.md) | Android 源码已落地部分、未完成范围与构建验证边界 |
 | [android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md](android/WINDOWS_DEVELOPMENT_ENVIRONMENT.md) | Windows 安卓环境安装入口、固定版本、SDK/IDE路径和当前验证状态 |

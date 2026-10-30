@@ -13,6 +13,7 @@
 .daily-page-heading h2.ant-typography {
   font-size: 24px !important;
   line-height: 1.4;
+  font-weight: 650;
   overflow-wrap: anywhere;
 }
 .daily-page-heading > .ant-typography {
@@ -42,6 +43,14 @@
 .daily-timetable-page .timetable-page-header {
   flex-shrink: 0;
 }
+.timetable-term-note { font-size: 12px; }
+.timetable-add-short { display: none; }
+.timetable-week-label {
+  display: inline-block;
+  min-width: 110px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .daily-timetable-page .timetable-week-picker .ant-btn {
   box-shadow: none;
 }
@@ -52,7 +61,6 @@
   gap: 20px;
   padding: 20px 24px;
   border: 1px solid var(--border-light);
-  border-left: 3px solid #167d9a;
   border-radius: 12px;
   background: var(--bg-card);
 }
@@ -218,14 +226,30 @@
   .daily-todos-page .todo-record .ant-btn {
     min-height: 44px;
   }
+  .daily-timetable-page .timetable-page-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 12px;
+  }
+  .daily-timetable-page .daily-page-heading h2.ant-typography {
+    font-size: 20px !important;
+  }
   .daily-timetable-page .daily-page-actions {
-    width: 100%;
+    align-self: start;
   }
-  .daily-timetable-page .daily-page-actions > .ant-space-item:first-child {
-    flex: 1;
+  .timetable-add-label,
+  .timetable-more-label { display: none; }
+  .timetable-add-short { display: inline; }
+  .daily-timetable-page .daily-page-actions .ant-btn {
+    min-width: 44px;
   }
-  .daily-timetable-page .daily-page-actions > .ant-space-item:first-child .ant-btn {
-    width: 100%;
+  .daily-timetable-page .timetable-view-toolbar {
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+  .daily-timetable-page .timetable-week-label {
+    min-width: 100px;
   }
   .daily-timetable-page .timetable-week-picker {
     width: 100%;

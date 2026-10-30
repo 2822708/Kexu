@@ -7,8 +7,7 @@ import DeviceConnectionPage from './pages/DeviceConnectionPage'
 import { useApp } from './store/AppContext'
 
 const TimetablePage = lazy(() => import('./pages/TimetablePage'))
-const TodosPage = lazy(() => import('./pages/TodosPage'))
-const FocusPage = lazy(() => import('./pages/FocusPage'))
+const TasksPage = lazy(() => import('./pages/TasksPage'))
 const AiChatPage = lazy(() => import('./pages/AiChatPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const UserManualPage = lazy(() => import('./pages/UserManualPage'))
@@ -68,7 +67,7 @@ function AppRoutes() {
     return <DeviceConnectionPage />
   }
 
-  if (LOCAL_MODE && widgetRoute) return <Navigate to="/focus" replace />
+  if (LOCAL_MODE && widgetRoute) return <Navigate to="/tasks" replace />
 
   if (widgetRoute) {
     return <WidgetPreviewPage />
@@ -78,8 +77,9 @@ function AppRoutes() {
     <AppLayout>
       <Routes>
         <Route path="/timetable" element={<TimetablePage />} />
-        <Route path="/todos" element={<TodosPage />} />
-        <Route path="/focus" element={<FocusPage />} />
+        <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/todos" element={<TaskRedirect view="all" />} />
+        <Route path="/focus" element={<TaskRedirect view="today" />} />
         <Route path="/ai" element={<AiChatPage />} />
         <Route path="/manual" element={<UserManualPage />} />
         <Route path="/settings" element={<SettingsPage />} />
@@ -87,4 +87,11 @@ function AppRoutes() {
       </Routes>
     </AppLayout>
   )
+}
+
+function TaskRedirect({ view }: { view: 'today' | 'all' }) {
+  const location = useLocation()
+  const search = new URLSearchParams(location.search)
+  search.set('view', view)
+  return <Navigate to={{ pathname: '/tasks', search: `?${search}`, hash: location.hash }} replace />
 }

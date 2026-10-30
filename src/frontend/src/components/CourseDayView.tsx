@@ -8,7 +8,6 @@ import {
   TrophyOutlined,
 } from '@ant-design/icons'
 import type { Course, Exam, PeriodConfig, Schedule } from '../types'
-import { courseColor } from '../utils/color'
 import { courseClockTime, dayAgenda } from '../utils/dayAgenda'
 import { dayjs, weekDayName } from '../utils/schedule'
 
@@ -102,19 +101,31 @@ export default function CourseDayView({
           </Typography.Text>
           {agenda.exams.map((exam) => (
             <article key={exam.id} className="day-agenda-card day-agenda-exam">
-              <div className="day-agenda-card-title">
-                <Tag color="red">考试</Tag>
-                <h3>{exam.name}</h3>
+              <div className="day-agenda-time">
+                <strong>
+                  {exam.startTime.slice(0, 5)}–{exam.endTime.slice(0, 5)}
+                </strong>
+                <span>考试</span>
               </div>
-              <strong>
-                {exam.startTime.slice(0, 5)}–{exam.endTime.slice(0, 5)}
-              </strong>
-              <div className="day-agenda-detail">
-                <span>地点</span>
-                <span>{exam.location || '未指定'}</span>
+              <div className="day-agenda-copy">
+                <div className="day-agenda-card-title">
+                  <h3>{exam.name}</h3>
+                </div>
+                <dl className="day-agenda-details">
+                  <div>
+                    <dt>地点</dt>
+                    <dd>{exam.location || '未指定'}</dd>
+                  </div>
+                </dl>
               </div>
-              <Button icon={<EditOutlined />} aria-label={`管理考试 ${exam.name}`} onClick={onExamClick}>
-                管理考试
+              <Button
+                type="text"
+                className="day-agenda-action"
+                icon={<EditOutlined />}
+                aria-label={`管理考试 ${exam.name}`}
+                onClick={onExamClick}
+              >
+                <span className="day-agenda-action-label">管理考试</span>
               </Button>
             </article>
           ))}
@@ -127,30 +138,36 @@ export default function CourseDayView({
           {agenda.courses.map((course) => {
             const clock = courseClockTime(course, periods)
             return (
-              <article
-                key={course.id}
-                className="day-agenda-card"
-                style={{ borderLeftColor: courseColor(course.name).border }}
-              >
-                <div className="day-agenda-card-title">
-                  <h3>{course.name}</h3>
-                </div>
+              <article key={course.id} className="day-agenda-card">
                 <div className="day-agenda-time">
-                  <strong>
+                  <strong>{clock || '作息时间未配置'}</strong>
+                  <span>
                     第 {course.startPeriod}–{course.endPeriod} 节
-                  </strong>
-                  <span>{clock || '作息时间未配置'}</span>
+                  </span>
                 </div>
-                <div className="day-agenda-detail">
-                  <span>地点</span>
-                  <span>{course.location || '未指定'}</span>
+                <div className="day-agenda-copy">
+                  <div className="day-agenda-card-title">
+                    <h3>{course.name}</h3>
+                  </div>
+                  <dl className="day-agenda-details">
+                    <div>
+                      <dt>地点</dt>
+                      <dd>{course.location || '未指定'}</dd>
+                    </div>
+                    <div>
+                      <dt>教师</dt>
+                      <dd>{course.teacher || '未指定'}</dd>
+                    </div>
+                  </dl>
                 </div>
-                <div className="day-agenda-detail">
-                  <span>教师</span>
-                  <span>{course.teacher || '未指定'}</span>
-                </div>
-                <Button icon={<EditOutlined />} aria-label={`编辑课程 ${course.name}`} onClick={() => onEdit(course)}>
-                  编辑课程
+                <Button
+                  type="text"
+                  className="day-agenda-action"
+                  icon={<EditOutlined />}
+                  aria-label={`编辑课程 ${course.name}`}
+                  onClick={() => onEdit(course)}
+                >
+                  <span className="day-agenda-action-label">编辑课程</span>
                 </Button>
               </article>
             )

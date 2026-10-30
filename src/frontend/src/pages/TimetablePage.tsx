@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Dropdown, Empty, Segmented, Space, Typography, message } from 'antd'
+import { Button, Card, Dropdown, Empty, Space, Typography, message } from 'antd'
 import {
   ImportOutlined,
   LeftOutlined,
@@ -10,8 +10,6 @@ import {
   TrophyOutlined,
 } from '@ant-design/icons'
 import TimetableGrid from '../components/TimetableGrid'
-import CourseListView from '../components/CourseListView'
-import CourseDayView from '../components/CourseDayView'
 import CourseFormModal from '../components/CourseFormModal'
 import ScheduleManagerModal from '../components/ScheduleManagerModal'
 import ScheduleCreateModal from '../components/ScheduleCreateModal'
@@ -20,7 +18,7 @@ import ExamManagerModal from '../components/ExamManagerModal'
 import { aiApi, courseApi, examApi, scheduleApi } from '../api'
 import { useApp } from '../store/AppContext'
 import type { Course, CoursePayload, Exam, ExamPayload, Schedule } from '../types'
-import { currentWeekOf, dayjs, totalWeeks } from '../utils/schedule'
+import { currentWeekOf, totalWeeks } from '../utils/schedule'
 import { LOCAL_MODE } from '../local/mode'
 import {
   assertEditorRecord,
@@ -49,10 +47,6 @@ export default function TimetablePage() {
   } = useApp()
 
   const [week, setWeek] = useState(1)
-  const [viewMode, setViewMode] = useState<'day' | 'week' | 'all'>(() =>
-    window.matchMedia('(max-width: 767px)').matches ? 'day' : 'week',
-  )
-  const [selectedDate, setSelectedDate] = useState(() => dayjs().format('YYYY-MM-DD'))
   const [courseModal, setCourseModal] = useState<{
     open: boolean
     course: Course | null
@@ -371,15 +365,16 @@ export default function TimetablePage() {
           <Typography.Title level={2} style={{ margin: 0 }}>
             {activeSchedule?.name ?? '课表'}
           </Typography.Title>
-          <Typography.Text type="secondary">
+          <Typography.Text type="secondary" className="timetable-term-note">
             {activeSchedule
               ? `${activeSchedule.periodStartDate} — ${activeSchedule.periodEndDate} · 共 ${total} 周`
               : '选择一个学期，查看课程与考试安排'}
           </Typography.Text>
         </div>
         <Space className="daily-page-actions">
-          <Button icon={<PlusOutlined />} type="primary" onClick={() => openCreate()}>
-            添加课程
+          <Button icon={<PlusOutlined />} type="primary" aria-label="添加课程" onClick={() => openCreate()}>
+            <span className="timetable-add-label">添加课程</span>
+            <span className="timetable-add-short" aria-hidden="true">添加</span>
           </Button>
           <Dropdown
             trigger={['click']}
@@ -392,82 +387,44 @@ export default function TimetablePage() {
               ],
             }}
           >
-            <Button icon={<MoreOutlined />} aria-label="更多课表操作">更多</Button>
+            <Button icon={<MoreOutlined />} aria-label="更多课表操作"><span className="timetable-more-label">更多</span></Button>
           </Dropdown>
         </Space>
       </div>
 
       <div className="timetable-view-toolbar">
-        <Segmented
-          aria-label="课表显示方式"
-          value={viewMode}
-          onChange={(v) => setViewMode(v as 'day' | 'week' | 'all')}
-          options={[
-            { value: 'day', label: '按日' },
-            { value: 'week', label: '按周' },
-            { value: 'all', label: '全部课程' },
-          ]}
-        />
-          {viewMode === 'week' && (
-            <Space className="timetable-week-picker" size={4}>
-              <Button
-                icon={<LeftOutlined />}
-                aria-label="上一教学周"
-                disabled={week <= 1}
-                onClick={() => setWeek((w) => Math.max(1, w - 1))}
-              />
-              <Typography.Text strong style={{ minWidth: 110, textAlign: 'center' }}>
-                第 {week} 周 / 共 {total} 周
-              </Typography.Text>
-              <Button
-                icon={<RightOutlined />}
-                aria-label="下一教学周"
-                disabled={week >= total}
-                onClick={() => setWeek((w) => Math.min(total, w + 1))}
-              />
-              <Button disabled={week === realCurrentWeek} onClick={() => setWeek(realCurrentWeek)}>本周</Button>
-            </Space>
-          )}
+        <Space className="timetable-week-picker" size={4}>
+          <Button
+            icon={<LeftOutlined />}
+            aria-label="上一教学周"
+            disabled={week <= 1}
+            onClick={() => setWeek((w) => Math.max(1, w - 1))}
+          />
+          <Typography.Text strong className="timetable-week-label">
+            第 {week} 周 / 共 {total} 周
+          </Typography.Text>
+          <Button
+            icon={<RightOutlined />}
+            aria-label="下一教学周"
+            disabled={week >= total}
+            onClick={() => setWeek((w) => Math.min(total, w + 1))}
+          />
+          <Button disabled={week === realCurrentWeek} onClick={() => setWeek(realCurrentWeek)}>本周</Button>
+        </Space>
       </div>
 
-      {viewMode === 'day' && activeSchedule ? (
-        <CourseDayView
-          date={selectedDate}
-          schedule={activeSchedule}
+      <div className="tt-scroll">
+        <TimetableGrid
           courses={courses}
           exams={exams}
           periods={periods}
-          onDateChange={(date) => {
-            setSelectedDate(date)
-            setWeek(
-              Math.min(
-                total,
-                Math.max(1, currentWeekOf(activeSchedule.periodStartDate, dayjs(date))),
-              ),
-            )
-          }}
-          onEdit={openEditCourse}
+          week={week}
+          semesterStart={activeSchedule?.periodStartDate ?? null}
+          onCourseClick={openEditCourse}
           onExamClick={openExamManager}
-          onCreate={openCreate}
+          onEmptyClick={(day, period) => openCreate(day, period)}
         />
-      ) : viewMode === 'week' ? (
-        <div className="tt-scroll">
-          <TimetableGrid
-            courses={courses}
-            exams={exams}
-            periods={periods}
-            week={week}
-            semesterStart={activeSchedule?.periodStartDate ?? null}
-            onCourseClick={openEditCourse}
-            onExamClick={openExamManager}
-            onEmptyClick={(day, period) => openCreate(day, period)}
-          />
-        </div>
-      ) : (
-        <div className="tt-list">
-          <CourseListView courses={courses} onEdit={openEditCourse} onDelete={deleteCourse} />
-        </div>
-      )}
+      </div>
 
       <CourseFormModal
         open={courseModal.open}
