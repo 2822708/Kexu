@@ -13,4 +13,4 @@ Android 直接覆盖安装，勿先卸载。Windows 完整解压，退出旧程�
 ## 文件与 SHA256
 
 - Kexu-Android-2026.11.01.apk · 3,037,538 字节 · `19f378936395bb44e077bdac1fba96df05ec26a10c0bc1d9d0c5b7808c017f8a`
-- Kexu-Windows-x64.zip · 1,380,272 字节 · `42af5111b1f0482a14d02420bd1fb8a1746b39b18f13d9a496e65ef6ddef8137`
+- Kexu-Windows-x64.zip · 1,380,273 字节 · `ccc8f4addc64bb4594a8848660f9afc9158fd513c2dc03b4f214b50c852370e3`

@@ -1,13 +1,13 @@
 {
   "version": "2026.11.01-preview.1",
-  "sourceCommit": "16c20a0d33bd6d7e345944d6045cddb7be72c255",
-  "sourceTree": "9b90e6d8ba21cc1ac62ae8547954453f17b31b7d",
+  "sourceCommit": "fb8b41611e81bd85c4d8740651eee09ced1e7405",
+  "sourceTree": "25aa70e535522e9928e77431588f29b3d45a95dc",
   "sourceDirty": false,
   "zip": "Kexu-2026.11.01-preview.1.zip",
-  "bytes": 1140291,
-  "sha256": "73b5eb6374468d3f5f7b3c404c0d6669166817eb7396f079dfe9fcb1b84341a7",
+  "bytes": 1137591,
+  "sha256": "faadb278da61068e171f7332f0d13ad83c7eb40dde0a81b9f42ca474faf03cda",
   "entries": 52,
-  "packageManifestSha256": "9ac01155daf00747f9ca33ac1bcf8b6a32770e5b39e752fbf775c2684cb795d6",
+  "packageManifestSha256": "c8f03bb9ecce3390d7ce2dee07dd6a683dc593335b32e6df0c94fa83ad4df6df",
   "validation": {
     "zipCrc": true,
     "allFilesByteEqual": true,
