@@ -276,6 +276,7 @@ export function validateLocalState(value: unknown): asserts value is LocalState 
   const messageIds = new Set<number>(),
     actionIds = new Set<number>()
   const actionTypes = [
+    'CREATE_SCHEDULE',
     'CREATE_COURSE',
     'UPDATE_COURSE',
     'DELETE_COURSE',

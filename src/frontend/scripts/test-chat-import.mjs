@@ -19,7 +19,7 @@ class FileReaderStub {
 }
 const exports = {}
 vm.runInNewContext(compiled, { exports, Blob, FileReader: FileReaderStub })
-const { appendChatText, chatMaterialText, readChatImage, MAX_CHAT_CHARS } = exports
+const { appendChatText, chatMaterialText, isImageDataUrl, readChatImage, MAX_CHAT_CHARS } = exports
 
 test('import appends to an existing draft without losing its text', () => {
   assert.equal(appendChatText('原有安排', '新材料'), '原有安排\n\n新材料')
@@ -52,4 +52,12 @@ test('dragged images without MIME get a supported data URL', async () => {
 test('unsupported image types are not mislabeled as valid images', async () => {
   await assert.rejects(readChatImage(new File(['text'], 'screen.png', { type: 'text/plain' })), /格式不支持/)
   await assert.rejects(readChatImage(new File(['svg'], 'screen.svg', { type: 'image/svg+xml' })), /格式不支持/)
+})
+
+test('only bounded image data URLs are accepted for direct image messages', () => {
+  assert.equal(isImageDataUrl('data:image/jpeg;base64,AAAA'), true)
+  assert.equal(isImageDataUrl('data:image/webp;base64,AA=='), true)
+  assert.equal(isImageDataUrl('https://example.com/a.png'), false)
+  assert.equal(isImageDataUrl('data:text/plain;base64,AAAA'), false)
+  assert.equal(isImageDataUrl(`data:image/png;base64,${'A'.repeat(6 * 1024 * 1024)}`), false)
 })

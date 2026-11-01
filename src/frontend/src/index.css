@@ -141,8 +141,9 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 /* Ant Design owns component colors and states through ThemeProvider tokens. */
 .ant-card { box-shadow: var(--surface-shadow); }
 .ant-btn { font-weight: 600; }
-.ant-card-head-title { font-weight: 650; }
-.ant-table-thead > tr > th { font-weight: 650; }
+.ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous) { font-weight: 500; }
+.ant-card-head-title { font-weight: 600; }
+.ant-table-thead > tr > th { font-weight: 600; }
 .ant-modal-content { overflow: hidden; }
 .ant-statistic-content { font-variant-numeric: tabular-nums; }
 .ant-tag { line-height: 1.65; }

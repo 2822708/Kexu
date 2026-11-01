@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Button,
   Alert,
@@ -75,7 +75,16 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
     setActiveScheduleId,
   } = useApp()
   const navigate = useNavigate()
-  const [filter, setFilter] = useState<Filter>('active')
+  const location = useLocation()
+  const requestedFilter = new URLSearchParams(location.search).get('taskFilter')
+  const filter: Filter = requestedFilter === 'completed' || requestedFilter === 'all'
+    ? requestedFilter
+    : 'active'
+  const setFilter = (value: Filter) => {
+    const search = new URLSearchParams(location.search)
+    search.set('taskFilter', value)
+    navigate({ pathname: location.pathname, search: `?${search}`, hash: location.hash })
+  }
   const [tick, setTick] = useState(Date.now)
   const [modal, setModal] = useState<{ open: boolean; todo: Todo | null }>({
     open: false,
@@ -136,7 +145,12 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
         : dayjs(item.kind === 'todo' ? item.value.ddl : item.value.plannedDate).isSame(now, 'day') ? 2 : 3
       buckets[index].items.push(item)
     }
-    return buckets.filter((bucket) => bucket.items.length > 0)
+    return buckets.filter((bucket) => bucket.items.length > 0).map((bucket) => {
+      const plannedDates = new Set(bucket.items
+        .filter((item): item is Extract<TaskRecord, { kind: 'dayTask' }> => item.kind === 'dayTask')
+        .map((item) => item.value.plannedDate))
+      return { ...bucket, sharedPlannedDate: plannedDates.size === 1 ? [...plannedDates][0] : null }
+    })
   }, [visible, now, dailyWorkspace?.date])
 
   const run = async (key: string, action: () => Promise<unknown>) => {
@@ -284,9 +298,12 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
         </div>
       </div>
 
-      <Typography.Paragraph className="todo-notification-note" type="secondary">
-        倒计时仅在页面内显示；当前版本不会发送系统通知，关闭页面后也不会弹窗提醒。
-      </Typography.Paragraph>
+      <details className="todo-notification-note">
+        <summary>提醒说明</summary>
+        <Typography.Paragraph type="secondary">
+          倒计时仅在页面内显示；当前版本不会发送系统通知，关闭页面后也不会弹窗提醒。
+        </Typography.Paragraph>
+      </details>
       {dailyError && <Alert type="error" message={dailyError} action={<Button onClick={() => void refreshDaily?.().catch(() => undefined)}>重试</Button>} />}
       {LOCAL_MODE && !dailyWorkspace && !dailyError && <Spin tip="正在读取日任务"><div style={{ minHeight: 48 }} /></Spin>}
       {groups.length === 0 && (!LOCAL_MODE || dailyWorkspace) && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filter === 'completed' ? '还没有已完成的任务' : '暂无任务'} />}
@@ -295,6 +312,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
         <div className={`todo-group-heading${group.danger ? ' daily-danger' : ''}`}>
           <Typography.Title level={4} style={{ margin: 0 }}>{group.title}</Typography.Title>
           <span>{group.items.length} 项</span>
+          {group.sharedPlannedDate && <time dateTime={group.sharedPlannedDate}>日任务计划 {group.sharedPlannedDate}</time>}
         </div>
         <Card className="todo-list-surface" styles={{ body: { padding: '0 16px' } }}>
         <List
@@ -313,7 +331,12 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
                       key="open"
                       type="text"
                       aria-label={`打开任务 ${entry.title}`}
-                      onClick={() => navigate(`/tasks?date=${entry.plannedDate}`)}
+                      onClick={() => {
+                        const search = new URLSearchParams(location.search)
+                        search.set('date', entry.plannedDate)
+                        search.set('view', 'today')
+                        navigate({ pathname: '/tasks', search: `?${search}`, hash: location.hash })
+                      }}
                     >
                       打开
                     </Button>,
@@ -339,7 +362,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
                         {entry.completed && <Tag color="green">已完成</Tag>}
                       </Space>
                     }
-                    description={<div className="todo-record-details"><span>计划日 {entry.plannedDate}</span></div>}
+                    description={group.sharedPlannedDate ? undefined : <div className="todo-record-details"><span>计划日 {entry.plannedDate}</span></div>}
                   />
                 </List.Item>
               )
@@ -431,7 +454,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
                               : '来自循环任务（规则已删除）'
                           }
                         >
-                          <Tag icon={<RetweetOutlined />} color="blue">
+                          <Tag icon={<RetweetOutlined />}>
                             循环
                           </Tag>
                         </Tooltip>
@@ -444,15 +467,15 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
                               : '来自考试：ddl=考试开始时间，考试结束后自动完成'
                           }
                         >
-                          <Tag icon={<ScheduleOutlined />} color="red">
+                          <Tag icon={<ScheduleOutlined />}>
                             考试
                           </Tag>
                         </Tooltip>
                       )}
                       {todo.completed ? (
                         <Tag color="green">已完成</Tag>
-                      ) : (
-                        <Tag color={overdue ? 'red' : urgent ? 'orange' : 'blue'}>
+                      ) : (overdue || urgent) && (
+                        <Tag color={overdue ? 'red' : 'orange'}>
                           {overdue ? '已逾期' : formatCountdown(todo.ddl, now)}
                         </Tag>
                       )}

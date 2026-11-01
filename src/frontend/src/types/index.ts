@@ -115,6 +115,7 @@ export interface PeriodConfig {
 }
 
 export type AiActionType =
+  | 'CREATE_SCHEDULE'
   | 'CREATE_COURSE'
   | 'UPDATE_COURSE'
   | 'DELETE_COURSE'

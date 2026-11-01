@@ -10,6 +10,8 @@
 | [design/UI_REDESIGN_PLAN.md](design/UI_REDESIGN_PLAN.md) | Kexu浅色蓝绿UI、命名依据、页面架构与实施顺序 |
 | [design/UI_IMPLEMENTATION_2026_10_19.md](design/UI_IMPLEMENTATION_2026_10_19.md) | 新界面落实、实际截图、周表与移动布局复验、preview.2交付 |
 | [design/UI_REFINEMENT_2026_10_29.md](design/UI_REFINEMENT_2026_10_29.md) | 今日清单、日课表与公共界面精简，含桌面/手机截图与本轮验证边界 |
+| [design/UI_POLISH_HALLMARK_2026_10_31.md](design/UI_POLISH_HALLMARK_2026_10_31.md) | 按 Hallmark 应用界面原则收敛装饰，保留功能，含精修截图与验证 |
+| [design/UX_FIXES_2026_11_01.md](design/UX_FIXES_2026_11_01.md) | 图片失败重试、PDF文字合并、筛选保留、信息精简及220项回归 |
 | [design/TASKS_UNIFICATION_2026_10_29.md](design/TASKS_UNIFICATION_2026_10_29.md) | 今日与待办统一任务入口、完成联动、旧链接兼容及本轮验收 |
 | [design/DAILY_TASKS_PRODUCT_PLAN.md](design/DAILY_TASKS_PRODUCT_PLAN.md) | 今日任务、自选重点、完成正反馈、每日回顾、临时事项与数据迁移策划 |
 | [design/DAILY_TASKS_IMPLEMENTATION.md](design/DAILY_TASKS_IMPLEMENTATION.md) | 日任务正式实现、schema2迁移、回顾/草稿、运行包与验收边界 |
