@@ -29,6 +29,7 @@ $staging = Join-Path $buildRoot 'Kexu-Windows-x64'
 $sdk = Join-Path $buildRoot 'sdk'
 New-Item -ItemType Directory -Path $staging -Force | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+Add-Type -AssemblyName System.IO.Compression
 [IO.Compression.ZipFile]::ExtractToDirectory([IO.Path]::GetFullPath($SdkPackage), $sdk)
 foreach ($name in @('Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll')) {
     Copy-Item -LiteralPath (Join-Path $sdk "lib\net462\$name") -Destination (Join-Path $staging $name)
@@ -75,7 +76,18 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 Move-Item -LiteralPath $staging -Destination $destination
 $zip = Join-Path $OutputDir 'Kexu-Windows-x64.zip'
 if (Test-Path -LiteralPath $zip) { throw "Existing zip preserved: $zip" }
-[IO.Compression.ZipFile]::CreateFromDirectory($destination, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
+# Write a portable archive: entry separators must be '/' so Linux tooling sees the same paths.
+$zipPrefix = [IO.Path]::GetFullPath($destination).TrimEnd('\') + '\'
+$zipStream = [IO.File]::Open($zip, [IO.FileMode]::CreateNew)
+try {
+    $zipArchive = New-Object IO.Compression.ZipArchive($zipStream, [IO.Compression.ZipArchiveMode]::Create, $true)
+    try {
+        Get-ChildItem -LiteralPath $destination -Recurse -File | Sort-Object FullName | ForEach-Object {
+            $entryName = 'Kexu-Windows-x64/' + $_.FullName.Substring($zipPrefix.Length).Replace('\', '/')
+            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zipArchive, $_.FullName, $entryName, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+        }
+    } finally { $zipArchive.Dispose() }
+} finally { $zipStream.Dispose() }
 $zipHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 "$zipHash  Kexu-Windows-x64.zip" | Set-Content -LiteralPath (Join-Path $OutputDir 'SHA256SUMS-windows.txt') -Encoding ascii
 Write-Host "Windows EXE: $(Join-Path $destination 'Kexu.exe')"
