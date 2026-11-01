@@ -25,11 +25,11 @@ Android 8.0 起，使用系统 WebView。安装 APK 后直接打开。应用 ID 
 
 程序默认将数据放在 EXE 旁的 `Data/WebView2/`。也可使用 `kexu-data-dir.txt` 或 `--data-dir` 固定数据目录。更新时保留 Data，发行目录内不包含验收资料或用户数据。
 
-31 项外壳策略检查与最终两次隔离启动冒烟通过，已验证日任务保存、刷新和重启后保留；包内 `app/index.html` 与 `dist-shell` 构建产物逐字节一致。
+31 项外壳策略检查与最终两次隔离启动冒烟通过，已验证日任务保存、刷新和重启后保留；包内 `app/index.html` 与 `dist-shell` 构建产物逐字节一致。ZIP 条目统一使用 `/` 分隔符，Windows 与 Linux 工具解压结果一致。
 
 ## 构建与来源
 
-本包在干净工作区构建，源码提交为 `16c20a0`（清单中 `sourceDirty` 为 `false`）。构建命令与校验值见本目录 `RELEASE_MANIFEST.json` 和 `SHA256SUMS.txt`。
+本包在干净工作区构建，源码提交为 `fb8b416`（清单中 `sourceDirty` 为 `false`）。构建命令与校验值见本目录 `RELEASE_MANIFEST.json` 和 `SHA256SUMS.txt`。
 
 ## Kexu Data & Network
 

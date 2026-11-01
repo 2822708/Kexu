@@ -47,7 +47,12 @@ def prepare(destination, tag):
             if name == config['windows']:
                 executable = 'Kexu-Windows-x64/Kexu.exe'
                 expected = next(entry for entry in manifest['artifacts'] if entry['path'] == executable)
-                if sha256(archive.read(executable)) != expected['sha256']:
+                try:
+                    executable_bytes = archive.read(executable)
+                except KeyError:
+                    # Older .NET builds stored separators as '\'; accept them for verification only.
+                    executable_bytes = archive.read(executable.replace('/', '\\'))
+                if sha256(executable_bytes) != expected['sha256']:
                     raise ValueError('Windows executable hash mismatch')
         assets[name] = data
     assets['RELEASE_MANIFEST.json'] = manifest_bytes
