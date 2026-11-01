@@ -6,6 +6,7 @@ import { describeOffset } from '../utils/recurring'
 import { LOCAL_MODE } from '../local/mode'
 
 const ACTION_LABELS: Record<string, string> = {
+  CREATE_SCHEDULE: '新建课表',
   CREATE_COURSE: '添加课程',
   UPDATE_COURSE: '修改课程',
   DELETE_COURSE: '删除课程',
@@ -53,6 +54,7 @@ export default function AiActionCard({
   const pending = action.status === 'PENDING'
   const stale = action.status === 'STALE'
   const affected = [
+    'schedules',
     'courses',
     'todos',
     'rules',
@@ -79,6 +81,14 @@ export default function AiActionCard({
     ) : (
       <Tag color="orange">待确认</Tag>
     )
+  const scopeLabel =
+    action.type === 'CREATE_SCHEDULE'
+      ? '课表管理'
+      : action.scope === 'COURSE'
+        ? '课表'
+        : action.type.includes('RECURRING')
+          ? '循环任务'
+          : '待办'
 
   return (
     <Card
@@ -88,23 +98,19 @@ export default function AiActionCard({
       title={
         <Space wrap size={6}>
           <span>{ACTION_LABELS[action.type] ?? action.type}</span>
-          <Tag color={action.scope === 'COURSE' ? 'blue' : 'cyan'}>
-            {action.scope === 'COURSE'
-              ? '课表'
-              : action.type.includes('RECURRING')
-                ? '循环任务'
-                : '待办'}
-          </Tag>
+          <Tag color={action.scope === 'COURSE' ? 'blue' : 'cyan'}>{scopeLabel}</Tag>
           {statusTag}
         </Space>
       }
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
-        {action.scope === 'COURSE'
-          ? `目标课表：${scheduleName ?? (action.scheduleId ? `课表 #${action.scheduleId}（已删除或不可用）` : '未绑定')}`
-          : LOCAL_MODE
-            ? '作用范围：本机待办（各课表共用）'
-            : '作用范围：当前账号的待办（所有课表共用）'}
+        {action.type === 'CREATE_SCHEDULE'
+          ? '作用范围：本机课表列表；创建后不会自动切换，可到课表页选择'
+          : action.scope === 'COURSE'
+            ? `目标课表：${scheduleName ?? (action.scheduleId ? `课表 #${action.scheduleId}（已删除或不可用）` : '未绑定')}`
+            : LOCAL_MODE
+              ? '作用范围：本机待办（各课表共用）'
+              : '作用范围：当前账号的待办（所有课表共用）'}
         {' · '}影响 {affected?.length ?? 0} 条记录
         {action.type === 'DELETE_EXAM' && '；对应考试待办也会删除'}
       </Typography.Paragraph>
@@ -210,6 +216,22 @@ function scriptSummary(v: unknown): string {
 
 function renderBody(type: string, data: Dict) {
   const before = (data._before as Dict[]) ?? []
+
+  if (type === 'CREATE_SCHEDULE') {
+    const rows = (data.schedules as Dict[]) ?? []
+    return (
+      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        {rows.map((r, i) => (
+          <div key={i}>
+            <Typography.Text strong>{str(r.name)}</Typography.Text>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+              学期 {str(r.periodStartDate)} 至 {str(r.periodEndDate)}
+            </div>
+          </div>
+        ))}
+      </Space>
+    )
+  }
 
   if (type === 'CREATE_RECURRING') {
     const rules = (data.rules as Dict[]) ?? []

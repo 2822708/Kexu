@@ -551,6 +551,9 @@ export function applyLocalOperation(
       '操作不属于当前工作课表',
     )
   switch (type) {
+    case 'CREATE_SCHEDULE':
+      for (const row of items('schedules')) createSchedule(state, row as Omit<Schedule, 'id'>)
+      break
     case 'CREATE_COURSE':
       assertLocal(scheduleId != null, '请先选择工作课表')
       for (const row of items('courses')) createCourse(state, scheduleId, row as CoursePayload)

@@ -11,30 +11,43 @@ import {
 } from '@ant-design/icons'
 import { aiApi } from '../api'
 import { useSpeechConsent, useSpeechInput } from '../hooks/useSpeechInput'
-import { extractImportFileText, isSupportedImage, MAX_IMAGE_BYTES } from '../utils/importFiles'
+import { MAX_IMAGE_BYTES, prepareImportFile } from '../utils/importFiles'
 import {
   appendChatText,
   chatMaterialText,
   MAX_CHAT_CHARS,
   MAX_CHAT_IMAGES,
-  readChatImage,
+  readChatImageCompact,
 } from '../utils/chatImport'
 import { useMediaQuery } from '../hooks/useMediaQuery'
+import { LOCAL_MODE } from '../local/mode'
+import { getAiSettings } from '../local/ai/settings'
+
+interface InitialImage {
+  dataUrl: string
+  name: string
+}
 
 interface AiChatComposerProps {
   value: string
   onChange: (text: string) => void
-  onSend: (content: string) => Promise<void>
+  /** True only after the chat request completed; failures keep the complete draft. */
+  onSend: (content: string, images: string[]) => Promise<boolean>
   onStop: () => void
   sending: boolean
   disabled: boolean
   sendDisabled: boolean
   scopeKey: string
+  /** Images handed over by the quick-import widget; they are sent with the next message. */
+  initialImages?: InitialImage[]
+  onInitialImagesApplied?: () => void
 }
 
 interface PendingImage {
   id: number
-  file: File
+  name: string
+  file?: File
+  dataUrl?: string
 }
 
 type Busy = 'files' | 'images' | null
@@ -48,6 +61,8 @@ export default function AiChatComposer({
   disabled,
   sendDisabled,
   scopeKey,
+  initialImages,
+  onInitialImagesApplied,
 }: AiChatComposerProps) {
   const mobile = useMediaQuery('(max-width: 767px)')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -67,10 +82,13 @@ export default function AiChatComposer({
   const operationRef = useRef(0)
   const imagesRef = useRef<PendingImage[]>([])
   const nextImageRef = useRef(0)
+  const appliedInitialRef = useRef<Set<string>>(new Set())
   const dragDepthRef = useRef(0)
   const composingRef = useRef(false)
   const voiceRef = useRef<{ scope: string; base: string } | null>(null)
   const abortSpeechRef = useRef<() => void>(() => undefined)
+  const appliedHandlerRef = useRef(onInitialImagesApplied)
+  appliedHandlerRef.current = onInitialImagesApplied
   scopeRef.current = scopeKey
   valueRef.current = value
   disabledRef.current = disabled
@@ -130,12 +148,37 @@ export default function AiChatComposer({
     dragDepthRef.current = 0
     voiceRef.current = null
     abortSpeechRef.current()
+    appliedInitialRef.current.clear()
     setImages([])
     setBusy(null)
     setDragging(false)
     setConsentOpen(false)
     composingRef.current = false
   }, [scopeKey, disabled])
+
+  useEffect(() => {
+    // Quick import hands images over after the conversation switch resets the composer.
+    if (!initialImages?.length || disabledRef.current) return
+    const additions = initialImages.filter(
+      (item) => !appliedInitialRef.current.has(item.dataUrl),
+    )
+    if (!additions.length) return
+    for (const item of additions) appliedInitialRef.current.add(item.dataUrl)
+    const room = MAX_CHAT_IMAGES - imagesRef.current.length
+    if (room <= 0) {
+      message.warning(`一次最多附带 ${MAX_CHAT_IMAGES} 张图片，已忽略其余导入图片`)
+      return
+    }
+    if (additions.length > room) message.warning(`一次最多附带 ${MAX_CHAT_IMAGES} 张图片，只保留前 ${room} 张`)
+    const accepted = additions.slice(0, room).map((item) => ({
+      id: ++nextImageRef.current,
+      name: item.name,
+      dataUrl: item.dataUrl,
+    }))
+    imagesRef.current = [...imagesRef.current, ...accepted]
+    setImages(imagesRef.current)
+    appliedHandlerRef.current?.()
+  }, [initialImages, scopeKey, disabled])
 
   const isCurrent = (scope: string, operation: number) =>
     mountedRef.current &&
@@ -160,17 +203,16 @@ export default function AiChatComposer({
       const addedImages: PendingImage[] = []
       const material: string[] = []
       for (const file of files) {
-        if (isSupportedImage(file)) {
-          if (file.size > MAX_IMAGE_BYTES) throw new Error(`图片不能超过 4 MiB：${file.name}`)
+        const prepared = await prepareImportFile(file)
+        if (!isCurrent(scope, operation)) return
+        for (const image of prepared.images) {
+          if (image.size > MAX_IMAGE_BYTES) throw new Error(`图片不能超过 4 MiB：${image.name}`)
           if (imagesRef.current.length + addedImages.length >= MAX_CHAT_IMAGES) {
-            throw new Error(`一次最多附带 ${MAX_CHAT_IMAGES} 张图片，请分批发送`)
+            throw new Error(`一次最多附带 ${MAX_CHAT_IMAGES} 张图片，请分批发送；扫描版 PDF 可分页导入`)
           }
-          addedImages.push({ id: ++nextImageRef.current, file })
-        } else {
-          const text = await extractImportFileText(file)
-          if (!isCurrent(scope, operation)) return
-          material.push(chatMaterialText(file.name, text))
+          addedImages.push({ id: ++nextImageRef.current, name: image.name, file: image })
         }
+        if (prepared.text) material.push(chatMaterialText(file.name, prepared.text))
       }
       if (!isCurrent(scope, operation)) return
       // Read the latest value after extraction, preserving text typed while it ran.
@@ -205,6 +247,10 @@ export default function AiChatComposer({
     const draft = valueRef.current.trim()
     const pending = imagesRef.current
     if (!draft && !pending.length) return
+    if (LOCAL_MODE && pending.length && !getAiSettings().visionEnabled) {
+      message.warning('图片需要先在 AI 连接设置中启用支持图片的模型，图片已保留在输入框')
+      return
+    }
     if (draft.length > MAX_CHAT_CHARS) {
       message.warning(`消息不能超过 ${MAX_CHAT_CHARS} 字，请缩短后发送`)
       return
@@ -214,27 +260,43 @@ export default function AiChatComposer({
     sendLockRef.current = true
     try {
       let content = draft
+      const dataUrls: string[] = []
       if (pending.length) {
         busyRef.current = 'images'
         setBusy('images')
         for (const image of pending) {
-          const dataUrl = await readChatImage(image.file)
+          const dataUrl = image.dataUrl ?? (image.file ? await readChatImageCompact(image.file) : '')
+          if (!dataUrl) throw new Error(`无法读取图片：${image.name}`)
           if (!isCurrent(scope, operation)) return
-          const result = await aiApi.parseImageText(dataUrl)
-          if (!isCurrent(scope, operation)) return
-          if (!result.text.trim()) throw new Error(`图片中未识别到文字：${image.file.name}`)
-          content = appendChatText(content, chatMaterialText(image.file.name, result.text, true))
+          dataUrls.push(dataUrl)
         }
+        if (!LOCAL_MODE) {
+          // The REST backend has no multimodal chat endpoint, so images are transcribed first.
+          for (let index = 0; index < pending.length; index++) {
+            const result = await aiApi.parseImageText(dataUrls[index])
+            if (!isCurrent(scope, operation)) return
+            if (!result.text.trim()) throw new Error(`图片中未识别到文字：${pending[index].name}`)
+            content = appendChatText(
+              content,
+              chatMaterialText(pending[index].name, result.text, true),
+            )
+          }
+        }
+        if (!content) content = '请阅读随消息附上的图片内容，并整理为待确认的提案。'
       }
       if (!isCurrent(scope, operation) || sendDisabledRef.current) return
-      // OCR failures leave everything untouched. Once prepared, the parent restores
-      // this complete payload if its normal chat request fails.
-      updateDraft(content)
-      imagesRef.current = []
-      setImages([])
+      // Keep the original text and attachments until the parent accepts the message.
+      // In REST mode the OCR text is a request payload, not a second draft to append
+      // again on retry. The first automatic conversation creation keeps this scope.
       busyRef.current = null
       setBusy(null)
-      await onSend(content)
+      const sent = await onSend(content, LOCAL_MODE ? dataUrls : [])
+      if (sent && isCurrent(scope, operation)) {
+        imagesRef.current = []
+        setImages([])
+        // A user may already be writing the next message while this one runs.
+        if (valueRef.current.trim() === draft) updateDraft('')
+      }
     } catch (error) {
       if (isCurrent(scope, operation))
         message.error(error instanceof Error ? error.message : '发送准备失败，草稿已保留')
@@ -359,15 +421,19 @@ export default function AiChatComposer({
             {images.map((image) => (
               <span className="ai-chat-composer-image" key={image.id}>
                 <Tooltip
-                  title={`${image.file.name} · 点击发送后会将图片交给已配置的 AI 服务识别文字`}
+                  title={`${image.name} · ${
+                    LOCAL_MODE
+                      ? '发送后直接交给已配置的 AI 阅读图片'
+                      : '发送后会将图片交给已配置的 AI 服务识别文字'
+                  }`}
                 >
-                  <span className="ai-chat-composer-image-name">{image.file.name}</span>
+                  <span className="ai-chat-composer-image-name">{image.name}</span>
                 </Tooltip>
                 <Button
                   type="text"
                   size="small"
                   icon={<CloseOutlined />}
-                  aria-label={`移除图片 ${image.file.name}`}
+                  aria-label={`移除图片 ${image.name}`}
                   disabled={disabled || !!busy || sending}
                   onClick={() => {
                     imagesRef.current = imagesRef.current.filter((item) => item.id !== image.id)
@@ -390,7 +456,7 @@ export default function AiChatComposer({
           }}
           placeholder={
             mobile
-              ? '描述你的安排，可附文件或截图'
+              ? '描述你的安排，可附截图'
               : '描述你的安排，或拖入文件、截图；Enter 发送，Shift+Enter 换行'
           }
           autoSize={{ minRows: 1, maxRows: 4 }}
@@ -447,13 +513,23 @@ export default function AiChatComposer({
         </Popconfirm>
       </div>
       {sending ? (
-        <Button className="assistant-send-button" danger icon={<StopOutlined />} onClick={onStop}>
+        <Button
+          className="assistant-send-button"
+          danger
+          icon={<StopOutlined />}
+          aria-label="停止生成"
+          onClick={onStop}
+        >
           停止
         </Button>
       ) : (
         <Tooltip
           title={
-            images.length ? '发送后将图片交给已配置的 AI 服务识别，再生成待确认提案' : undefined
+            images.length
+              ? LOCAL_MODE
+                ? '发送后图片会直接交给已配置的 AI 阅读，再生成待确认提案'
+                : '发送后将图片交给已配置的 AI 服务识别，再生成待确认提案'
+              : undefined
           }
         >
           <Button
@@ -461,6 +537,7 @@ export default function AiChatComposer({
             type="primary"
             icon={<SendOutlined />}
             loading={busy === 'images'}
+            aria-label={busy === 'images' ? '正在准备图片' : '发送消息'}
             disabled={
               disabled ||
               sendDisabled ||
@@ -470,7 +547,7 @@ export default function AiChatComposer({
             }
             onClick={() => void send()}
           >
-            {busy === 'images' ? '识图中' : '发送'}
+            {busy === 'images' ? (LOCAL_MODE ? '准备图片' : '识图中') : '发送'}
           </Button>
         </Tooltip>
       )}

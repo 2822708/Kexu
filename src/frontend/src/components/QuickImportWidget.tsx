@@ -18,12 +18,13 @@ import { aiApi } from '../api'
 import { useApp } from '../store/AppContext'
 import { useSpeechConsent, useSpeechInput } from '../hooks/useSpeechInput'
 import {
-  extractImportFileText,
   isSupportedImage,
   MAX_IMAGE_BYTES,
   MAX_IMPORT_TEXT_CHARS,
+  mergeImportText,
+  prepareImportFile,
 } from '../utils/importFiles'
-import { readChatImage } from '../utils/chatImport'
+import { readChatImage, readChatImageCompact } from '../utils/chatImport'
 import { LOCAL_MODE } from '../local/mode'
 import { localAiApi } from '../local/ai'
 
@@ -39,7 +40,7 @@ export default function QuickImportWidget() {
   const [open, setOpen] = useState(false)
   const [sourceName, setSourceName] = useState('手动输入')
   const [text, setText] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageFiles, setImageFiles] = useState<File[]>([])
   const [busy, setBusy] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [speechConsent, setSpeechConsent] = useSpeechConsent()
@@ -71,8 +72,8 @@ export default function QuickImportWidget() {
     onError: setError,
   })
   const imagePreview = useMemo(
-    () => (imageFile ? URL.createObjectURL(imageFile) : null),
-    [imageFile],
+    () => (imageFiles[0] ? URL.createObjectURL(imageFiles[0]) : null),
+    [imageFiles],
   )
 
   useEffect(
@@ -98,7 +99,7 @@ export default function QuickImportWidget() {
     abort()
     busyRef.current = false
     setBusy(false)
-    setImageFile(null)
+    setImageFiles([])
     if (open)
       setError('课表已切换，已取消旧的读取或识别。现有文字草稿保留，请核对目标课表后再继续。')
   }, [activeScheduleId, abort, open])
@@ -111,7 +112,7 @@ export default function QuickImportWidget() {
     abort()
     setText('')
     setSourceName('手动输入')
-    setImageFile(null)
+    setImageFiles([])
     setVoiceOpen(false)
     setError('')
   }
@@ -125,21 +126,25 @@ export default function QuickImportWidget() {
       if (file.size > MAX_IMAGE_BYTES) {
         setError('截图不能超过 4 MiB')
       } else {
-        setImageFile(file)
+        setImageFiles([file])
         setSourceName(file.name)
         setText('')
       }
       return Upload.LIST_IGNORE
     }
-    setImageFile(null)
+    setImageFiles([])
     busyRef.current = true
     setBusy(true)
-    void extractImportFileText(file)
-      .then((next) => {
-        if (current(scope, operation)) {
-          setText(next)
-          setSourceName(file.name)
-        }
+    void prepareImportFile(file)
+      .then((material) => {
+        if (!current(scope, operation)) return
+        setText(material.text ?? '')
+        setImageFiles(material.images)
+        setSourceName(
+          material.images.length
+            ? `${file.name}（${material.images.length} 页待识别${material.text ? '，其余页面已读取' : ''}）`
+            : file.name,
+        )
       })
       .catch((e: unknown) => {
         if (current(scope, operation))
@@ -155,34 +160,58 @@ export default function QuickImportWidget() {
   }
 
   const startVoice = () => {
-    if (busyRef.current || recording || imageFile) return
+    if (busyRef.current || recording || imageFiles.length) return
     textBeforeRecordingRef.current = text.trim()
     start()
   }
 
-  const transcribeImage = async () => {
-    if (!imageFile || busyRef.current || recording) return
+  const recognizeAttachments = async (
+    files: File[],
+    scope: number | null,
+    operation: number,
+    controller: AbortController,
+  ): Promise<string> => {
+    const parts: string[] = []
+    for (const file of files) {
+      const dataUrl = await readChatImage(file)
+      if (!current(scope, operation)) return ''
+      const result = LOCAL_MODE
+        ? await localAiApi.parseImageText(dataUrl, controller.signal)
+        : await aiApi.parseImageText(dataUrl)
+      if (!current(scope, operation)) return ''
+      const recognized = result.text.trim()
+      if (!recognized) throw new Error(`图片中未识别到文字：${file.name}`)
+      parts.push(files.length > 1 ? `【${file.name}】\n${recognized}` : recognized)
+      if (parts.join('\n\n').length > MAX_IMPORT_TEXT_CHARS) {
+        throw new Error(`识别文字超过 ${MAX_IMPORT_TEXT_CHARS} 字上限，请拆分后重试`)
+      }
+    }
+    return parts.join('\n\n').trim()
+  }
+
+  const transcribeAttachments = async () => {
+    if (!imageFiles.length || busyRef.current || recording) return
     const scope = scopeRef.current
     const operation = ++operationRef.current
-    const selected = imageFile
+    const selected = imageFiles
+    const existingText = text
     const controller = new AbortController()
     imageAbortRef.current = controller
     busyRef.current = true
     setBusy(true)
     setError('')
     try {
-      const dataUrl = await readChatImage(selected)
+      const recognized = await recognizeAttachments(selected, scope, operation, controller)
       if (!current(scope, operation)) return
-      const result = LOCAL_MODE
-        ? await localAiApi.parseImageText(dataUrl, controller.signal)
-        : await aiApi.parseImageText(dataUrl)
-      if (!current(scope, operation)) return
-      setText(result.text)
-      setSourceName(`${selected.name}（截图识别）`)
-      setImageFile(null)
+      const merged = mergeImportText(existingText, recognized)
+      setText(merged)
+      setSourceName(
+        selected.length > 1 ? `扫描件 ${selected.length} 页（AI 识别）` : `${selected[0].name}（AI 识别）`,
+      )
+      setImageFiles([])
     } catch (e) {
       if (current(scope, operation) && !controller.signal.aborted)
-        setError(e instanceof Error ? e.message : '截图识别失败')
+        setError(e instanceof Error ? e.message : '图片识别失败')
     } finally {
       if (imageAbortRef.current === controller) imageAbortRef.current = null
       if (current(scope, operation)) {
@@ -193,14 +222,48 @@ export default function QuickImportWidget() {
   }
 
   const sendToAi = async () => {
-    const material = text.trim()
-    if (!material || busyRef.current || recording) return
+    const existingText = text.trim()
+    if ((!existingText && !imageFiles.length) || busyRef.current || recording) return
     const scope = scopeRef.current
     const operation = ++operationRef.current
+    const selected = imageFiles
+    const controller = new AbortController()
+    imageAbortRef.current = controller
     busyRef.current = true
     setBusy(true)
     setError('')
     try {
+      let material = existingText
+      let attachments: Array<{ dataUrl: string; name: string }> = []
+      if (selected.length) {
+        if (LOCAL_MODE) {
+          // Attach the pages directly so the AI reads the image instead of a lossy OCR pass.
+          attachments = await Promise.all(
+            selected.map(async (file) => ({
+              dataUrl: await readChatImageCompact(file),
+              name: file.name,
+            })),
+          )
+          if (!current(scope, operation)) return
+        } else {
+          const recognized = await recognizeAttachments(selected, scope, operation, controller)
+          if (!current(scope, operation)) return
+          material = mergeImportText(material, recognized)
+          setText(material)
+          setSourceName(
+            selected.length > 1
+              ? `扫描件 ${selected.length} 页（AI 识别）`
+              : `${selected[0].name}（AI 识别）`,
+          )
+          setImageFiles([])
+        }
+      }
+      const prompt = material
+        ? importPrompt(material, sourceName)
+        : importPrompt(
+            `请直接阅读随消息附上的 ${attachments.length} 张图片，识别其中的课程、考试或待办安排。`,
+            sourceName,
+          )
       const conversation = await aiApi.createConversation(scope)
       if (!current(scope, operation)) return
       navigate('/ai', {
@@ -210,15 +273,18 @@ export default function QuickImportWidget() {
             scheduleId: scope,
             conversationPublicId: (conversation as { publicId?: string }).publicId,
             intent: 'IMPORT_EVENTS',
-            prompt: importPrompt(material, sourceName),
+            prompt,
+            images: attachments,
           },
         },
       })
       setOpen(false)
       reset()
     } catch (e) {
-      if (current(scope, operation)) setError(e instanceof Error ? e.message : '无法创建 AI 会话')
+      if (current(scope, operation) && !controller.signal.aborted)
+        setError(e instanceof Error ? e.message : '无法创建 AI 会话')
     } finally {
+      if (imageAbortRef.current === controller) imageAbortRef.current = null
       if (current(scope, operation)) {
         busyRef.current = false
         setBusy(false)
@@ -252,10 +318,14 @@ export default function QuickImportWidget() {
           <Button
             type="primary"
             loading={busy}
-            disabled={!text.trim() || !!imageFile || recording}
+            disabled={(!text.trim() && !imageFiles.length) || recording}
             onClick={sendToAi}
           >
-            转到聊天并检查（尚未发送）
+            {imageFiles.length
+              ? LOCAL_MODE
+                ? '带到聊天，随消息附上图片'
+                : '识别文字并转到聊天'
+              : '转到聊天并检查（尚未发送）'}
           </Button>
         }
         width={560}
@@ -265,7 +335,7 @@ export default function QuickImportWidget() {
       >
         <Space direction="vertical" size={10} style={{ display: 'flex' }}>
           <Typography.Paragraph type="secondary" className="quick-import-context">
-            文件文字先在本机读取并生成草稿；转到聊天后仍需点击发送，AI才会处理。当前课表：
+            文字文件先在本机读取；截图和扫描版 PDF 会随消息交给 AI。转到聊天后仍需点击发送。当前课表：
             {activeSchedule?.name ?? '未选择'}
           </Typography.Paragraph>
           <Dragger
@@ -280,7 +350,7 @@ export default function QuickImportWidget() {
               <div>
                 <div>点击选择，或拖入截图 / 文件</div>
                 <Typography.Text type="secondary" className="quick-import-hint">
-                  TXT、MD、CSV、ICS、HTML、PDF、DOCX；截图需手动开始识别
+                  TXT、MD、CSV、ICS、HTML、PDF、DOCX；截图与扫描件可随消息交给 AI 阅读
                 </Typography.Text>
               </div>
             </div>
@@ -294,13 +364,16 @@ export default function QuickImportWidget() {
                   alt="待识别截图"
                   style={{ maxWidth: 160, maxHeight: 110, objectFit: 'contain' }}
                 />
+                {imageFiles.length > 1 && (
+                  <Typography.Text type="secondary">共 {imageFiles.length} 页</Typography.Text>
+                )}
                 <Button
                   icon={<FileImageOutlined />}
-                  onClick={transcribeImage}
+                  onClick={transcribeAttachments}
                   loading={busy}
                   disabled={recording}
                 >
-                  将截图发送给 AI 识别文字
+                  先识别文字（可编辑）
                 </Button>
               </div>
               <Alert
@@ -308,8 +381,8 @@ export default function QuickImportWidget() {
                 showIcon
                 message={
                   LOCAL_MODE
-                    ? '仅点击识别时，选中的截图会直接发给你在设置中选择且已允许图片的AI服务；快照云不转发图片。'
-                    : '识别时截图会经本服务器转发到已配置的 DeepSeek 服务；应用不会保存图片。'
+                    ? `转到聊天时会附上${imageFiles.length > 1 ? `这 ${imageFiles.length} 页` : '选中的图片'}，由你在设置中选择且已允许图片的 AI 直接阅读；点击发送前不会上传，快照云不转发图片。`
+                    : `提交时${imageFiles.length > 1 ? `这 ${imageFiles.length} 页` : '选中的图片'}会经本服务器转发到已配置的 AI 服务识别文字；应用不会保存图片。`
                 }
               />
             </Space>
@@ -359,7 +432,7 @@ export default function QuickImportWidget() {
                       <Button
                         icon={<AudioOutlined />}
                         onClick={startVoice}
-                        disabled={busy || !!imageFile || !speechConsent || !supported}
+                        disabled={busy || imageFiles.length > 0 || !speechConsent || !supported}
                       >
                         开始语音输入
                       </Button>

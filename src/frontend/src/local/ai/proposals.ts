@@ -21,8 +21,13 @@ interface Guard {
 
 const KINDS: Record<
   AiActionType,
-  { key: string; collection: 'courses' | 'todos' | 'exams' | 'recurringRules'; scoped: boolean }
+  {
+    key: string
+    collection: 'courses' | 'todos' | 'exams' | 'recurringRules' | 'schedules'
+    scoped: boolean
+  }
 > = {
+  CREATE_SCHEDULE: { key: 'schedules', collection: 'schedules', scoped: false },
   CREATE_COURSE: { key: 'courses', collection: 'courses', scoped: true },
   UPDATE_COURSE: { key: 'courses', collection: 'courses', scoped: true },
   DELETE_COURSE: { key: 'courseIds', collection: 'courses', scoped: true },
@@ -145,6 +150,16 @@ function examPayload(row: Dict): Dict {
     endTime,
   }
 }
+function schedulePayload(row: Dict): Dict {
+  if (!validLocalDate(row.periodStartDate) || !validLocalDate(row.periodEndDate))
+    throw new Error('课表学期日期无效，必须明确到具体日期')
+  if (row.periodStartDate > row.periodEndDate) throw new Error('学期结束日期不能早于开始日期')
+  return {
+    name: text(row.name, '课表名称', 100),
+    periodStartDate: row.periodStartDate,
+    periodEndDate: row.periodEndDate,
+  }
+}
 function recurringPayload(row: Dict): Dict {
   if (!['DAILY', 'WEEKLY', 'MONTHLY'].includes(String(row.frequency)) || row.script !== null)
     throw new Error('AI仅可提议内置循环规则；CUSTOM脚本一律不执行')
@@ -216,32 +231,36 @@ export function normalizeProposals(
       else {
         const row = object(record, '记录')
         const fields =
-          kind.collection === 'courses'
-            ? ['name', 'location', 'teacher', 'dayOfWeek', 'startPeriod', 'endPeriod', 'weeks']
-            : kind.collection === 'todos'
-              ? ['title', 'ddl']
-              : kind.collection === 'exams'
-                ? ['name', 'location', 'examDate', 'startTime', 'endTime']
-                : [
-                    'title',
-                    'frequency',
-                    'dayOfWeek',
-                    'dayOfMonth',
-                    'triggerTime',
-                    'script',
-                    'ddlOffsetMinutes',
-                    'enabled',
-                    'chainAfterComplete',
-                  ]
+          kind.collection === 'schedules'
+            ? ['name', 'periodStartDate', 'periodEndDate']
+            : kind.collection === 'courses'
+              ? ['name', 'location', 'teacher', 'dayOfWeek', 'startPeriod', 'endPeriod', 'weeks']
+              : kind.collection === 'todos'
+                ? ['title', 'ddl']
+                : kind.collection === 'exams'
+                  ? ['name', 'location', 'examDate', 'startTime', 'endTime']
+                  : [
+                      'title',
+                      'frequency',
+                      'dayOfWeek',
+                      'dayOfMonth',
+                      'triggerTime',
+                      'script',
+                      'ddlOffsetMinutes',
+                      'enabled',
+                      'chainAfterComplete',
+                    ]
         exact(row, creation ? fields : ['id', ...fields], '记录')
         const body =
-          kind.collection === 'courses'
-            ? coursePayload(row, state, scheduleId)
-            : kind.collection === 'todos'
-              ? { title: text(row.title, '待办标题', 100), ddl: dateTime(row.ddl) }
-              : kind.collection === 'exams'
-                ? examPayload(row)
-                : recurringPayload(row)
+          kind.collection === 'schedules'
+            ? schedulePayload(row)
+            : kind.collection === 'courses'
+              ? coursePayload(row, state, scheduleId)
+              : kind.collection === 'todos'
+                ? { title: text(row.title, '待办标题', 100), ddl: dateTime(row.ddl) }
+                : kind.collection === 'exams'
+                  ? examPayload(row)
+                  : recurringPayload(row)
         payload = creation
           ? body
           : { id: integer(row.id, 1, Number.MAX_SAFE_INTEGER, '记录ID'), ...body }

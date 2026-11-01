@@ -728,6 +728,106 @@ test('AI-disabled and vision-disabled paths do not call the model or block local
   assert.equal(calls, 0)
 })
 
+test('images are rejected before any request when vision is not enabled', async () => {
+  let calls = 0
+  const x = setup({
+    fetcher: async () => {
+      calls++
+      throw new Error('unexpected fetch')
+    },
+  })
+  configure(x, 'http://127.0.0.1:1/v1')
+  const conv = await x.localAiApi.createConversation(null)
+  await assert.rejects(
+    x.localAiStream(conv.id, '看图', null, {}, undefined, undefined, [
+      'data:image/png;base64,AAAA',
+    ]),
+    /支持图片/,
+  )
+  assert.equal(calls, 0)
+})
+
+test('screenshots and scanned PDF pages reach the planner as images in one request', async () =>
+  withMock({}, async (mock) => {
+    const x = setup()
+    const f = await fixture(x)
+    x.saveAiSettings({
+      endpoint: mock.endpoint,
+      model: 'mock-model',
+      apiKey: syntheticKey,
+      enabled: true,
+      allowContext: true,
+      visionEnabled: true,
+    })
+    const conv = await x.localAiApi.createConversation(f.schedule.id)
+    const image = 'data:image/jpeg;base64,AAAA'
+    await x.localAiStream(conv.id, '请看图片', f.schedule.id, {}, undefined, undefined, [image])
+    const sent = mock.requests.at(-1).messages.at(-1)
+    assert.equal(Array.isArray(sent.content), true)
+    assert.deepEqual(sent.content[0], { type: 'text', text: '请看图片' })
+    assert.deepEqual(sent.content[1], { type: 'image_url', image_url: { url: image } })
+    const messages = await x.localAiApi.listMessages(conv.id)
+    assert.match(messages.find((message) => message.role === 'user').text, /附图 1 张/)
+  }))
+
+test('AI can propose a new schedule and only writes it after confirmation', async () => {
+  const output = JSON.stringify({
+    reply: '已准备新建课表，请确认。',
+    actions: [
+      {
+        type: 'CREATE_SCHEDULE',
+        data: {
+          schedules: [
+            { name: '大二上', periodStartDate: '2026-09-01', periodEndDate: '2027-01-31' },
+          ],
+        },
+      },
+    ],
+  })
+  await withMock({ output }, async (mock) => {
+    const x = setup()
+    configure(x, mock.endpoint)
+    const conv = await x.localAiApi.createConversation(null)
+    const reply = await x.localAiStream(
+      conv.id,
+      '新建一个叫大二上的课表，2026-09-01 到 2027-01-31',
+      null,
+      {},
+    )
+    assert.equal(reply.actions.length, 1)
+    assert.equal(reply.actions[0].type, 'CREATE_SCHEDULE')
+    assert.equal(
+      (await x.localScheduleApi.list()).some((schedule) => schedule.name === '大二上'),
+      false,
+    )
+    await x.localAiApi.execute(conv.id, reply.actions[0].actionId)
+    const schedules = await x.localScheduleApi.list()
+    assert.equal(schedules.some((schedule) => schedule.name === '大二上'), true)
+  })
+})
+
+test('a schedule proposal without explicit semester dates cannot become a card', async () => {
+  const output = JSON.stringify({
+    reply: '日期不完整，请补充。',
+    actions: [
+      {
+        type: 'CREATE_SCHEDULE',
+        data: { schedules: [{ name: '新课表', periodStartDate: '2026-09-01', periodEndDate: '待定' }] },
+      },
+    ],
+  })
+  await withMock({ output }, async (mock) => {
+    const x = setup()
+    configure(x, mock.endpoint)
+    const conv = await x.localAiApi.createConversation(null)
+    await assert.rejects(
+      x.localAiStream(conv.id, '新建课表', null, {}),
+      /课表学期日期无效/,
+    )
+    assert.equal((await x.localScheduleApi.list()).length, 0)
+  })
+})
+
 test('a malicious provider echoing the request key cannot persist or display it', async () =>
   withMock(
     { output: JSON.stringify({ reply: `意外泄露${syntheticKey}`, actions: [] }) },

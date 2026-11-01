@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   Checkbox,
-  Empty,
   Input,
   List,
   Space,
@@ -14,7 +13,12 @@ import {
   Typography,
   message,
 } from 'antd'
-import { DeleteOutlined, EditOutlined, MenuOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  HistoryOutlined,
+  PlusOutlined,
+} from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AiActionCard from '../components/AiActionCard'
 import AiChatComposer from '../components/AiChatComposer'
@@ -22,6 +26,7 @@ import { aiApi } from '../api'
 import { useApp } from '../store/AppContext'
 import type { AiConversation, AiMessage } from '../types'
 import { formatWeekInfo } from '../utils/schedule'
+import { isImageDataUrl, MAX_CHAT_IMAGES } from '../utils/chatImport'
 import { subscribeAiSettings } from '../local/ai/settings'
 import { localAiStream } from '../local/ai'
 import { readLocalState, subscribeLocalChanges } from '../local/db'
@@ -59,6 +64,7 @@ export default function AiChatPage() {
     exams,
     todos,
     recurringTodos,
+    refreshSchedules,
     refreshCourses,
     refreshExams,
     refreshTodos,
@@ -76,6 +82,9 @@ export default function AiChatPage() {
   const [convPanelOpen, setConvPanelOpen] = useState(false)
   const [messages, setMessages] = useState<AiMessage[]>([])
   const [input, setInput] = useState('')
+  const [pendingImages, setPendingImages] = useState<Array<{ dataUrl: string; name: string }>>([])
+  const [composerEpoch, setComposerEpoch] = useState(0)
+  const clearPendingImages = useCallback(() => setPendingImages([]), [])
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [executingId, setExecutingId] = useState<number | null>(null)
   const [listMode, setListMode] = useState<'normal' | 'edit' | 'delete'>('normal')
@@ -93,15 +102,25 @@ export default function AiChatPage() {
   const conversationCountRef = useRef(30)
   const selectedPublicIdRef = useRef<string | null>(null)
   const importIntentRef = useRef<{ conversationId: number; kind: 'IMPORT_EVENTS' } | null>(null)
+  const localDatasetRef = useRef<string | null>(null)
+  const activeScheduleRef = useRef(activeScheduleId)
+  const composerScheduleRef = useRef(activeScheduleId)
+  activeScheduleRef.current = activeScheduleId
 
   const stream = currentId !== null ? streams[currentId] : undefined
   const sending = stream !== undefined || creatingConversation
 
   const changeConversation = useCallback(
     (id: number | null, abort = true, publicId: string | null = null) => {
-      if (id !== currentIdRef.current) {
-        if (importIntentRef.current) setInput('')
+      const identityChanged = id !== null && publicId !== null &&
+        selectedPublicIdRef.current !== null && publicId !== selectedPublicIdRef.current
+      if (id !== currentIdRef.current || identityChanged) {
+        if (abort) {
+          setInput('')
+          setComposerEpoch((value) => value + 1)
+        }
         importIntentRef.current = null
+        setPendingImages([])
         if (abort) activeAbortRef.current?.abort()
         messageRequestRef.current++
         messagesRef.current = []
@@ -126,7 +145,16 @@ export default function AiChatPage() {
     }
   }, [])
 
-  useEffect(() => () => activeAbortRef.current?.abort(), [activeScheduleId])
+  useEffect(() => {
+    if (composerScheduleRef.current !== activeScheduleId) {
+      composerScheduleRef.current = activeScheduleId
+      setInput('')
+      setPendingImages([])
+      importIntentRef.current = null
+      setComposerEpoch((value) => value + 1)
+    }
+    return () => activeAbortRef.current?.abort()
+  }, [activeScheduleId])
 
   // 工作空间保护：每个对话绑定一个课表。当前课表与对话所属课表不一致时，
   // 禁止发送消息 / 执行或取消提案，避免串到其它课表的数据。
@@ -254,6 +282,17 @@ export default function AiChatPage() {
       try {
         const state = await readLocalState()
         if (disposed || request !== version) return
+        const dataset = `${state.datasetId}:${state.dataGeneration}`
+        const replaced = localDatasetRef.current !== null && localDatasetRef.current !== dataset
+        localDatasetRef.current = dataset
+        if (replaced) {
+          activeAbortRef.current?.abort()
+          setStreams({})
+          setInput('')
+          setPendingImages([])
+          importIntentRef.current = null
+          setComposerEpoch((value) => value + 1)
+        }
         const id = currentIdRef.current
         const view = localChatView(
           state,
@@ -271,7 +310,7 @@ export default function AiChatPage() {
           return
         }
         initial = false
-        if (view.selectionMissing) {
+        if (view.selectionMissing || replaced) {
           activeAbortRef.current?.abort()
           setStreams({})
           setInput('')
@@ -353,10 +392,16 @@ export default function AiChatPage() {
         conversationPublicId?: string
         prompt: string
         intent?: 'IMPORT_EVENTS'
+        images?: Array<{ dataUrl: string; name: string }>
       }
     } | null
     const draft = state?.quickImport
     if (!draft) return
+    const images = Array.isArray(draft.images)
+      ? draft.images
+          .filter((item) => item && typeof item.name === 'string' && isImageDataUrl(item.dataUrl))
+          .slice(0, MAX_CHAT_IMAGES)
+      : []
     if (draft.scheduleId !== activeScheduleId) {
       navigate(location.pathname, { replace: true, state: null })
       message.warning('导入材料绑定的课表已变化，请切回对应课表后重试。')
@@ -386,6 +431,7 @@ export default function AiChatPage() {
         ),
       )
       setInput(draft.prompt)
+      setPendingImages(images)
       importIntentRef.current =
         draft.intent === 'IMPORT_EVENTS'
           ? { conversationId: draft.conversationId, kind: 'IMPORT_EVENTS' }
@@ -440,13 +486,33 @@ export default function AiChatPage() {
   }, [currentId, loadingMessages])
 
   const newConversation = async () => {
+    const previousId = currentIdRef.current
+    activeAbortRef.current?.abort()
+    if (previousId !== null) clearStream(previousId)
+    const controller = new AbortController()
+    const requestScheduleId = activeScheduleId
+    activeAbortRef.current = controller
+    setCreatingConversation(true)
+    setInput('')
+    setPendingImages([])
+    importIntentRef.current = null
+    setComposerEpoch((value) => value + 1)
     try {
       const conv = await aiApi.createConversation(activeScheduleId)
+      if (controller.signal.aborted || activeScheduleRef.current !== requestScheduleId) return
       await loadConversations()
-      changeConversation(conv.id, true, conversationIdentity(conv))
+      if (controller.signal.aborted || activeScheduleRef.current !== requestScheduleId) return
+      // The explicit new-dialogue action already invalidated the previous draft.
+      changeConversation(conv.id, false, conversationIdentity(conv))
       setConvPanelOpen(false)
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '创建对话失败')
+      if (!controller.signal.aborted)
+        message.error(e instanceof Error ? e.message : '创建对话失败')
+    } finally {
+      if (activeAbortRef.current === controller) {
+        activeAbortRef.current = null
+        setCreatingConversation(false)
+      }
     }
   }
 
@@ -511,72 +577,103 @@ export default function AiChatPage() {
     setDeleteSelected([])
   }
 
-  const send = async (draft: string = input) => {
+  const send = async (draft: string = input, images: string[] = []): Promise<boolean> => {
     const content = draft.trim()
-    if (!content || sending || activeAbortRef.current) return
+    if ((!content && !images.length) || sending || activeAbortRef.current) return false
     if (workspaceMismatch) {
       message.warning('该对话属于另一个课表，请切换到对应课表后再继续，或新建对话')
-      return
+      return false
     }
 
     let convId = currentId
     const controller = new AbortController()
+    const requestScheduleId = activeScheduleId
     activeAbortRef.current = controller
-    setInput('')
 
     try {
       if (convId === null) {
         setCreatingConversation(true)
         const conv = await aiApi.createConversation(activeScheduleId)
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted || activeScheduleRef.current !== requestScheduleId) {
+          if (activeAbortRef.current === controller) {
+            setCreatingConversation(false)
+            activeAbortRef.current = null
+          }
+          return false
+        }
         convId = conv.id
         changeConversation(conv.id, false, conversationIdentity(conv))
         setConvPanelOpen(false)
         await loadConversations()
       }
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '创建对话失败')
-      setInput(content)
-      if (activeAbortRef.current === controller) activeAbortRef.current = null
-      return
-    } finally {
-      setCreatingConversation(false)
-      if (controller.signal.aborted && activeAbortRef.current === controller)
+      if (!controller.signal.aborted) message.error(e instanceof Error ? e.message : '创建对话失败')
+      if (activeAbortRef.current === controller) {
+        setCreatingConversation(false)
         activeAbortRef.current = null
+      }
+      return false
+    } finally {
+      if (activeAbortRef.current === controller) {
+        setCreatingConversation(false)
+        if (controller.signal.aborted) activeAbortRef.current = null
+      }
     }
 
-    if (controller.signal.aborted) return
+    if (controller.signal.aborted || activeScheduleRef.current !== requestScheduleId) {
+      if (activeAbortRef.current === controller) activeAbortRef.current = null
+      return false
+    }
     const cid = convId
     setStreams((prev) => ({
       ...prev,
-      [cid]: { phase: 'thinking', text: '', userText: content },
+      [cid]: {
+        phase: 'thinking',
+        text: '',
+        userText: images.length ? `${content}\n\n〔附图 ${images.length} 张〕` : content,
+      },
     }))
 
     try {
-      const sendStream = LOCAL_MODE ? localAiStream : aiApi.sendMessageStream
-      await sendStream(
-        cid,
-        content,
-        activeScheduleId,
-        {
-          onThinking: () => patchStream(cid, { phase: 'thinking' }),
-          onText: (delta) =>
-            setStreams((prev) => {
-              const cur = prev[cid]
-              if (!cur) return prev
-              return { ...prev, [cid]: { ...cur, phase: 'text', text: cur.text + delta } }
-            }),
-          onPlanning: () => patchStream(cid, { phase: 'planning' }),
-        },
-        controller.signal,
+      const handlers = {
+        onThinking: () => patchStream(cid, { phase: 'thinking' }),
+        onText: (delta: string) =>
+          setStreams((prev) => {
+            const cur = prev[cid]
+            if (!cur) return prev
+            return { ...prev, [cid]: { ...cur, phase: 'text', text: cur.text + delta } }
+          }),
+        onPlanning: () => patchStream(cid, { phase: 'planning' }),
+      }
+      const intent =
         LOCAL_MODE && importIntentRef.current?.conversationId === cid
           ? importIntentRef.current.kind
-          : undefined,
-      )
+          : undefined
+      if (LOCAL_MODE)
+        await localAiStream(
+          cid,
+          content,
+          activeScheduleId,
+          handlers,
+          controller.signal,
+          intent,
+          images,
+        )
+      else await aiApi.sendMessageStream(cid, content, activeScheduleId, handlers, controller.signal)
+      if (controller.signal.aborted) {
+        clearStream(cid)
+        return false
+      }
       if (importIntentRef.current?.conversationId === cid) importIntentRef.current = null
       clearStream(cid)
-      await refreshMessages(cid)
-      await loadConversations()
+      try {
+        await refreshMessages(cid)
+        await loadConversations()
+      } catch (e) {
+        if (currentIdRef.current === cid)
+          message.warning(`回复已保存，但刷新失败：${e instanceof Error ? e.message : '请刷新后查看'}`)
+      }
+      return true
     } catch (e) {
       clearStream(cid)
       if (!controller.signal.aborted) message.error(e instanceof Error ? e.message : '发送失败')
@@ -585,8 +682,7 @@ export default function AiChatPage() {
       } catch {
         // 忽略
       }
-      if (!controller.signal.aborted && currentIdRef.current === cid)
-        setInput((draft) => draft || content)
+      return false
     } finally {
       if (activeAbortRef.current === controller) activeAbortRef.current = null
     }
@@ -602,11 +698,20 @@ export default function AiChatPage() {
     }
     setExecutingId(actionId)
     try {
+      const actionType = messagesRef.current
+        .flatMap((item) => item.actions ?? [])
+        .find((item) => item.actionId === actionId)?.type
       await aiApi.execute(currentId, actionId)
-      message.success('操作已执行')
+      if (actionType === 'CREATE_SCHEDULE') message.success('课表已创建，可到课表页切换')
       await refreshMessages(currentId, true)
       try {
-        await Promise.all([refreshCourses(), refreshExams(), refreshTodos(), refreshRecurring()])
+        await Promise.all([
+          refreshSchedules(),
+          refreshCourses(),
+          refreshExams(),
+          refreshTodos(),
+          refreshRecurring(),
+        ])
       } catch (e) {
         message.warning(
           `操作已执行，但刷新部分数据失败：${e instanceof Error ? e.message : '请稍后重试'}`,
@@ -811,21 +916,27 @@ export default function AiChatPage() {
             <Button
               className="conv-toggle-btn"
               size="small"
-              icon={<MenuOutlined />}
+              icon={<HistoryOutlined />}
+              aria-label="打开对话记录"
+              aria-expanded={convPanelOpen}
               onClick={() => setConvPanelOpen(true)}
             >
               对话
             </Button>
-            <span>助手</span>
+            <span className="assistant-page-title">助手</span>
             {convScheduleName ? (
-              <Tag color={workspaceMismatch ? 'red' : 'blue'}>
+              <Tag className="assistant-schedule-tag" color={workspaceMismatch ? 'red' : 'blue'}>
                 {workspaceMismatch ? '课表不一致 · ' : ''}
                 {convScheduleName}
               </Tag>
             ) : activeSchedule ? (
-              <Tag color="blue">{activeSchedule.name}</Tag>
+              <Tag className="assistant-schedule-tag" color="blue">
+                {activeSchedule.name}
+              </Tag>
             ) : (
-              <Tag color="orange">未选择课表</Tag>
+              <Tag className="assistant-schedule-tag" color="orange">
+                未选择课表
+              </Tag>
             )}
           </Space>
         }
@@ -833,6 +944,7 @@ export default function AiChatPage() {
           <Button
             className="assistant-new-conversation"
             icon={<PlusOutlined />}
+            aria-label="新建对话"
             onClick={newConversation}
           >
             新对话
@@ -842,37 +954,33 @@ export default function AiChatPage() {
         <div className="assistant-context" aria-label="当前助手上下文">
           <div>
             <Typography.Text strong>{activeSchedule?.name ?? '未选择课表'}</Typography.Text>
-            <Typography.Text type="secondary">
+            <Typography.Text type="secondary" className="assistant-context-week">
               {weekInfo ?? '选择课表后可按当前安排提问'}
             </Typography.Text>
           </div>
-          <Tag color={pendingCount ? 'gold' : 'default'}>
+          <Tag className="assistant-pending-tag" color={pendingCount ? 'gold' : 'default'}>
             {pendingCount ? `已加载消息中 ${pendingCount} 项待确认` : '修改前逐项确认'}
           </Tag>
         </div>
         {enabled === false && (
-          <Alert
-            type="warning"
-            showIcon
-            message="连接 AI 后即可开始对话"
-            description={
-              LOCAL_MODE
-                ? '请在设置中连接你选择的 AI 服务。消息、选定课表与本机待办的必要上下文仅在主动发送时直达该服务，课表、考试和待办可离线使用。'
-                : '请联系服务管理员启用 AI。课表、考试和待办仍可正常使用。'
-            }
-            action={
-              LOCAL_MODE ? (
-                <Button onClick={() => navigate('/settings#ai')}>配置 AI 连接</Button>
-              ) : undefined
-            }
-            style={{ marginBottom: 12, flexShrink: 0 }}
-          />
-        )}
-
-        {LOCAL_MODE && enabled === true && (
-          <Typography.Paragraph type="secondary" className="assistant-privacy-note">
-            会话保存在本机；点击发送时才会把消息、当前课表与待办的必要上下文发给你设置的AI服务。每张修改卡仍需单独确认。
-          </Typography.Paragraph>
+          <section className="assistant-ai-setup" aria-label="AI 连接提示">
+            <div className="assistant-setup-row">
+              <span>连接 AI 后即可开始对话</span>
+              {LOCAL_MODE && (
+                <Button type="link" onClick={() => navigate('/settings#ai')}>
+                  去设置
+                </Button>
+              )}
+            </div>
+            <details className="assistant-setup-details">
+              <summary>数据如何使用</summary>
+              <p>
+                {LOCAL_MODE
+                  ? '请在设置中连接你选择的 AI 服务。消息、选定课表与本机待办的必要上下文仅在主动发送时直达该服务，课表、考试和待办可离线使用。'
+                  : '请联系服务管理员启用 AI。课表、考试和待办仍可正常使用。'}
+              </p>
+            </details>
+          </section>
         )}
 
         {workspaceMismatch && (
@@ -911,35 +1019,27 @@ export default function AiChatPage() {
                 <Spin />
               </div>
             ) : messages.length === 0 && !stream ? (
-              <Empty
-                className="assistant-empty"
-                description={
-                  <div>
-                    <Typography.Title level={3}>把安排说清楚，确认后再保存</Typography.Title>
-                    <Typography.Paragraph type="secondary">
-                      描述课程调整、考试或待办，也可以添加课表文件与截图。
-                    </Typography.Paragraph>
-                    <div className="assistant-examples">
-                      {EXAMPLES.map((ex, i) => (
-                        <Button
-                          key={i}
-                          className="assistant-example"
-                          disabled={workspaceMismatch || sending}
-                          onClick={() => setInput(ex)}
-                        >
-                          {ex}
-                        </Button>
-                      ))}
-                    </div>
-                    <Typography.Text
-                      type="secondary"
-                      style={{ display: 'block', fontSize: 11, marginTop: 4 }}
+              <section className="assistant-empty" aria-label="开始对话">
+                <Typography.Title level={3}>记录或调整安排</Typography.Title>
+                <Typography.Paragraph type="secondary">
+                  描述课程调整、考试或待办，也可以添加课表文件与截图。
+                </Typography.Paragraph>
+                <div className="assistant-examples">
+                  {[EXAMPLES[0], EXAMPLES[3]].map((ex, i) => (
+                    <Button
+                      key={i}
+                      className="assistant-example"
+                      disabled={workspaceMismatch || sending}
+                      onClick={() => setInput(ex)}
                     >
-                      点击示例只会填入输入框；请按实际安排修改后发送。
-                    </Typography.Text>
-                  </div>
-                }
-              />
+                      {ex}
+                    </Button>
+                  ))}
+                </div>
+                <Typography.Text type="secondary" className="assistant-empty-hint">
+                  点击示例只填入输入框；发送时才会交给 AI 处理。
+                </Typography.Text>
+              </section>
             ) : (
               messages.map((msg) => (
                 <div
@@ -1021,7 +1121,9 @@ export default function AiChatPage() {
             sending={sending}
             disabled={workspaceMismatch}
             sendDisabled={enabled !== true}
-            scopeKey={`${currentId ?? 'new'}:${activeScheduleId ?? 'none'}`}
+            scopeKey={`${composerEpoch}:${activeScheduleId ?? 'none'}`}
+            initialImages={pendingImages}
+            onInitialImagesApplied={clearPendingImages}
           />
         </div>
       </Card>

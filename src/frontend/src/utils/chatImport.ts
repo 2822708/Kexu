@@ -1,5 +1,15 @@
 export const MAX_CHAT_CHARS = 20000
 export const MAX_CHAT_IMAGES = 4
+export const MAX_IMAGE_DATA_URL_CHARS = 6 * 1024 * 1024
+
+/** Validate an AI image payload without decoding it; the provider still validates the bytes. */
+export function isImageDataUrl(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= MAX_IMAGE_DATA_URL_CHARS &&
+    /^data:image\/(png|jpe?g|webp|gif);base64,/.test(value)
+  )
+}
 
 /** Keep the existing draft intact; reject a whole addition instead of truncating it. */
 export function appendChatText(draft: string, addition: string): string {
@@ -33,4 +43,38 @@ export function readChatImage(file: File): Promise<string> {
       : reject(new Error(`图片编码失败：${file.name}`))
     reader.readAsDataURL(image)
   })
+}
+
+function decodeImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('图片解码失败'))
+    image.src = dataUrl
+  })
+}
+
+/**
+ * Downscale large photos/screenshots before they enter navigation state or an AI request.
+ * GIFs keep their original bytes so animation still works elsewhere.
+ */
+export async function readChatImageCompact(file: File): Promise<string> {
+  const dataUrl = await readChatImage(file)
+  if (file.size <= 1200 * 1024 || file.type === 'image/gif') return dataUrl
+  try {
+    const image = await decodeImage(dataUrl)
+    const longest = Math.max(image.naturalWidth, image.naturalHeight)
+    if (!longest) return dataUrl
+    const scale = Math.min(1, 1600 / longest)
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+    const context = canvas.getContext('2d')
+    if (!context) return dataUrl
+    context.drawImage(image, 0, 0, canvas.width, canvas.height)
+    const compact = canvas.toDataURL('image/jpeg', 0.85)
+    return compact.length < dataUrl.length ? compact : dataUrl
+  } catch {
+    return dataUrl
+  }
 }

@@ -31,7 +31,8 @@
     "test:local": "node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs scripts/test-ai-providers.mjs scripts/test-daily-core.mjs scripts/test-daily-review.mjs",
     "test:daily": "node --test scripts/test-daily-core.mjs scripts/test-daily-review.mjs",
     "test:shell": "node --test scripts/test-native-export.mjs",
-    "test:timetable-layout": "node --test scripts/test-timetable-layout.mjs"
+    "test:timetable-layout": "node --test scripts/test-timetable-layout.mjs",
+    "test:interaction": "node --test scripts/test-chat-drafts.mjs scripts/test-import-materials.mjs scripts/test-task-filters.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.1",
