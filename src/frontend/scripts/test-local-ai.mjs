@@ -537,6 +537,15 @@ test('simultaneous and repeated confirmation execute one local transaction only'
       assert.equal((await x.localAiApi.listMessages(conv.id))[1].actions[0].status, 'EXECUTED')
     },
   ))
+test('image rejection explains model capability instead of a generic failure', () => {
+  const x = setup()
+  assert.equal(
+    x.describeLocalAiFailure(new Error('AI请求失败：HTTP 400（请检查连接或更换模型）'), false, true),
+    '当前模型不接受图片输入，请更换支持图片的模型，或删除图片后重试。',
+  )
+  assert.match(x.describeLocalAiFailure(new Error('AI请求失败：HTTP 400'), false, false), /HTTP 400/)
+  assert.match(x.describeLocalAiFailure(new Error('boom'), true, true), /已取消/)
+})
 test('unbound conversation can be bound once to an existing schedule', async () => {
   const x = setup(),
     f = await fixture(x)
