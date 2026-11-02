@@ -24,7 +24,8 @@ const findConversation = (state: LocalState, id: number) => {
   return conv
 }
 
-const IMAGE_REJECTED = '当前模型不接受图片输入，请更换支持图片的模型，或删除图片后重试。'
+const IMAGE_REJECTED =
+  '图片请求被服务端拒绝（HTTP 400/415/422）。请检查图片格式与大小（JPEG、PNG、GIF、WebP），或更换支持图片的模型后重试。'
 
 /** 把失败原因转成可执行文案；只使用已净化的错误信息，不写入上游响应体。 */
 export function describeLocalAiFailure(error: unknown, aborted: boolean, withImages: boolean): string {
