@@ -1,9 +1,19 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { mobilePwa } from './src/pwa/buildPlugin.mjs'
+import { assertBuildMode } from './src/app-mode'
 
-export default defineConfig(({ mode }) => {
-  const target = loadEnv(mode, '.', 'VITE_').VITE_DEV_API_TARGET || 'http://localhost:8080'
+export default defineConfig(({ mode, command }) => {
+  const env = loadEnv(mode, '.', 'VITE_')
+  if (command === 'build') {
+    const problem = assertBuildMode({
+      viteMode: mode,
+      localData: env.VITE_LOCAL_DATA,
+      apiBase: env.VITE_API_BASE,
+    })
+    if (problem) throw new Error(problem)
+  }
+  const target = env.VITE_DEV_API_TARGET || 'http://localhost:8080'
   const proxy = { '/api': { target, changeOrigin: true } }
   return {
     plugins: [react(), ...(mode === 'mobile' ? [mobilePwa()] : [])],

@@ -106,7 +106,7 @@
   color: var(--text-secondary);
 }
 .day-agenda-action.ant-btn:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 @media (max-width: 767px) {

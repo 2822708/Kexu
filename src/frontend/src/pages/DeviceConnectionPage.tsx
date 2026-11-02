@@ -33,7 +33,12 @@ export default function DeviceConnectionPage() {
               </Spin>
             )}
             {connectionError && (
-              <Alert type="warning" message="暂时无法连接" description={connectionError} showIcon />
+              <Alert
+                type="warning"
+                message="暂时无法连接"
+                description={<span style={{ whiteSpace: 'pre-line' }}>{connectionError}</span>}
+                showIcon
+              />
             )}
             {ready && (
               <Button

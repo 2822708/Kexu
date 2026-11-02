@@ -88,7 +88,7 @@
 }
 .daily-list-tabs button[aria-selected='true'] {
   border-bottom-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 650;
 }
 .daily-list-tabs button:hover {
@@ -315,7 +315,7 @@
 }
 .daily-tool-row button[aria-expanded='true'] {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-ink);
   border-color: var(--border-light);
 }
 .daily-tool-row button:disabled {

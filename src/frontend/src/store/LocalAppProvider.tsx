@@ -16,6 +16,15 @@ import type { LocalState } from '../local/types'
 import { startAutoBackup } from '../backup/coordinator'
 
 const SELECTION_KEY = 'kexu.local.activeSchedulePublicId'
+
+/** 启动耗时打点；性能测量失败绝不能影响启动。 */
+function mark(name: string) {
+  try {
+    performance.mark(name)
+  } catch {
+    /* ignore */
+  }
+}
 const collections = [
   'schedules',
   'courses',
@@ -86,10 +95,15 @@ export default function LocalAppProvider({
   const reconnect = useCallback(async () => {
     setLoading(true)
     setConnectionError(null)
+    mark('kexu:init:start')
     try {
       await initializeLocalStore()
+      mark('kexu:init:done')
+      // 维护在首屏前完成：首屏即最终状态，避免列表在打开瞬间跳动。
       await runLocalMaintenance()
+      mark('kexu:maintenance:done')
       await load()
+      mark('kexu:first-load:done')
     } catch (error) {
       setConnectionError(
         error instanceof Error ? error.message : '本地数据无法打开，请检查浏览器存储权限',

@@ -8,6 +8,7 @@ export const LOCAL_DATABASE_NAME = legacyNames.localDatabase
 const STORE_NAME = 'main'
 const STATE_KEY = 'state'
 let connection: Promise<IDBDatabase> | null = null
+let initialization: Promise<void> | null = null
 const subscribers = new Set<() => void>()
 let channel: BroadcastChannel | null = null
 
@@ -63,6 +64,7 @@ function openDatabase(): Promise<IDBDatabase> {
       db.onversionchange = () => {
         db.close()
         connection = null
+        initialization = null
       }
       resolve(db)
     }
@@ -74,7 +76,7 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 /** Initializes in one read/write transaction so simultaneous first tabs create one dataset. */
-export async function initializeLocalStore(): Promise<LocalState> {
+async function runInitialization(): Promise<LocalState> {
   const db = await openDatabase()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
@@ -107,6 +109,28 @@ export async function initializeLocalStore(): Promise<LocalState> {
       /* abort handler carries the transaction error */
     }
   })
+}
+
+/**
+ * 初始化每个页面只做一次。
+ *
+ * 旧实现里 readLocalState / mutateLocalState 每次都会调用初始化，
+ * 每次都要完整读取、校验并 structuredClone 整份状态；启动链路因此重复 3~5 次。
+ *
+ * 返回 void：初始化只负责“就绪”，需要当前数据请调用 readLocalState()。
+ * 不把内部快照暴露给调用方，避免共享引用被误改污染缓存。
+ */
+export function initializeLocalStore(): Promise<void> {
+  if (!initialization) {
+    initialization = runInitialization().then(
+      () => undefined,
+      (error) => {
+        initialization = null
+        throw error
+      },
+    )
+  }
+  return initialization
 }
 
 export async function readLocalState(): Promise<LocalState> {
@@ -202,6 +226,7 @@ export async function replaceLocalState(
 export async function closeLocalStore(): Promise<void> {
   if (connection) (await connection).close()
   connection = null
+  initialization = null
   channel?.close()
   channel = null
 }

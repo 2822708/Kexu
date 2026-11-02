@@ -11,7 +11,8 @@ import {
   type ReactNode,
 } from 'react'
 import { message } from 'antd'
-import { getApiKey, invalidateSessionRequests, onUnauthorized } from '../api/client'
+import { BASE_URL, getApiKey, invalidateSessionRequests, onUnauthorized } from '../api/client'
+import { describeConnectionFailure } from '../api/connectionDiagnostics'
 import { connectDevice, DEVICE_KEY_STORAGE } from '../api/deviceSession'
 import { courseApi, examApi, periodApi, recurringApi, scheduleApi, todoApi } from '../api'
 import type { Course, Exam, PeriodConfig, RecurringTodo, Schedule, Todo } from '../types'
@@ -140,7 +141,7 @@ function ServerAppProvider({ children }: { children: ReactNode }) {
       setAuthed(true)
     } catch (error) {
       if (epoch !== authEpoch.current) return
-      setConnectionError(error instanceof Error ? error.message : '设备连接失败，请重试。')
+      setConnectionError(describeConnectionFailure(error, BASE_URL))
     } finally {
       if (epoch === authEpoch.current) setReady(true)
     }

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { theme as antdTheme, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { useFont } from './store/FontContext'
+import { useAccent } from './store/AccentContext'
 
 type Mode = 'light' | 'dark'
 
@@ -80,6 +81,12 @@ const TOKENS = {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<Mode>(getInitialMode)
   const { globalScale } = useFont()
+  const { palette } = useAccent()
+  const accent = palette ? palette[mode] : null
+  const primary = accent?.base ?? TOKENS[mode].colorPrimary
+  const selectedSoft = accent?.soft ?? (mode === 'dark' ? '#203f4c' : '#e7f4f7')
+  // 选中项文字落在 accent-soft 上，必须用对比度校正过的 ink，而不是 base。
+  const selectedText = accent?.ink ?? (mode === 'dark' ? '#69c6d5' : '#106b85')
 
   useEffect(() => {
     document.documentElement.dataset.theme = mode
@@ -94,7 +101,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         locale={zhCN}
         theme={{
           algorithm: mode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-          token: { ...TOKENS[mode], fontSize: Math.round(14 * globalScale) },
+          token: { ...TOKENS[mode], colorPrimary: primary, colorInfo: primary, colorLink: selectedText, fontSize: Math.round(14 * globalScale) },
           components: {
             Layout: {
               headerBg: TOKENS[mode].colorBgContainer,
@@ -105,8 +112,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             Menu: {
               itemBg: 'transparent',
               itemColor: TOKENS[mode].colorTextSecondary,
-              itemSelectedBg: mode === 'dark' ? '#203f4c' : '#e7f4f7',
-              itemSelectedColor: TOKENS[mode].colorPrimary,
+              itemSelectedBg: selectedSoft,
+              itemSelectedColor: selectedText,
               itemBorderRadius: 8,
               itemHeight: 44,
               itemMarginInline: 0,
@@ -138,7 +145,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             Segmented: {
               trackBg: mode === 'dark' ? '#101d27' : '#edf3f6',
               itemSelectedBg: TOKENS[mode].colorBgContainer,
-              itemSelectedColor: TOKENS[mode].colorPrimary,
+              itemSelectedColor: primary,
               trackPadding: 4,
             },
           },

@@ -431,7 +431,7 @@ test('real HTTP automatic backup retries identical ciphertext, preserves new wri
     const newest = list.items.find((item) => item.revision === local.revision)
     const encrypted = await client.downloadCloudSnapshot(credential, newest.snapshotId)
     const receiver = setup(),
-      receiverBefore = await receiver.initializeLocalStore()
+      receiverBefore = await receiver.readLocalState()
     const snapshot = await receiver.decryptSnapshot(encrypted, credential.key)
     await receiver.restoreConfirmed(await receiver.previewRestore(snapshot))
     const receiverState = await receiver.readLocalState()
@@ -676,7 +676,7 @@ test('v1 plain and encrypted snapshots restore into schema2 without fabricating 
   const snapshot = await source.decryptSnapshot(envelope, key)
   assert.equal(snapshot.version, 1)
   const receiver = setup(),
-    before = await receiver.initializeLocalStore()
+    before = await receiver.readLocalState()
   const preview = await receiver.previewRestore(
     receiver.parseLogicalSnapshot(JSON.stringify(snapshot)),
   )
@@ -719,7 +719,7 @@ test('snapshot2 round trip preserves daily UUID references, saved review and ind
   assert.equal(snapshot.data.dailyReviews[0].saved.text, '完成一件具体的事')
   assert.equal(snapshot.data.dailyReviews[0].draft.text, '尚未提交的新想法')
   const receiver = setup(),
-    before = await receiver.initializeLocalStore()
+    before = await receiver.readLocalState()
   const key = source.generateBackupKey(),
     envelope = await source.encryptSnapshot(snapshot, key)
   const decoded = await receiver.decryptSnapshot(envelope, key)

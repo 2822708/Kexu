@@ -3,6 +3,7 @@ import { Alert, Button, Modal, Space, Typography } from 'antd'
 import { DownloadOutlined, ReloadOutlined, WifiOutlined } from '@ant-design/icons'
 import { findWaitingUpdate } from '../pwa/updateState'
 import { useLocation } from 'react-router-dom'
+import { APP_MODE } from '../local/mode'
 import '../pwa/pwa.css'
 
 interface InstallPrompt extends Event {
@@ -10,7 +11,7 @@ interface InstallPrompt extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
-const enabled = import.meta.env.MODE === 'mobile'
+const enabled = APP_MODE.source === 'mobile'
 const inStandalone = () =>
   window.matchMedia('(display-mode: standalone)').matches ||
   (navigator as Navigator & { standalone?: boolean }).standalone === true
