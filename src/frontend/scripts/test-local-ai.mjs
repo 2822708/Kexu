@@ -537,6 +537,22 @@ test('simultaneous and repeated confirmation execute one local transaction only'
       assert.equal((await x.localAiApi.listMessages(conv.id))[1].actions[0].status, 'EXECUTED')
     },
   ))
+test('unbound conversation can be bound once to an existing schedule', async () => {
+  const x = setup(),
+    f = await fixture(x)
+  const conv = await x.localAiApi.createConversation(null)
+  const bound = await x.localAiApi.bindConversationSchedule(conv.id, f.schedule.id)
+  assert.equal(bound.scheduleId, f.schedule.id)
+  await assert.rejects(
+    x.localAiApi.bindConversationSchedule(conv.id, f.other.id),
+    /已绑定/,
+  )
+  const another = await x.localAiApi.createConversation(null)
+  await assert.rejects(
+    x.localAiApi.bindConversationSchedule(another.id, 999999),
+    /请先选择有效课表/,
+  )
+})
 test('manual change makes an old proposal stale, and rejected cards never write data', async () => {
   const x = setup(),
     f = await fixture(x),

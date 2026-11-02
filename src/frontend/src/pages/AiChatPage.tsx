@@ -28,7 +28,7 @@ import type { AiConversation, AiMessage } from '../types'
 import { formatWeekInfo } from '../utils/schedule'
 import { isImageDataUrl, MAX_CHAT_IMAGES } from '../utils/chatImport'
 import { subscribeAiSettings } from '../local/ai/settings'
-import { localAiStream } from '../local/ai'
+import { localAiApi, localAiStream } from '../local/ai'
 import { readLocalState, subscribeLocalChanges } from '../local/db'
 import { currentImportConversation, localChatView } from '../local/ai/uiState'
 import '../settings-ai.css'
@@ -169,6 +169,8 @@ export default function AiChatPage() {
       ? (schedules.find((s) => s.id === currentConv?.scheduleId)?.name ??
         `课表#${currentConv.scheduleId}`)
       : null
+  const convScheduleMissing =
+    currentConv?.scheduleId != null && !schedules.some((s) => s.id === currentConv?.scheduleId)
 
   const patchStream = useCallback((convId: number, patch: Partial<StreamState>) => {
     setStreams((prev) => {
@@ -577,11 +579,30 @@ export default function AiChatPage() {
     setDeleteSelected([])
   }
 
+  const bindConversation = async (conversationId: number, scheduleId: number) => {
+    try {
+      await localAiApi.bindConversationSchedule(conversationId, scheduleId)
+      await loadConversations()
+      try {
+        await refreshMessages(conversationId, true)
+      } catch {
+        // 绑定已提交，消息刷新失败不影响继续使用。
+      }
+      message.success('已绑定到当前课表')
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '绑定失败')
+    }
+  }
+
   const send = async (draft: string = input, images: string[] = []): Promise<boolean> => {
     const content = draft.trim()
     if ((!content && !images.length) || sending || activeAbortRef.current) return false
     if (workspaceMismatch) {
-      message.warning('该对话属于另一个课表，请切换到对应课表后再继续，或新建对话')
+      message.warning(
+        currentConv?.scheduleId == null
+          ? '该对话尚未绑定课表，请先绑定或新建对话'
+          : '该对话属于另一个课表，请切换到对应课表后再继续，或新建对话',
+      )
       return false
     }
 
@@ -693,7 +714,11 @@ export default function AiChatPage() {
   const execute = async (actionId: number) => {
     if (currentId === null || executingId !== null || sending) return
     if (workspaceMismatch) {
-      message.warning('该对话属于另一个课表，无法在当前课表下执行')
+      message.warning(
+        currentConv?.scheduleId == null
+          ? '该对话尚未绑定课表，无法执行提案'
+          : '该对话属于另一个课表，无法在当前课表下执行',
+      )
       return
     }
     setExecutingId(actionId)
@@ -988,14 +1013,26 @@ export default function AiChatPage() {
             type="error"
             showIcon
             message="工作空间不一致"
-            description={`该对话属于「${
-              currentConv?.scheduleId != null
-                ? (schedules.find((s) => s.id === currentConv?.scheduleId)?.name ??
-                  `课表#${currentConv.scheduleId}`)
-                : '某课表'
-            }」，与当前课表「${
-              activeSchedule?.name ?? '未选择'
-            }」不一致，已锁定发送与操作。请切换到对应课表，或新建对话。`}
+            description={
+              currentConv?.scheduleId == null
+                ? `该对话尚未绑定课表，当前课表为「${activeSchedule?.name ?? '未选择'}」。绑定后才能继续发送或执行提案，也可以新建对话。`
+                : convScheduleMissing
+                  ? `该对话原本绑定的课表已不存在，当前课表为「${activeSchedule?.name ?? '未选择'}」。请新建对话；若课表被误删，可先在课表页恢复。`
+                  : `该对话属于「${convScheduleName ?? '未知课表'}」，与当前课表「${activeSchedule?.name ?? '未选择'}」不一致，已锁定发送与操作。请切换到对应课表，或新建对话。`
+            }
+            action={
+              LOCAL_MODE && currentConv?.scheduleId == null && activeScheduleId != null ? (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    if (currentId !== null && activeScheduleId != null)
+                      void bindConversation(currentId, activeScheduleId)
+                  }}
+                >
+                  绑定到当前课表
+                </Button>
+              ) : undefined
+            }
             style={{ marginBottom: 12, flexShrink: 0 }}
           />
         )}
