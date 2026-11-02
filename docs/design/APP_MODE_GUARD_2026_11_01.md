@@ -18,7 +18,7 @@
    - 服务器模式的产物若把 `VITE_API_BASE` 指向 `localhost` / `127.0.0.1`，构建失败；
    - 普通网页构建若带 `VITE_LOCAL_DATA=true`，也会失败，避免“部署包其实是本地模式”这种更难排查的错配。需要本地网页产物时用新增的 `npm run build:localdata`，PWA 仍用 `build:mobile`。
 3. **启动日志**：开发模式启动时打印 `[kexu] 本地模式（local-mode）：数据保存在本机 IndexedDB，不访问后端。`
-4. **失败可执行**：`src/frontend/src/api/connectionDiagnostics.ts` 把连接错误扩展为“请求地址 / 原因 / 三条修复命令”，设备连接页按换行渲染。
+4. **失败可执行**：`src/frontend/src/api/connectionDiagnostics.ts` 把“连不上服务”类错误（network / timeout / server）扩展为“请求地址 / 原因 / 三条修复命令”；凭据、权限与业务错误保留原文案，避免把用户推向另一个数据空间。
 5. **脚本语义对齐产品定位**：`npm run dev` 与 `dev:local` 使用 `--mode localdata`（Vite 不允许 `local` 作为 mode 名）；连后端改为显式 `npm run dev:server`。
 6. **回归测试**：`scripts/test-app-mode.mjs` 覆盖外壳/PWA/本地标记/默认四种来源、大小写标记与两个方向的构建断言；已加入 CI 的回归命令列表。
 7. **消除最后一处重复判定**：`components/PwaStatus.tsx` 不再直接读 `import.meta.env.MODE === 'mobile'`，改为 `APP_MODE.source === 'mobile'`，Service Worker 注册条件同样只认单一入口。

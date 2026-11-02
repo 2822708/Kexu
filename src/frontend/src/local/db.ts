@@ -8,7 +8,7 @@ export const LOCAL_DATABASE_NAME = legacyNames.localDatabase
 const STORE_NAME = 'main'
 const STATE_KEY = 'state'
 let connection: Promise<IDBDatabase> | null = null
-let initialization: Promise<LocalState> | null = null
+let initialization: Promise<void> | null = null
 const subscribers = new Set<() => void>()
 let channel: BroadcastChannel | null = null
 
@@ -117,15 +117,18 @@ async function runInitialization(): Promise<LocalState> {
  * 旧实现里 readLocalState / mutateLocalState 每次都会调用初始化，
  * 每次都要完整读取、校验并 structuredClone 整份状态；启动链路因此重复 3~5 次。
  *
- * 返回的是首次初始化时的快照，可能随后被写入更新；
- * 需要当前数据请调用 readLocalState()。
+ * 返回 void：初始化只负责“就绪”，需要当前数据请调用 readLocalState()。
+ * 不把内部快照暴露给调用方，避免共享引用被误改污染缓存。
  */
-export function initializeLocalStore(): Promise<LocalState> {
+export function initializeLocalStore(): Promise<void> {
   if (!initialization) {
-    initialization = runInitialization().catch((error) => {
-      initialization = null
-      throw error
-    })
+    initialization = runInitialization().then(
+      () => undefined,
+      (error) => {
+        initialization = null
+        throw error
+      },
+    )
   }
   return initialization
 }

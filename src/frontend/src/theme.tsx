@@ -85,6 +85,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const accent = palette ? palette[mode] : null
   const primary = accent?.base ?? TOKENS[mode].colorPrimary
   const selectedSoft = accent?.soft ?? (mode === 'dark' ? '#203f4c' : '#e7f4f7')
+  // 选中项文字落在 accent-soft 上，必须用对比度校正过的 ink，而不是 base。
+  const selectedText = accent?.ink ?? (mode === 'dark' ? '#69c6d5' : '#106b85')
 
   useEffect(() => {
     document.documentElement.dataset.theme = mode
@@ -99,7 +101,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         locale={zhCN}
         theme={{
           algorithm: mode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-          token: { ...TOKENS[mode], colorPrimary: primary, colorInfo: primary, colorLink: primary, fontSize: Math.round(14 * globalScale) },
+          token: { ...TOKENS[mode], colorPrimary: primary, colorInfo: primary, colorLink: selectedText, fontSize: Math.round(14 * globalScale) },
           components: {
             Layout: {
               headerBg: TOKENS[mode].colorBgContainer,
@@ -111,7 +113,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
               itemBg: 'transparent',
               itemColor: TOKENS[mode].colorTextSecondary,
               itemSelectedBg: selectedSoft,
-              itemSelectedColor: primary,
+              itemSelectedColor: selectedText,
               itemBorderRadius: 8,
               itemHeight: 44,
               itemMarginInline: 0,

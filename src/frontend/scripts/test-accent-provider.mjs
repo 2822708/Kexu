@@ -72,6 +72,10 @@ test('主题色偏好写入 CSS 变量与 localStorage，并可恢复默认', as
     assert.ok(style, '应注入主题色样式')
     assert.match(style.textContent, /:root\[data-theme='light'\]\{--accent:#[0-9a-f]{6}/)
     assert.match(style.textContent, /:root\[data-theme='dark'\]\{--accent:#[0-9a-f]{6}/)
+    assert.match(style.textContent, /--accent-ink:#[0-9a-f]{6}/)
+    const expected = accent.buildPalette({ id: 'pine', hue: 158, chroma: 0.09 })
+    assert.ok(style.textContent.includes(`--accent-ink:${expected.light.ink}`), '浅色选中态文字应使用 ink')
+    assert.ok(style.textContent.includes(`--accent-ink:${expected.dark.ink}`), '深色选中态文字应使用 ink')
     assert.equal(
       dom.window.localStorage.getItem('timetable.accent'),
       JSON.stringify({ id: 'pine', hue: 158, chroma: 0.09 }),

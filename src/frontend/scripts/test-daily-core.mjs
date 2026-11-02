@@ -87,7 +87,7 @@ test('v1 migration atomically keeps exact recovery state and never invents compl
   delete old.dailyReviews
   old.schemaVersion = 1
   await seedV1(x, old)
-  const next = await x.initializeLocalStore()
+  const next = await x.readLocalState()
   assert.equal(next.schemaVersion, 2)
   assert.equal(next.datasetId, old.datasetId)
   assert.equal(next.periods[0].publicId, old.periods[0].publicId)
@@ -425,7 +425,7 @@ test('yesterday prompt is durable but viewing it does not mark the day started',
   assert.equal((await x.readLocalState()).dailyReviews[0].promptedYesterday, true)
   assert.equal(x.hasDailyActivity(await x.readLocalState(), date), false)
   await x.closeLocalStore()
-  await x.initializeLocalStore()
+  await x.readLocalState()
   assert.equal((await x.readLocalState()).dailyReviews[0].promptedYesterday, true)
   await x.closeLocalStore()
 })

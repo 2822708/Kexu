@@ -24,8 +24,9 @@
 
 只重映射以下变量与 Ant Design token：
 
-- CSS：`--accent`、`--accent-hover`、`--accent-soft`、`--focus-ring`（浅色/深色各一套，通过 `:root[data-theme]` 注入）。
-- Ant Design：`colorPrimary`、`colorInfo`、`colorLink`，以及菜单选中底色与文字色、分段控件选中文字色。
+- CSS：`--accent`、`--accent-hover`、`--accent-ink`、`--accent-soft`、`--focus-ring`（浅色/深色各一套，通过 `:root[data-theme]` 注入）。
+- Ant Design：`colorPrimary`、`colorInfo`、`colorLink`（链接用 ink），以及菜单选中底色与文字色、分段控件选中文字色。
+- 落在 `--accent-soft` 或浅色页面背景上的文字使用 `--accent-ink`（对比度 ≥ 4.5:1）；`--accent` 只用于实底按钮、边框与图形。
 
 未改动语义色（成功/警告/错误）与中性色，界面其余部分仍按原主题。
 

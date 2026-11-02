@@ -85,15 +85,18 @@ const recurringBody = {
 const normal = (x) => JSON.parse(JSON.stringify(x))
 
 test('concurrent first initialization shares one dataset and survives database reopen', async () => {
-  const x = setup()
-  const [a, b] = await Promise.all([x.initializeLocalStore(), x.initializeLocalStore()])
-  assert.equal(a.datasetId, b.datasetId)
-  assert.equal(a.revision, 0)
-  assert.equal(a.periods.length, 12)
-  await x.localScheduleApi.create(scheduleBody)
-  await x.closeLocalStore()
-  const restored = await x.readLocalState()
-  assert.equal(restored.datasetId, a.datasetId)
+  const factory = new IDBFactory(),
+    a = setup(factory),
+    b = setup(factory)
+  await Promise.all([a.initializeLocalStore(), b.initializeLocalStore()])
+  const first = await a.readLocalState()
+  assert.equal((await b.readLocalState()).datasetId, first.datasetId)
+  assert.equal(first.revision, 0)
+  assert.equal(first.periods.length, 12)
+  await a.localScheduleApi.create(scheduleBody)
+  await a.closeLocalStore()
+  const restored = await a.readLocalState()
+  assert.equal(restored.datasetId, first.datasetId)
   assert.equal(restored.schedules[0].name, scheduleBody.name)
   assert.equal(restored.revision, 1)
 })
@@ -118,8 +121,8 @@ test('separate browser-module instances serialize writes and reject stale restor
   const sharedFactory = new IDBFactory(),
     a = setup(sharedFactory),
     b = setup(sharedFactory)
-  const initial = await a.initializeLocalStore()
-  assert.equal((await b.initializeLocalStore()).datasetId, initial.datasetId)
+  const initial = await a.readLocalState()
+  assert.equal((await b.readLocalState()).datasetId, initial.datasetId)
   await Promise.all(
     Array.from({ length: 20 }, (_, i) =>
       (i % 2 ? a : b).localTodoApi.create({ ...todoBody, title: `cross-tab ${i}` }),
@@ -142,7 +145,7 @@ test('read results and returned entities cannot mutate persisted state', async (
 })
 test('no-op maintenance and read transactions do not advance revision or trigger backup notifications', async () => {
   const x = setup(),
-    initial = await x.initializeLocalStore()
+    initial = await x.readLocalState()
   let changes = 0
   const stop = x.subscribeLocalChanges(() => changes++)
   await x.mutateLocalState(() => null)

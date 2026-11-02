@@ -1,12 +1,24 @@
 import { APP_MODE } from '../local/mode'
 
 /**
- * 把连接失败翻译成可执行的修复步骤。
- * 只对需要后端的模式追加排查建议；本地模式保持原始错误，避免误导。
+ * 只有“连不上服务”才追加后端排查建议。
+ * 凭据失效、权限不足、业务校验错误必须保留原文案：
+ * 把“密钥无效”提示成“后端没启动、不如换本地模式”，会把用户推向另一个数据空间。
  */
+const CONNECTIVITY_KINDS = new Set(['network', 'timeout', 'server'])
+
+function failureKind(error: unknown): string | null {
+  if (error && typeof error === 'object' && 'kind' in error) {
+    const kind = (error as { kind?: unknown }).kind
+    return typeof kind === 'string' ? kind : null
+  }
+  return null
+}
+
 export function describeConnectionFailure(error: unknown, baseUrl: string): string {
   const reason = error instanceof Error ? error.message : String(error)
   if (!APP_MODE.needsBackend) return reason
+  if (!CONNECTIVITY_KINDS.has(failureKind(error) ?? '')) return reason
   return [
     `请求地址：${baseUrl}`,
     `原因：${reason}`,

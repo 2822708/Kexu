@@ -6,7 +6,7 @@
  * 让界面可以给出可执行提示，而不是直接抛原始错误。
  */
 
-export type ApiFailureKind = 'timeout' | 'network' | 'auth' | 'server' | 'client' | 'unknown'
+export type ApiFailureKind = 'timeout' | 'network' | 'auth' | 'forbidden' | 'server' | 'client' | 'unknown'
 
 export interface ApiFailure {
   kind: ApiFailureKind
@@ -34,8 +34,11 @@ export function classifyApiFailure(input: {
   if (status === null || status === 0) {
     return { kind: 'network', retryable: true, status, message: NETWORK_MESSAGE }
   }
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return { kind: 'auth', retryable: false, status, message: AUTH_MESSAGE }
+  }
+  if (status === 403) {
+    return { kind: 'forbidden', retryable: false, status, message: '当前账号没有执行该操作的权限' }
   }
   if (status === 408 || status === 429 || status >= 500) {
     return { kind: 'server', retryable: true, status, message: SERVER_MESSAGE }

@@ -29,12 +29,15 @@ test('5xx、408、429 归为服务端可重试', () => {
   }
 })
 
-test('401/403 归为登录失效且不自动重试', () => {
-  for (const status of [401, 403]) {
-    const failure = classifyApiFailure({ status })
-    assert.equal(failure.kind, 'auth')
-    assert.equal(failure.retryable, false)
-  }
+test('401 归为登录失效，403 归为权限不足，均不自动重试', () => {
+  const auth = classifyApiFailure({ status: 401 })
+  assert.equal(auth.kind, 'auth')
+  assert.equal(auth.retryable, false)
+
+  const forbidden = classifyApiFailure({ status: 403 })
+  assert.equal(forbidden.kind, 'forbidden')
+  assert.equal(forbidden.retryable, false)
+  assert.match(forbidden.message, /没有执行该操作的权限/)
 })
 
 test('4xx 业务错误保留原始文案', () => {

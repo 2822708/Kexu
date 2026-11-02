@@ -415,7 +415,7 @@ export default function SettingsPage() {
               min={0}
               max={360}
               step={1}
-              value={accentChoice?.id === 'custom' ? accentChoice.hue : 205}
+              value={accentChoice ? accentChoice.hue : 205}
               onChange={(hue) => setAccentChoice({ ...CUSTOM_ACCENT, hue })}
               marks={{ 0: '红', 60: '黄', 120: '绿', 180: '青', 240: '蓝', 300: '紫' }}
             />

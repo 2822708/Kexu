@@ -10,6 +10,7 @@
   --bg-code: #102d3b;
   --accent: #167d9a;
   --accent-hover: #106b85;
+  --accent-ink: #106b85;
   --accent-soft: #e7f4f7;
   --accent-green: #69c9b3;
   --teal: #0c7c72;
@@ -40,6 +41,7 @@
   --bg-code: #0b1821;
   --accent: #69c6d5;
   --accent-hover: #8dd7e2;
+  --accent-ink: #69c6d5;
   --accent-soft: #203f4c;
   --accent-green: #7bd5be;
   --teal: #65c5ad;

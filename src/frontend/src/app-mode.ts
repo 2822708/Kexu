@@ -73,7 +73,7 @@ export function assertBuildMode(input: {
 
   if (appMode.id !== 'server') return null
   const base = input.apiBase ?? ''
-  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(base)) {
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|[^/]+\.localhost)(:\d+)?/i.test(base)) {
     return (
       `服务器模式的构建不能把 VITE_API_BASE 指向本机开发地址（当前 ${base}）。` +
       '部署到独立域名时请改为同源 /api 或真实服务地址；本地联调请改用 npm run dev:local。'

@@ -27,7 +27,15 @@ export default tseslint.config(
         'error',
         {
           selector: "MemberExpression[object.property.name='env'][property.name=/^(MODE|VITE_LOCAL_DATA)$/]",
-          message: '运行模式只在 src/local/mode.ts 判定，请使用 APP_MODE / LOCAL_MODE。',
+          message: '运行模式由 src/app-mode.ts 判定、由 src/local/mode.ts 注入；请使用 APP_MODE / LOCAL_MODE。',
+        },
+        {
+          selector: "MemberExpression[object.property.name='env'][computed=true][property.value=/^(MODE|VITE_LOCAL_DATA)$/]",
+          message: '运行模式由 src/app-mode.ts 判定、由 src/local/mode.ts 注入；请使用 APP_MODE / LOCAL_MODE。',
+        },
+        {
+          selector: "VariableDeclarator[init.object.type='MetaProperty'][init.property.name='env'] > ObjectPattern",
+          message: '不要从 import.meta.env 解构运行模式；请使用 src/local/mode.ts 导出的 APP_MODE / LOCAL_MODE。',
         },
       ],
     },

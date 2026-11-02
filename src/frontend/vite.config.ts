@@ -13,7 +13,7 @@ export default defineConfig(({ mode, command }) => {
     })
     if (problem) throw new Error(problem)
   }
-  const target = loadEnv(mode, '.', 'VITE_').VITE_DEV_API_TARGET || 'http://localhost:8080'
+  const target = env.VITE_DEV_API_TARGET || 'http://localhost:8080'
   const proxy = { '/api': { target, changeOrigin: true } }
   return {
     plugins: [react(), ...(mode === 'mobile' ? [mobilePwa()] : [])],

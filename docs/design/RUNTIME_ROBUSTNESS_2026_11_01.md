@@ -47,7 +47,7 @@
 
 ## 验证
 
-- `npm run test:mode`、`test:accent`、`test:errors`、`test:accent-provider` 全部通过。
+- `npm run test:mode`、`test:accent`、`test:accent-provider`、`test:errors`、`test:diagnostics` 全部通过（共 20 项）。
 - `npm run typecheck`、`npm run lint`（0 error）、`npm run build`、`npm run build:mobile`、`npm run build:shell` 通过。
 - `npm run perf:budget`：总量 1078.5 / 1150 KB，入口 54.6 / 65 KB，最大 chunk 372.8 / 400 KB。
 - 实测 `npm run dev`：本地模式直接进课表；`npm run dev:server`（无后端）显示地址、原因与三条修复步骤。

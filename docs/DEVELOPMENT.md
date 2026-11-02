@@ -49,7 +49,7 @@ Set-Location -LiteralPath 'E:\codex work\projects\Kexu\src\frontend'
 npm run dev:server
 ```
 
-`npm run dev` 等同 `dev:local`，使用 `--mode local`；`dev:server` 才把 `/api` 代理到 `http://localhost:8080`。启动时控制台会打印当前运行模式及其数据位置；服务器模式下连不上后端时，页面会给出请求地址、失败原因和三条修复命令（启动后端 / 改用 `dev:local` / 设置 `VITE_API_BASE`）。
+`npm run dev` 等同 `dev:local`，使用 `--mode localdata`；`dev:server` 才把 `/api` 代理到 `http://localhost:8080`。启动时控制台会打印当前运行模式及其数据位置；服务器模式下连不上后端时，页面会给出请求地址、失败原因和三条修复命令（启动后端 / 改用 `dev:local` / 设置 `VITE_API_BASE`）。
 
 已有数据库需核对列、索引和账号，不把空库初始化当作版本迁移。
 

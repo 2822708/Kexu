@@ -1,6 +1,7 @@
 .settings-page,
 .ai-chat-page {
   --assistant-selected-bg: var(--accent-soft);
+  --assistant-ink: var(--accent-ink);
   --assistant-brand: var(--accent);
   min-width: 0;
 }
@@ -189,7 +190,7 @@
 }
 
 .ai-chat-page .conversation-item.is-active {
-  color: var(--assistant-brand);
+  color: var(--assistant-ink);
   background: var(--assistant-selected-bg);
   box-shadow: none;
 }
@@ -589,8 +590,8 @@
   gap: 10px;
 }
 .accent-swatch {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 0;
   border-radius: 50%;

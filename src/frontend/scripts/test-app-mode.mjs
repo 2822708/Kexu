@@ -42,7 +42,7 @@ test('本地模式标记可以不依赖构建模式生效', () => {
 })
 
 test('服务器模式构建禁止指向本机开发地址', () => {
-  for (const base of ['http://localhost:8080/api', 'https://127.0.0.1:8443']) {
+  for (const base of ['http://localhost:8080/api', 'https://127.0.0.1:8443', 'http://0.0.0.0:8080', 'http://[::1]:8080', 'https://api.localhost']) {
     assert.ok(assertBuildMode({ viteMode: 'production', apiBase: base }), base)
   }
   assert.equal(assertBuildMode({ viteMode: 'production', apiBase: '/api' }), null)
