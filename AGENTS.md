@@ -17,6 +17,7 @@
 - 课程、考试属于课表；待办、循环规则属于账号；作息为全局数据。
 - AI 先产生提案，由用户逐条确认后执行；保留此交互边界。
 - 修改考试或循环功能时同时检查待办联动；修改 AI 时检查工作空间、提案状态和并发一致性。
+- 前端运行模式只在 `src/frontend/src/app-mode.ts` 判定；`npm run dev` 默认本地模式（IndexedDB，无需后端），联调 REST 时显式用 `npm run dev:server`。新增文件不要重新拼接 `import.meta.env.MODE` 或 `VITE_LOCAL_DATA`。
 - 不因旧报告的“已修复”字样省略当前实现和运行证据核对。
 
 ## 验证

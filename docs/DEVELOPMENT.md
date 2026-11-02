@@ -34,16 +34,24 @@ npm run build
 先准备数据库和本机环境配置。默认后端配置读取 `KEXU_COMMON_PASSWORD`，AI 读取 `DEEPSEEK_API_KEY`。不要把真实值写到版本控制中的文档或命令示例。
 
 ```powershell
+# 方式一：只看界面。本地模式，数据在浏览器 IndexedDB，不需要后端
+Set-Location -LiteralPath 'E:\codex work\projects\Kexu\src\frontend'
+npm ci   # 首次
+npm run dev
+
+# 方式二：连后端联调。需要数据库与 Java 环境
 # 后端终端：先在当前进程配置所需环境变量
 Set-Location -LiteralPath 'E:\codex work\projects\Kexu\src\backend'
 .\mvnw.cmd spring-boot:run
 
-# 另一终端启动前端；首次先运行 npm ci
+# 前端终端
 Set-Location -LiteralPath 'E:\codex work\projects\Kexu\src\frontend'
-npm run dev
+npm run dev:server
 ```
 
-默认前端 `http://localhost:5173`，后端 `http://localhost:8080`；Vite 将 `/api` 代理至后端。已有数据库需核对列、索引和账号，不把空库初始化当作版本迁移。
+`npm run dev` 等同 `dev:local`，使用 `--mode local`；`dev:server` 才把 `/api` 代理到 `http://localhost:8080`。启动时控制台会打印当前运行模式及其数据位置；服务器模式下连不上后端时，页面会给出请求地址、失败原因和三条修复命令（启动后端 / 改用 `dev:local` / 设置 `VITE_API_BASE`）。
+
+已有数据库需核对列、索引和账号，不把空库初始化当作版本迁移。
 
 ## Git 日常使用
 

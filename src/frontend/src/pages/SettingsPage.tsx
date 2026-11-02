@@ -23,6 +23,8 @@ import { aiApi, periodApi } from '../api'
 import { getApiKey } from '../api/client'
 import { useApp } from '../store/AppContext'
 import { useFont } from '../store/FontContext'
+import { useAccent } from '../store/AccentContext'
+import { ACCENT_PRESETS, CUSTOM_ACCENT, presetSwatch } from '../accent'
 import type { AiConfig, PeriodCategory, PeriodConfig } from '../types'
 import { dayjs } from '../utils/schedule'
 import BackupSettings from '../components/BackupSettings'
@@ -51,6 +53,12 @@ export default function SettingsPage() {
     setActiveScheduleId,
   } = useApp()
   const { globalScale, ttScale, setGlobalScale, setTtScale } = useFont()
+  const { choice: accentChoice, setChoice: setAccentChoice } = useAccent()
+  const accentLabel = accentChoice
+    ? accentChoice.id === 'custom'
+      ? `自定义 · ${accentChoice.hue}°`
+      : (ACCENT_PRESETS.find((preset) => preset.id === accentChoice.id)?.label ?? '自定义')
+    : '默认青蓝'
   const [rows, setRows] = useState<PeriodConfig[]>([])
   const [widgetKey] = useState(() => (LOCAL_MODE ? '' : (getApiKey() ?? '')))
   const [aiConfig, setAiConfig] = useState<AiConfig | null>(null)
@@ -329,13 +337,14 @@ export default function SettingsPage() {
 
   const appearanceSection = (
     <Card
-      title="字体大小"
+      title="外观"
       extra={
         <Button
           size="small"
           onClick={() => {
             setGlobalScale(1)
             setTtScale(1)
+            setAccentChoice(null)
           }}
         >
           重置
@@ -371,8 +380,49 @@ export default function SettingsPage() {
             marks={{ 0.8: '小', 1: '默认', 1.4: '大' }}
           />
         </div>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Typography.Text strong>主题色</Typography.Text>
+            <Typography.Text type="secondary">{accentLabel}</Typography.Text>
+          </div>
+          <div className="accent-swatches" role="group" aria-label="主题色">
+            {ACCENT_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="accent-swatch"
+                style={{ background: presetSwatch(preset) }}
+                aria-label={preset.label}
+                aria-pressed={accentChoice ? accentChoice.id === preset.id : preset.id === 'default'}
+                title={preset.label}
+                onClick={() =>
+                  setAccentChoice(
+                    preset.id === 'default'
+                      ? null
+                      : { id: preset.id, hue: preset.hue, chroma: preset.chroma },
+                  )
+                }
+              />
+            ))}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                自定义色相
+              </Typography.Text>
+            </div>
+            <Slider
+              min={0}
+              max={360}
+              step={1}
+              value={accentChoice?.id === 'custom' ? accentChoice.hue : 205}
+              onChange={(hue) => setAccentChoice({ ...CUSTOM_ACCENT, hue })}
+              marks={{ 0: '红', 60: '黄', 120: '绿', 180: '青', 240: '蓝', 300: '紫' }}
+            />
+          </div>
+        </div>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          字号偏好只保存在当前设备。
+          主题色只影响按钮、选中态和链接；对比度会自动校正到可读范围。偏好只保存在当前设备。
         </Typography.Text>
       </div>
     </Card>

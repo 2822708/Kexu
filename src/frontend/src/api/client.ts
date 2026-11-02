@@ -1,4 +1,5 @@
 import type { ApiResponse } from '../types'
+import { classifyApiFailure, fallbackMessageForStatus, type ApiFailureKind } from './errors'
 
 const API_KEY_STORAGE = 'timetable.apiKey'
 const API_LABEL_STORAGE = 'timetable.apiLabel'
@@ -36,10 +37,15 @@ export function clearApiKey() {
 
 export class ApiError extends Error {
   code: number
+  /** 传输层分类；业务错误（HTTP 200 + 非 200 code）保持 client。 */
+  kind: ApiFailureKind
+  retryable: boolean
 
-  constructor(code: number, message: string) {
+  constructor(code: number, message: string, kind: ApiFailureKind = 'client', retryable = false) {
     super(message)
     this.code = code
+    this.kind = kind
+    this.retryable = retryable
   }
 }
 
@@ -93,8 +99,10 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
       signal: controller?.signal,
     })
     text = await res.text()
-  } catch {
-    throw new ApiError(0, '连接服务失败或等待超时，请检查网络和后端服务后重试。')
+  } catch (error) {
+    const aborted = error instanceof DOMException && error.name === 'AbortError'
+    const failure = classifyApiFailure({ aborted })
+    throw new ApiError(0, failure.message, failure.kind, failure.retryable)
   } finally {
     if (timer !== undefined) window.clearTimeout(timer)
   }
@@ -113,7 +121,8 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
   }
 
   if (payload === null) {
-    throw new ApiError(res.status, `请求失败 (HTTP ${res.status})`)
+    const failure = classifyApiFailure({ status: res.status })
+    throw new ApiError(res.status, fallbackMessageForStatus(res.status), failure.kind, failure.retryable)
   }
 
   if (payload.code !== 200) {

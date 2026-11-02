@@ -11,10 +11,14 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode localdata",
+    "dev:local": "vite --mode localdata",
+    "dev:server": "vite",
     "build": "tsc -b && vite build",
     "build:mobile": "tsc -b && vite build --mode mobile",
     "build:shell": "tsc -b && vite build --mode shell --outDir dist-shell",
+    "build:localdata": "tsc -b && vite build --mode localdata",
+    "perf:budget": "node scripts/check-bundle-budget.mjs",
     "typecheck": "tsc --noEmit",
     "test:device-session": "node --test scripts/test-device-session.mjs",
     "test:pwa": "node --test scripts/test-pwa.mjs",
@@ -32,7 +36,11 @@
     "test:daily": "node --test scripts/test-daily-core.mjs scripts/test-daily-review.mjs",
     "test:shell": "node --test scripts/test-native-export.mjs",
     "test:timetable-layout": "node --test scripts/test-timetable-layout.mjs",
-    "test:interaction": "node --test scripts/test-chat-drafts.mjs scripts/test-import-materials.mjs scripts/test-task-filters.mjs"
+    "test:interaction": "node --test scripts/test-chat-drafts.mjs scripts/test-import-materials.mjs scripts/test-task-filters.mjs",
+    "test:accent": "node --test scripts/test-accent.mjs",
+    "test:mode": "node --test scripts/test-app-mode.mjs",
+    "test:errors": "node --test scripts/test-api-errors.mjs",
+    "test:accent-provider": "node --test scripts/test-accent-provider.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.1",
@@ -55,6 +63,7 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "fake-indexeddb": "^6.2.6",
     "globals": "^17.12.0",
+    "jsdom": "^30.1.3",
     "prettier": "^3.9.9",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.70.1",

@@ -23,6 +23,18 @@ export default tseslint.config(
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[object.property.name='env'][property.name=/^(MODE|VITE_LOCAL_DATA)$/]",
+          message: '运行模式只在 src/local/mode.ts 判定，请使用 APP_MODE / LOCAL_MODE。',
+        },
+      ],
     },
+  },
+  {
+    // 唯一允许读取模式环境变量的位置。
+    files: ['src/local/mode.ts'],
+    rules: { 'no-restricted-syntax': 'off' },
   },
 )
