@@ -277,6 +277,18 @@ export function normalizeProposals(
   return result
 }
 
+/** 只容忍代码块包装（可带前后说明），不从普通文字里猜测 JSON 边界。 */
+function extractJsonPayload(raw: string): string {
+  const text = raw.replace(/^\uFEFF/, '').trim()
+  const opening = text.indexOf('```')
+  if (opening >= 0) {
+    const after = text.slice(opening + 3).replace(/^json\s*/i, '')
+    const closing = after.indexOf('```')
+    if (closing >= 0) return after.slice(0, closing).trim()
+  }
+  return text
+}
+
 export function parsePlannerReply(
   raw: string,
   state: LocalState,
@@ -286,7 +298,7 @@ export function parsePlannerReply(
   if (raw.length > 100000) throw new Error('AI回复过长，已停止')
   let parsed: unknown
   try {
-    parsed = JSON.parse(raw)
+    parsed = JSON.parse(extractJsonPayload(raw))
   } catch {
     throw new Error('AI未返回完整JSON；没有生成可执行提案，请重试或换兼容模型')
   }

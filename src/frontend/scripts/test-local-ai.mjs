@@ -285,7 +285,7 @@ test('missing fields, invalid teaching weeks, unknown periods and ambiguous JSON
       ),
     )
   }
-  assert.throws(() => x.parsePlannerReply('```json\n{}\n```', f.state, f.schedule.id), /完整JSON/)
+  assert.throws(() => x.parsePlannerReply('```json\n{}\n```', f.state, f.schedule.id), /缺少必要字段/)
   const clarify = x.parsePlannerReply(
     '{"reply":"请补充截止日期与时间。","actions":[]}',
     f.state,
@@ -537,6 +537,39 @@ test('simultaneous and repeated confirmation execute one local transaction only'
       assert.equal((await x.localAiApi.listMessages(conv.id))[1].actions[0].status, 'EXECUTED')
     },
   ))
+test('planner tolerates markdown-fenced JSON from multimodal replies', async () => {
+  const x = setup(),
+    f = await fixture(x)
+  const raw = '```json\n' + JSON.stringify({ reply: '好的', actions: [] }) + '\n```'
+  const parsed = x.parsePlannerReply(raw, await x.readLocalState(), f.schedule.id)
+  assert.equal(parsed.reply, '好的')
+  assert.equal(parsed.proposals.length, 0)
+})
+test('image rejection explains model capability instead of a generic failure', () => {
+  const x = setup()
+  assert.match(
+    x.describeLocalAiFailure(new Error('AI请求失败：HTTP 400（请检查连接或更换模型）'), false, true),
+    /图片请求被服务端拒绝/,
+  )
+  assert.match(x.describeLocalAiFailure(new Error('AI请求失败：HTTP 400'), false, false), /HTTP 400/)
+  assert.match(x.describeLocalAiFailure(new Error('boom'), true, true), /已取消/)
+})
+test('unbound conversation can be bound once to an existing schedule', async () => {
+  const x = setup(),
+    f = await fixture(x)
+  const conv = await x.localAiApi.createConversation(null)
+  const bound = await x.localAiApi.bindConversationSchedule(conv.id, f.schedule.id)
+  assert.equal(bound.scheduleId, f.schedule.id)
+  await assert.rejects(
+    x.localAiApi.bindConversationSchedule(conv.id, f.other.id),
+    /已绑定/,
+  )
+  const another = await x.localAiApi.createConversation(null)
+  await assert.rejects(
+    x.localAiApi.bindConversationSchedule(another.id, 999999),
+    /请先选择有效课表/,
+  )
+})
 test('manual change makes an old proposal stale, and rejected cards never write data', async () => {
   const x = setup(),
     f = await fixture(x),
