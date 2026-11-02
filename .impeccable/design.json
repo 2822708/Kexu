@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-01T13:39:51Z",
+  "title": "Design System: Kexu",
+  "extensions": {
+    "colorMeta": {
+      "harbor-teal": {
+        "role": "primary",
+        "displayName": "Harbor Teal",
+        "canonical": "#167d9a",
+        "tonalRamp": ["#0b3f4f", "#0e5165", "#12637b", "#167d9a", "#2f9ab8", "#63b8cf", "#9bd4e3", "#d9eef5"]
+      },
+      "lecture-green": {
+        "role": "secondary",
+        "displayName": "Lecture Green",
+        "canonical": "#0c7c72",
+        "tonalRamp": ["#063e39", "#085049", "#0a665e", "#0c7c72", "#2b998e", "#5fb8ae", "#9ad5ce", "#d8eeea"]
+      },
+      "mint-accent": {
+        "role": "tertiary",
+        "displayName": "Mint Accent",
+        "canonical": "#69c9b3",
+        "tonalRamp": ["#14443b", "#1f5f53", "#2c7d6e", "#3f9c8b", "#69c9b3", "#8ed8c7", "#b9e8dd", "#e3f6f1"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#f5f8fa",
+        "tonalRamp": ["#1b2429", "#39474f", "#5f7078", "#8a9ba3", "#b9c7ce", "#d5dfe4", "#e8eef2", "#f5f8fa"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#173244",
+        "tonalRamp": ["#0a161f", "#0f2330", "#173244", "#2c4b60", "#517187", "#7f99aa", "#b3c4cf", "#e3ebf0"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#c7d6df",
+        "tonalRamp": ["#5b6e79", "#7a8d98", "#9aadb7", "#b4c4cd", "#c7d6df", "#d8e3e9", "#e8eff3", "#f4f8fa"]
+      },
+      "alert-red": {
+        "role": "neutral",
+        "displayName": "Alert Red",
+        "canonical": "#b42318",
+        "tonalRamp": ["#4d0d07", "#6f1410", "#921c14", "#b42318", "#cf4a3f", "#e28078", "#f0b5b0", "#fbe3e0"]
+      },
+      "alert-amber": {
+        "role": "neutral",
+        "displayName": "Alert Amber",
+        "canonical": "#8a4b00",
+        "tonalRamp": ["#3a1f00", "#552d00", "#6f3c00", "#8a4b00", "#ad6800", "#cf9138", "#e8be83", "#f8e9d2"]
+      }
+    },
+    "typographyMeta": {
+      "body": { "displayName": "Body", "purpose": "正文、任务标题、课程名；14px 固定基准。" },
+      "title": { "displayName": "Title", "purpose": "页面标题、弹窗标题、日课表日期。" },
+      "label": { "displayName": "Label", "purpose": "表头、时间、标签与按钮内文字。" }
+    },
+    "shadows": [
+      { "name": "overlay", "value": "0 8px 28px rgba(23, 50, 68, 0.12)", "purpose": "弹窗、下拉、抽屉等覆盖页面内容的浮层（深色主题为 rgba(0, 0, 0, 0.28)）。" }
+    ],
+    "motion": [
+      { "name": "state", "value": "150ms ease", "purpose": "背景与颜色的状态切换。" },
+      { "name": "move", "value": "200ms ease", "purpose": "位移、展开收起与抽屉。" }
+    ],
+    "breakpoints": [
+      { "name": "wide", "value": "1100px" },
+      { "name": "desktop", "value": "1024px" },
+      { "name": "tablet", "value": "900px" },
+      { "name": "mobile", "value": "767px" },
+      { "name": "narrow", "value": "640px" },
+      { "name": "compact", "value": "359px" }
+    ],
+    "darkTheme": {
+      "background": "#101d27",
+      "surface": "#172a35",
+      "surfaceRaised": "#203743",
+      "accent": "#69c6d5",
+      "accentHover": "#8dd7e2",
+      "accentSoft": "#203f4c",
+      "text": "#e5f0f5",
+      "textSecondary": "#abc1cc",
+      "border": "#46616e",
+      "borderSoft": "#314a57"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "主操作：保存、确认、创建。",
+      "html": "<button class=\"ds-btn-primary\">保存修改</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; height:38px; padding:0 16px; border:1px solid var(--accent, #167d9a); border-radius:8px; background:var(--accent, #167d9a); color:var(--text-on-accent, #fff); font:500 14px/1 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; cursor:pointer; transition:background 150ms ease, border-color 150ms ease; } .ds-btn-primary:hover { background:var(--accent-hover, #106b85); border-color:var(--accent-hover, #106b85); } .ds-btn-primary:focus-visible { outline:2px solid var(--focus-ring, #167d9a); outline-offset:2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "次级操作：取消、返回、非破坏性的辅助动作。",
+      "html": "<button class=\"ds-btn-ghost\">取消</button>",
+      "css": ".ds-btn-ghost { display:inline-flex; align-items:center; justify-content:center; height:38px; padding:0 16px; border:1px solid var(--border-dark, #c7d6df); border-radius:8px; background:var(--bg-card, #fff); color:var(--text-primary, #173244); font:500 14px/1 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; cursor:pointer; transition:border-color 150ms ease, color 150ms ease; } .ds-btn-ghost:hover { border-color:var(--accent, #167d9a); color:var(--accent-hover, #106b85); } .ds-btn-ghost:focus-visible { outline:2px solid var(--focus-ring, #167d9a); outline-offset:2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "单行输入：任务标题、课程名、搜索。",
+      "html": "<input class=\"ds-input\" placeholder=\"添加一条任务\" />",
+      "css": ".ds-input { display:block; width:100%; height:38px; padding:0 12px; border:1px solid var(--border-dark, #c7d6df); border-radius:8px; background:var(--bg-card, #fff); color:var(--text-primary, #173244); font:400 14px/1.4 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; transition:border-color 150ms ease, box-shadow 150ms ease; } .ds-input::placeholder { color:var(--text-muted, #647b87); } .ds-input:focus { outline:none; border-color:var(--accent, #167d9a); box-shadow:0 0 0 2px var(--accent-soft, #e7f4f7); }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "任务条目、课程详情、AI 提案的通用容器。",
+      "html": "<section class=\"ds-card\"><h3>高等数学</h3><p>周三 3-4 节 · 教三楼 204</p></section>",
+      "css": ".ds-card { padding:16px; border:1px solid var(--divider, #dde6eb); border-radius:12px; background:var(--bg-card, #fff); color:var(--text-primary, #173244); box-shadow:none; } .ds-card h3 { margin:0 0 4px; font:600 15px/1.4 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; } .ds-card p { margin:0; color:var(--text-secondary, #536b78); font:400 12px/1.5 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "左侧导航的当前项与非当前项。",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item is-active\" href=\"#\">今日</a><a class=\"ds-nav-item\" href=\"#\">课表</a></nav>",
+      "css": ".ds-nav { display:flex; flex-direction:column; gap:4px; width:200px; padding:8px; border-radius:12px; background:var(--bg-sidebar, #f5f8fa); } .ds-nav-item { position:relative; display:flex; align-items:center; height:38px; padding:0 12px; border-radius:8px; color:var(--text-secondary, #536b78); font:500 14px/1 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; text-decoration:none; transition:background 150ms ease, color 150ms ease; } .ds-nav-item:hover { background:var(--bg-card, #fff); color:var(--text-primary, #173244); } .ds-nav-item.is-active { background:var(--accent-soft, #e7f4f7); color:var(--accent-hover, #106b85); font-weight:600; } .ds-nav-item.is-active::before { content:''; position:absolute; left:0; top:8px; bottom:8px; width:3px; border-radius:999px; background:var(--accent, #167d9a); }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip-filter",
+      "description": "任务筛选与分类标签。",
+      "html": "<button class=\"ds-chip\">今天</button><button class=\"ds-chip is-selected\">全部</button>",
+      "css": ".ds-chip { display:inline-flex; align-items:center; height:26px; padding:0 12px; border:1px solid var(--border-light, #dde6eb); border-radius:999px; background:var(--bg-card, #fff); color:var(--text-secondary, #536b78); font:500 12px/1 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; cursor:pointer; transition:background 150ms ease, color 150ms ease, border-color 150ms ease; } .ds-chip:hover { border-color:var(--accent, #167d9a); color:var(--accent-hover, #106b85); } .ds-chip.is-selected { border-color:transparent; background:var(--accent-soft, #e7f4f7); color:var(--accent-hover, #106b85); }"
+    },
+    {
+      "name": "Timetable Course Block",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "周课表里的课程块：签名组件，承担一周的扫读。",
+      "html": "<div class=\"ds-course\"><strong>高等数学</strong><span>教三楼 204</span></div>",
+      "css": ".ds-course { display:flex; flex-direction:column; gap:2px; padding:8px 10px; border:1px solid var(--border-light, #dde6eb); border-left:3px solid var(--accent, #167d9a); border-radius:8px; background:var(--bg-card, #fff); color:var(--text-primary, #173244); box-shadow:none; } .ds-course strong { font:600 13px/1.35 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; } .ds-course span { color:var(--text-muted, #647b87); font:400 11px/1.3 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Day's Arc",
+    "overview": "Kexu 的界面围绕“一天怎么推进”组织，而不是围绕功能模块。顶部常驻的深色横条给出当前位置与周次，主区域按时间顺序展开今天的课、今天要做的事和下一件要处理的事；用户在这里的每一次点击，都应该是把一天往前推一格。系统的气质是安静的推进感：低饱和的青绿作为唯一的强调色，靠边框、留白和字号层级组织信息，而不是靠阴影或装饰。",
+    "keyCharacteristics": [
+      "扁平优先：静态表面没有阴影，层级由 1px 边框与背景差完成。",
+      "单一强调色：青绿系承担选中、主操作与进度，其他颜色只表达状态。",
+      "时间是一等公民：周次、节次、截止时间、日期在视觉上始终可扫读。",
+      "密度可调、层级不变：手机到桌面只改变列数与留白，不改变信息顺序。"
+    ],
+    "rules": [
+      { "name": "The Single Accent Rule", "body": "一屏之内，青绿只出现在当前选中项、主操作和需要立刻注意的数字上；其余地方用墨色与线色表达层级。", "section": "colors" },
+      { "name": "The 14px Base Rule", "body": "正文固定 14px，放大只发生在标题层级；不靠整体字号放大解决可读性，优先提高对比度与行距。", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "静态表面不加阴影；只有在覆盖页面内容、需要用户先处理它时，才允许出现投影。", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 用 1px 线色边框和背景差建立层级，让页面在无阴影情况下依然清楚。",
+      "Do 让青绿只承担“当前/主要/需要立刻注意”三类含义。",
+      "Do 保持 14px 正文字号与 12px 标签字号，用字重和颜色区分层级。",
+      "Do 在移动端维持单列信息顺序，先时间后内容。",
+      "Do 为每一类状态（空、加载、失败、未配置）给出明确文案。"
+    ],
+    "donts": [
+      "Don't 给静态卡片加投影，或用投影代替分组。",
+      "Don't 引入渐变、玻璃拟态或装饰性插画来增加“设计感”。",
+      "Don't 在同一个视图里同时使用青绿与另一种高饱和强调色。",
+      "Don't 继续把蓝色当作品牌识别色扩展；主色的替换属于后续决策。",
+      "Don't 用卡片套卡片的方式表达层级，优先拆分区块。"
+    ]
+  }
+}

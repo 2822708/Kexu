@@ -65,3 +65,16 @@ src/android/local.properties
 *.jks
 *.keystore
 !src/android/gradle/wrapper/gradle-wrapper.jar
+
+# Impeccable: keep shared project artifacts, ignore runtime state and the downloaded engine
+.impeccable/*
+!.impeccable/config.json
+!.impeccable/design.json
+!.impeccable/live/
+.impeccable/live/*
+!.impeccable/live/config.json
+!.impeccable/surfaces/
+!.impeccable/surfaces/*.md
+!.impeccable/critique/
+!.impeccable/critique/*.md
+.opencode/skills/impeccable/scripts/bin/
