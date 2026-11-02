@@ -6,9 +6,59 @@
     <meta name="theme-color" content="#f5f8fa" />
     <link rel="icon" type="image/svg+xml" href="/pwa/icon.svg" />
     <title>Kexu · 课表、待办与专注</title>
+    <script>
+      // 在样式与脚本加载前应用主题，避免深色用户看到白色闪屏。
+      try {
+        var mode = localStorage.getItem('timetable-theme')
+        if (mode === 'dark' || mode === 'light') document.documentElement.dataset.theme = mode
+      } catch (e) {}
+    </script>
+    <style>
+      html, body { margin: 0; background: #f5f8fa; }
+      html[data-theme='dark'], html[data-theme='dark'] body { background: #101d27; }
+      #root { min-height: 100vh; }
+      .boot-splash {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        color: #52606b;
+        font: 400 14px/1.6 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      }
+      html[data-theme='dark'] .boot-splash { color: #97afbb; }
+      .boot-brand { font-size: 22px; font-weight: 600; color: #173244; }
+      html[data-theme='dark'] .boot-brand { color: #e5f0f5; }
+      .boot-bar { width: 76px; height: 3px; border-radius: 999px; background: rgba(23, 50, 68, 0.12); overflow: hidden; }
+      html[data-theme='dark'] .boot-bar { background: rgba(229, 240, 245, 0.14); }
+      .boot-bar::after {
+        content: '';
+        display: block;
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        background: #167d9a;
+        animation: boot-pulse 1.2s ease-in-out infinite;
+      }
+      html[data-theme='dark'] .boot-bar::after { background: #69c6d5; }
+      @keyframes boot-pulse {
+        0%, 100% { opacity: 0.35; }
+        50% { opacity: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-bar::after { animation: none; opacity: 0.6; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-splash" role="status" aria-live="polite">
+        <div class="boot-brand">Kexu</div>
+        <div class="boot-bar" aria-hidden="true"></div>
+        <div>正在打开 Kexu…</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
