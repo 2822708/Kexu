@@ -7,11 +7,11 @@
   "windows": "Kexu-Windows-x64.zip",
   "notes": "docs/install/release-notes.md",
   "publishedAssets": {
-    "INSTALL.md": "2ada6241461a9f0e8303aa945d21344c2a71992e2138e63fb31982340b3a2616",
+    "INSTALL.md": "5c873d72bfdb805f3d408e0ad7d5b9fc2114b72c9bdcd3568718be8eb9e8ef02",
     "Kexu-Android-2026.11.01.apk": "19f378936395bb44e077bdac1fba96df05ec26a10c0bc1d9d0c5b7808c017f8a",
     "Kexu-Install.html": "86cf51d098210fd0a43ab061dbc3b31a7f634928e0c8cc7942d797ebf58d5518",
     "Kexu-Windows-x64.zip": "ccc8f4addc64bb4594a8848660f9afc9158fd513c2dc03b4f214b50c852370e3",
     "RELEASE_MANIFEST.json": "89285bb72bd10b0ea3958ca652ad13f9783cb955c080266dfc18703619772941",
-    "SHA256SUMS.txt": "919d6c50813cb52a05fb1881ccc5cf2944a9db6402f750ebde3157aca076c5ae"
+    "SHA256SUMS.txt": "ad704ab2f0b5191561e489258b50caf1ca1fa7c5eb831386029fa3224047b4c1"
   }
 }
