@@ -116,6 +116,9 @@ async function runInitialization(): Promise<LocalState> {
  *
  * 旧实现里 readLocalState / mutateLocalState 每次都会调用初始化，
  * 每次都要完整读取、校验并 structuredClone 整份状态；启动链路因此重复 3~5 次。
+ *
+ * 返回的是首次初始化时的快照，可能随后被写入更新；
+ * 需要当前数据请调用 readLocalState()。
  */
 export function initializeLocalStore(): Promise<LocalState> {
   if (!initialization) {
