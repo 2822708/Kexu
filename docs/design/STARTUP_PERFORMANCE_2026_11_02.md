@@ -20,21 +20,21 @@ Android 端冷启动到看到内容有数秒等待，期间只有系统背景色
 | 改动 | 文件 | 效果 |
 |---|---|---|
 | 初始化按页面缓存 | `local/db.ts` | 同一页面只做一次整读+校验，后续调用复用 Promise；`closeLocalStore` 与 `onversionchange` 会重置缓存 |
-| 维护任务移出关键路径 | `store/LocalAppProvider.tsx` | 先 `load()` 出首屏，再后台执行 `runLocalMaintenance()`；有变更时通过既有 `notify()` 订阅自动刷新 |
+| 维护任务仍在首屏前执行 | `store/LocalAppProvider.tsx` | 先 `runLocalMaintenance()` 再 `load()`：首屏即最终状态，代价是启动多等一次维护事务 |
 | 首屏骨架 + 主题预应用 | `index.html` | HTML 解析后立刻显示品牌与进度条；内联脚本在样式与脚本前设置 `data-theme`，消除深色用户的白闪 |
-| 启动打点 | `store/LocalAppProvider.tsx` | 写入 `kexu:init:start` / `init:done` / `first-load:done` / `maintenance:done`，可用 `performance.getEntriesByType('mark')` 在真机 `chrome://inspect` 查看 |
+| 启动打点 | `store/LocalAppProvider.tsx` | 写入 `kexu:init:start` / `init:done` / `maintenance:done` / `first-load:done`，可用 `performance.getEntriesByType('mark')` 在真机 `chrome://inspect` 查看 |
 
-维护任务仍是每次启动执行、语义不变，只是不再阻塞首屏；它写入数据时会触发现有订阅刷新。
+**决策变更（2026-11-02）**：维护最初被移到首屏之后，评审认为“首屏可能先显示维护前的数据、随后列表跳动”的副作用不可接受，已回退为阻塞执行。保留的收益是初始化整读次数下降与首屏骨架。
 
 ## 实测（桌面，空数据集，`dist-shell` 静态服务）
 
 | 指标 | 数值 |
 |---|---|
-| 首屏内容出现 | 422 ms（热缓存）／604 ms（冷缓存） |
-| 本地初始化 | 5–13 ms |
-| 维护完成 | 首屏后约 105 ms |
+| 首屏内容出现 | 657 ms（阻塞维护，冷缓存；热缓存约 430 ms） |
+| 本地初始化 | 5–18 ms |
+| 维护事务 | 约 10 ms（空数据集） |
 
-数据量越大，被消除的“整读 + 校验 + clone”次数收益越明显（启动链路从 3~5 次降为 1 次）。
+数据量越大，被消除的“整读 + 校验 + clone”次数收益越明显（启动链路从 3~5 次降为 1 次）；维护仍占一次写事务，数据越多耗时越明显。
 
 ## 仍未解决
 

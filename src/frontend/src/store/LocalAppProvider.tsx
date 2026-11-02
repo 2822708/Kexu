@@ -99,6 +99,9 @@ export default function LocalAppProvider({
     try {
       await initializeLocalStore()
       mark('kexu:init:done')
+      // 维护在首屏前完成：首屏即最终状态，避免列表在打开瞬间跳动。
+      await runLocalMaintenance()
+      mark('kexu:maintenance:done')
       await load()
       mark('kexu:first-load:done')
     } catch (error) {
@@ -109,13 +112,6 @@ export default function LocalAppProvider({
       setReady(true)
       setLoading(false)
     }
-    // 维护（循环规则推进、过期任务收尾）不阻塞首屏；有变更时由本地订阅自动刷新。
-    void runLocalMaintenance()
-      .then(() => mark('kexu:maintenance:done'))
-      .catch((error) => {
-        // 失败不阻塞使用，但必须留下痕迹，避免“数据悄悄停在旧状态”。
-        console.warn('[kexu] 本地维护未完成，界面继续使用上次数据', error)
-      })
   }, [load])
 
   useEffect(() => {
