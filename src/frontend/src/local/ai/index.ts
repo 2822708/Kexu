@@ -23,6 +23,22 @@ const findConversation = (state: LocalState, id: number) => {
   if (!conv) throw new Error('本地对话不存在，可能已被删除或恢复替换')
   return conv
 }
+
+const IMAGE_REJECTED =
+  '图片请求被服务端拒绝（HTTP 400/415/422）。请检查图片格式与大小（JPEG、PNG、GIF、WebP），或更换支持图片的模型后重试。'
+
+/** 把失败原因转成可执行文案；只使用已净化的错误信息，不写入上游响应体。 */
+export function describeLocalAiFailure(error: unknown, aborted: boolean, withImages: boolean): string {
+  if (aborted) return '本次请求已取消，没有生成或执行任何提案。'
+  const raw =
+    error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string'
+      ? (error as { message: string }).message.trim()
+      : ''
+  if (withImages && /HTTP (400|415|422)/.test(raw)) return IMAGE_REJECTED
+  return raw
+    ? raw.slice(0, 200)
+    : '本次AI请求未完成或输出未通过校验，没有生成或执行任何提案。请检查提示后重试。'
+}
 function maskConfig(): AiConfig {
   const settings = getAiSettings()
   return {
@@ -202,8 +218,13 @@ export async function localAiStream(
     handlers.onText?.(parsed.reply)
     return result
   } catch (error) {
+    const failureText = describeLocalAiFailure(
+      error,
+      Boolean(signal?.aborted),
+      attached.length > 0,
+    )
     if (userId && captured) {
-      // Preserve a clear local history of failure without storing raw provider errors or partial JSON.
+      // 保留可执行的失败原因（例如“图片理解未开启”），但不写入任何上游原始响应体。
       await mutateLocalState((state) => {
         const conv = state.conversations.find(
           (item) => item.id === conversationId && item.publicId === convPublicId,
@@ -214,15 +235,12 @@ export async function localAiStream(
           newestUser(state, conversationId) !== userId
         )
           return
-        addMessage(
-          state,
-          conversationId,
-          'assistant',
-          signal?.aborted
-            ? '本次请求已取消，没有生成或执行任何提案。'
-            : '本次AI请求未完成或输出未通过校验，没有生成或执行任何提案。请检查提示后重试。',
-        )
+        addMessage(state, conversationId, 'assistant', failureText)
       }).catch(() => undefined)
+    }
+    if (failureText === IMAGE_REJECTED && error instanceof Error) {
+      error.message = IMAGE_REJECTED
+      throw error
     }
     throw error
   } finally {
@@ -281,6 +299,16 @@ export const localAiApi = {
         updatedAt: now,
       }
       state.conversations.push(conv)
+      return conv
+    }),
+  bindConversationSchedule: (id: number, scheduleId: number) =>
+    mutateLocalState((state): AiConversation => {
+      if (!state.schedules.some((row) => row.id === scheduleId))
+        throw new Error('请先选择有效课表')
+      const conv = findConversation(state, id)
+      if (conv.scheduleId != null) throw new Error('该对话已绑定课表，不能重复绑定')
+      conv.scheduleId = scheduleId
+      conv.updatedAt = new Date().toISOString()
       return conv
     }),
   deleteConversation: (id: number) =>
