@@ -130,7 +130,7 @@ export default function TimetableGrid({
         style={{
           minWidth: `calc(var(--tt-axis-width, 56px) + ${dayLaneCounts.reduce((sum, count) => sum + count, 0)} * var(--tt-day-min, 112px))`,
           gridTemplateColumns: `var(--tt-axis-width, 56px) ${dayLaneCounts.map((count) => `minmax(calc(${count} * var(--tt-day-min, 112px)), 1fr)`).join(' ')}`,
-          gridTemplateRows: `auto repeat(${periodList.length}, minmax(calc(var(--tt-row-min, 68px) * var(--tt-scale, 1)), 1fr))`,
+          gridTemplateRows: `auto repeat(${periodList.length}, minmax(calc(var(--tt-row-min, 68px) * var(--tt-scale, 1)), max-content))`,
         }}
       >
         <div className="tt-cell tt-head" style={{ gridColumn: 1, gridRow: 1 }}>

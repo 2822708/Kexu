@@ -333,3 +333,11 @@
   .daily-timetable-page .timetable-view-toolbar { padding-bottom: 4px; }
   .daily-timetable-page .timetable-page-header .daily-page-heading { gap: 2px; }
 }
+
+/* 流式排版：标题、间距、周次标签随宽度连续缩放，避免断点处跳动 */
+.daily-timetable-page .daily-page-heading h2.ant-typography {
+  font-size: clamp(18px, 4.6vw, 24px) !important;
+}
+.daily-timetable-page .timetable-page-header { gap: clamp(6px, 2vw, 16px); }
+.daily-timetable-page .timetable-week-label { min-width: clamp(56px, 16vw, 110px); }
+.daily-timetable-page .timetable-view-toolbar { padding-bottom: clamp(4px, 1.2vw, 12px); }
