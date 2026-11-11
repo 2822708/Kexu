@@ -15,7 +15,13 @@ export default defineConfig(({ mode, command }) => {
   }
   const target = env.VITE_DEV_API_TARGET || 'http://localhost:8080'
   const proxy = { '/api': { target, changeOrigin: true } }
+  // GitHub Pages 等子路径部署通过 VITE_BASE 指定，例如 /Kexu/。
+  const base = env.VITE_BASE ?? '/'
+  if (!base.startsWith('/') || !base.endsWith('/')) {
+    throw new Error('VITE_BASE 必须以 / 开头并以 / 结尾，例如 /Kexu/')
+  }
   return {
+    base,
     plugins: [react(), ...(mode === 'mobile' ? [mobilePwa()] : [])],
     server: {
       port: 5173,

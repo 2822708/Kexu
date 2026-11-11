@@ -16,6 +16,9 @@ if (import.meta.env.DEV) {
   console.info('[kexu] ' + APP_MODE.label + '（' + APP_MODE.source + '）：' + APP_MODE.hint)
 }
 
+// 子路径部署（如 GitHub Pages 的 /Kexu/）时，路由必须与 Vite base 保持一致。
+const routerBase = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/'
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BootErrorBoundary>
@@ -23,7 +26,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <AccentProvider>
           <ThemeProvider>
             <AntApp>
-              <BrowserRouter>
+              <BrowserRouter basename={routerBase}>
                 <AppProvider>
                   <App />
                 </AppProvider>

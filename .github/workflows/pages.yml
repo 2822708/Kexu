@@ -1,0 +1,56 @@
+name: Deploy trial to GitHub Pages
+
+on:
+  push:
+    branches: [fix/complete-optimization-plan]
+    paths:
+      - 'src/frontend/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+      - name: Build local-first PWA under /Kexu/
+        working-directory: src/frontend
+        env:
+          VITE_BASE: /Kexu/
+        run: npm run build:mobile
+      - name: Prepare SPA fallback and Pages metadata
+        working-directory: src/frontend
+        run: |
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: src/frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
