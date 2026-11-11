@@ -2,6 +2,25 @@
   min-height: 100dvh;
   display: grid;
   place-items: center;
+  box-sizing: border-box;
+  padding: 24px;
+}
+.app-loading-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.app-loading-block p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.app-loading-page > .ant-alert {
+  width: 100%;
+  max-width: 420px;
 }
 .app-shell {
   height: 100dvh;

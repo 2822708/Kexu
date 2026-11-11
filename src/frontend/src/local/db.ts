@@ -37,6 +37,8 @@ export function subscribeLocalChanges(cb: () => void): () => void {
   subscribers.add(cb)
   return () => subscribers.delete(cb)
 }
+/** 浏览器个别状态下 open 既不成功也不报错，超时后给出可操作的提示而不是无限转圈。 */
+const DB_OPEN_TIMEOUT_MS = 10_000
 function openDatabase(): Promise<IDBDatabase> {
   if (connection) return connection
   connection = new Promise<IDBDatabase>((resolve, reject) => {
@@ -46,14 +48,30 @@ function openDatabase(): Promise<IDBDatabase> {
     }
     const req = indexedDB.open(LOCAL_DATABASE_NAME, 2)
     let abandoned = false
+    let settled = false
+    const settle = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+    const timer = setTimeout(() => {
+      abandoned = true
+      settle(() =>
+        reject(
+          new Error('打开本机数据超时，请关闭其他课表页面，或清除本站数据后重试'),
+        ),
+      )
+    }, DB_OPEN_TIMEOUT_MS)
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE_NAME))
         req.result.createObjectStore(STORE_NAME)
     }
-    req.onerror = () => reject(new Error(`本地数据库无法打开：${req.error?.message ?? '未知错误'}`))
+    req.onerror = () =>
+      settle(() => reject(new Error(`本地数据库无法打开：${req.error?.message ?? '未知错误'}`)))
     req.onblocked = () => {
       abandoned = true
-      reject(new Error('本地数据库升级被其他页面阻塞，请关闭其他课表页面后重试'))
+      settle(() => reject(new Error('本地数据库升级被其他页面阻塞，请关闭其他课表页面后重试')))
     }
     req.onsuccess = () => {
       const db = req.result
@@ -66,7 +84,7 @@ function openDatabase(): Promise<IDBDatabase> {
         connection = null
         initialization = null
       }
-      resolve(db)
+      settle(() => resolve(db))
     }
   }).catch((error) => {
     connection = null

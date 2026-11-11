@@ -19,18 +19,21 @@ const WidgetPreviewPage = lazy(() => import('./pages/WidgetPreviewPage'))
 export default function App() {
   return (
     <>
-      <Suspense
-        fallback={
-          <div className="app-loading-page">
-            <Spin tip="正在打开页面…">
-              <div style={{ height: 48 }} />
-            </Spin>
-          </div>
-        }
-      >
+      <Suspense fallback={<BootLoading text="正在打开页面…" />}>
         <AppRoutes />
       </Suspense>
     </>
+  )
+}
+
+function BootLoading({ text }: { text: string }) {
+  return (
+    <div className="app-loading-page" role="status" aria-live="polite">
+      <div className="app-loading-block">
+        <Spin size="large" />
+        <p>{text}</p>
+      </div>
+    </div>
   )
 }
 
@@ -48,21 +51,16 @@ function AppRoutes() {
   }
 
   if (LOCAL_MODE && (!ready || !authed)) {
+    if (!ready || (!authed && !connectionError)) return <BootLoading text="正在打开本机数据" />
     return (
       <div className="app-loading-page">
-        {!ready || (!authed && !connectionError) ? (
-          <Spin tip="正在打开本机数据">
-            <div style={{ height: 48 }} />
-          </Spin>
-        ) : (
-          <Alert
-            type="error"
-            showIcon
-            message="本机数据暂时无法打开"
-            description={connectionError ?? '请允许浏览器保存数据，并保留当前网站数据后重试。'}
-            action={<Button onClick={() => void reconnect()}>重试</Button>}
-          />
-        )}
+        <Alert
+          type="error"
+          showIcon
+          message="本机数据暂时无法打开"
+          description={connectionError ?? '请允许浏览器保存数据，并保留当前网站数据后重试。'}
+          action={<Button onClick={() => void reconnect()}>重试</Button>}
+        />
       </div>
     )
   }
