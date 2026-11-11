@@ -1,0 +1,709 @@
+From 23aeb5424926166781acef1ccfd5b31f197c1a55 Mon Sep 17 00:00:00 2001
+From: zhaohanchun <xcjasonjack@qq.com>
+Date: Wed, 11 Nov 2026 21:19:10 +0800
+Subject: [PATCH] fix: make mobile startup consistent and recoverable
+
+---
+ ...-11-11-MOBILE_TIMETABLE_AND_BOOT_REPORT.md |  6 ++
+ src/android-shell/app/build.gradle.kts        |  4 +-
+ src/frontend/index.html                       | 52 ++++++++----
+ src/frontend/public/boot.js                   | 31 +++++++
+ src/frontend/scripts/test-local-core.mjs      |  9 +-
+ src/frontend/src/App.tsx                      | 37 +++------
+ src/frontend/src/components/BootScreen.tsx    | 64 +++++++++++++++
+ src/frontend/src/local/db.ts                  | 19 ++---
+ src/frontend/src/main.tsx                     | 29 ++++---
+ src/frontend/src/mobile.css                   | 24 ------
+ src/frontend/src/store/FontContext.tsx        | 20 ++++-
+ src/frontend/src/store/LocalAppProvider.tsx   | 82 +++++++++++++------
+ src/frontend/src/theme.tsx                    | 14 +++-
+ 13 files changed, 265 insertions(+), 126 deletions(-)
+ create mode 100644 src/frontend/public/boot.js
+ create mode 100644 src/frontend/src/components/BootScreen.tsx
+
+diff --git a/docs/reviews/2026-11-11-MOBILE_TIMETABLE_AND_BOOT_REPORT.md b/docs/reviews/2026-11-11-MOBILE_TIMETABLE_AND_BOOT_REPORT.md
+index 94a43b5..22a6fcc 100644
+--- a/docs/reviews/2026-11-11-MOBILE_TIMETABLE_AND_BOOT_REPORT.md
++++ b/docs/reviews/2026-11-11-MOBILE_TIMETABLE_AND_BOOT_REPORT.md
+@@ -7,6 +7,12 @@
+ - 范围：手机课表显示、启动加载页、左右滑动、本地预览、本地发行包
+ - 结论：加载页本身是代码里的正常界面，不是浏览器错误页；长时间停留是浏览器本机数据（IndexedDB）未及时响应，已用 10 秒超时和错误提示兜底。课表已按要求加长并允许上下滚动。
+ 
++## 启动页复核（2026-11-11）
++
++下文保留 `2026.11.11.2` 的原始记录。使用独立 Edge 配置和 Android WebView 的内容安全策略复现了三个遗漏场景。入口脚本请求失败会让静态启动页一直转圈，首次路由脚本请求失败会造成白屏，IndexedDB 打开成功后初始化事务仍可能迟迟不返回。仅测试 `indexedDB.open` 无法区分这些情况。
++
++`2026.11.11.3` 将静态启动、读取本机数据和首次路由加载统一为「圆环 + 完美人生正在到来」。入口脚本和路由加载失败会显示「重新加载」，本机数据启动的初始化、维护和首读共用 15 秒上限。深色启动由同源脚本处理。重试通过重新加载页面释放当前连接并保留站点数据。旧记录中清除站点数据的提示会移除本机数据库，已从应用中删除。
++
+ ## 1. 问题清单
+ 
+ | # | 现象 | 归属 | 根因 | 处理 |
+diff --git a/src/android-shell/app/build.gradle.kts b/src/android-shell/app/build.gradle.kts
+index 253607b..27ee9bc 100644
+--- a/src/android-shell/app/build.gradle.kts
++++ b/src/android-shell/app/build.gradle.kts
+@@ -13,8 +13,8 @@ android {
+         applicationId = "com.kexu.local"
+         minSdk = 26
+         targetSdk = 36
+-        versionCode = 2026111102
+-        versionName = "2026.11.11.2"
++        versionCode = 2026111103
++        versionName = "2026.11.11.3"
+     }
+     buildFeatures { buildConfig = true }
+     compileOptions {
+diff --git a/src/frontend/index.html b/src/frontend/index.html
+index ef3c022..99d50d7 100644
+--- a/src/frontend/index.html
++++ b/src/frontend/index.html
+@@ -6,29 +6,32 @@
+     <meta name="theme-color" content="#f5f8fa" />
+     <link rel="icon" type="image/svg+xml" href="/pwa/icon.svg" />
+     <title>Kexu · 课表、待办与专注</title>
+-    <script>
+-      // 在样式与脚本加载前应用主题，避免深色用户看到白色闪屏。
+-      try {
+-        var mode = localStorage.getItem('timetable-theme')
+-        if (mode === 'dark' || mode === 'light') document.documentElement.dataset.theme = mode
+-      } catch (e) {}
+-    </script>
++    <script src="/boot.js"></script>
+     <style>
+       html, body { margin: 0; background: #f5f8fa; }
+       html[data-theme='dark'], html[data-theme='dark'] body { background: #101d27; }
+-      #root { min-height: 100vh; }
++      #root { min-height: 100vh; min-height: 100dvh; }
+       .boot-splash {
+         min-height: 100vh;
++        min-height: 100dvh;
++        box-sizing: border-box;
+         display: flex;
+-        flex-direction: column;
+         align-items: center;
+         justify-content: center;
+-        gap: 16px;
++        padding: 16px;
++        text-align: center;
+         color: #52606b;
+         font: 400 14px/1.6 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+       }
++      .boot-status:not([hidden]) {
++        display: flex;
++        flex-direction: column;
++        align-items: center;
++        gap: 16px;
++      }
+       html[data-theme='dark'] .boot-splash { color: #97afbb; }
+       .boot-spinner {
++        box-sizing: border-box;
+         width: 38px;
+         height: 38px;
+         border-radius: 50%;
+@@ -42,9 +45,20 @@
+       }
+       .boot-message {
+         margin: 0;
+-        white-space: nowrap;
+         letter-spacing: 0.02em;
+       }
++      .boot-error { max-width: 30em; }
++      .boot-error p { margin: 0 0 16px; overflow-wrap: anywhere; }
++      .boot-error button {
++        min-height: 44px;
++        padding: 8px 16px;
++        border: 1px solid currentColor;
++        border-radius: 8px;
++        background: transparent;
++        color: inherit;
++        font: inherit;
++        cursor: pointer;
++      }
+       @keyframes boot-spin {
+         to { transform: rotate(360deg); }
+       }
+@@ -55,9 +69,19 @@
+   </head>
+   <body>
+     <div id="root">
+-      <div class="boot-splash" role="status" aria-live="polite">
+-        <span class="boot-spinner" aria-hidden="true"></span>
+-        <p class="boot-message">完美人生正在到来</p>
++      <div class="boot-splash">
++        <div id="boot-start-status" class="boot-status" role="status">
++          <span class="boot-spinner" aria-hidden="true"></span>
++          <p class="boot-message">完美人生正在到来</p>
++        </div>
++        <div id="boot-start-error" class="boot-error" hidden>
++          <p role="alert"><strong>Kexu 启动失败</strong><br />页面资源暂时无法加载，请重新打开。</p>
++          <button id="boot-start-retry" type="button">重新加载</button>
++        </div>
++        <noscript>
++          <style>#boot-start-status { display: none; }</style>
++          <p>请启用 JavaScript 后重新打开 Kexu。</p>
++        </noscript>
+       </div>
+     </div>
+     <script type="module" src="/src/main.tsx"></script>
+diff --git a/src/frontend/public/boot.js b/src/frontend/public/boot.js
+new file mode 100644
+index 0000000..778559e
+--- /dev/null
++++ b/src/frontend/public/boot.js
+@@ -0,0 +1,31 @@
++// Android WebView and the PWA allow same-origin scripts under their CSP.
++(() => {
++  try {
++    const mode = localStorage.getItem('timetable-theme')
++    if (mode === 'dark' || mode === 'light') document.documentElement.dataset.theme = mode
++  } catch {
++    // Preferences are optional when browser storage is restricted.
++  }
++
++  function showError() {
++    const status = document.getElementById('boot-start-status')
++    const error = document.getElementById('boot-start-error')
++    if (!status || !error || !error.hidden) return
++    status.hidden = true
++    error.hidden = false
++    document.getElementById('boot-start-retry').addEventListener('click', () => location.reload())
++  }
++
++  function onScriptError(event) {
++    if (event.target instanceof HTMLScriptElement && event.target.type === 'module') {
++      showError()
++    }
++  }
++
++  const timer = window.setTimeout(showError, 15_000)
++  window.addEventListener('error', onScriptError, true)
++  window.addEventListener('kexu:react-mounted', () => {
++    window.clearTimeout(timer)
++    window.removeEventListener('error', onScriptError, true)
++  }, { once: true })
++})()
+diff --git a/src/frontend/scripts/test-local-core.mjs b/src/frontend/scripts/test-local-core.mjs
+index 3cbe583..0df9f44 100644
+--- a/src/frontend/scripts/test-local-core.mjs
++++ b/src/frontend/scripts/test-local-core.mjs
+@@ -9,7 +9,7 @@ import ts from 'typescript'
+ 
+ // fake-indexeddb implements IndexedDB requests/transactions, rather than mocking our DB facade.
+ // Each case receives a fresh database factory; close/reopen retains that factory's persisted records.
+-function setup(indexedDB = new IDBFactory()) {
++function setup(indexedDB = new IDBFactory(), globals = {}) {
+   const modules = new Map()
+   const nativeRequire = createRequire(import.meta.url)
+   const context = vm.createContext({
+@@ -21,6 +21,7 @@ function setup(indexedDB = new IDBFactory()) {
+     clearTimeout,
+     Intl,
+     Date,
++    ...globals,
+   })
+   function loadSource(url) {
+     if (modules.has(url.href)) return modules.get(url.href).exports
+@@ -100,6 +101,12 @@ test('concurrent first initialization shares one dataset and survives database r
+   assert.equal(restored.schedules[0].name, scheduleBody.name)
+   assert.equal(restored.revision, 1)
+ })
++test('initialization commits and settles without cloning a discarded snapshot', async () => {
++  const x = setup(new IDBFactory(), { structuredClone: undefined })
++  assert.equal(await x.initializeLocalStore(), undefined)
++  assert.equal((await x.readLocalState()).periods.length, 12)
++  await x.closeLocalStore()
++})
+ test('40 concurrent IDB writes allocate unique IDs and commit every record', async () => {
+   const x = setup()
+   let notifications = 0
+diff --git a/src/frontend/src/App.tsx b/src/frontend/src/App.tsx
+index 227586c..d232bad 100644
+--- a/src/frontend/src/App.tsx
++++ b/src/frontend/src/App.tsx
+@@ -1,8 +1,8 @@
+ import { LOCAL_MODE } from './local/mode'
+ import { lazy, Suspense } from 'react'
+-import { Alert, Button, Spin } from 'antd'
+ import { Navigate, Route, Routes, useLocation, type Location } from 'react-router-dom'
+ import AppLayout from './components/AppLayout'
++import { BootError, BootLoading } from './components/BootScreen'
+ import SwipePager from './components/SwipePager'
+ import DeviceConnectionPage from './pages/DeviceConnectionPage'
+ import { useApp } from './store/AppContext'
+@@ -18,22 +18,9 @@ const WidgetPreviewPage = lazy(() => import('./pages/WidgetPreviewPage'))
+ 
+ export default function App() {
+   return (
+-    <>
+-      <Suspense fallback={<BootLoading text="正在打开页面…" />}>
+-        <AppRoutes />
+-      </Suspense>
+-    </>
+-  )
+-}
+-
+-function BootLoading({ text }: { text: string }) {
+-  return (
+-    <div className="app-loading-page" role="status" aria-live="polite">
+-      <div className="app-loading-block">
+-        <Spin size="large" />
+-        <p>{text}</p>
+-      </div>
+-    </div>
++    <Suspense fallback={<BootLoading waitingForPage />}>
++      <AppRoutes />
++    </Suspense>
+   )
+ }
+ 
+@@ -51,17 +38,13 @@ function AppRoutes() {
+   }
+ 
+   if (LOCAL_MODE && (!ready || !authed)) {
+-    if (!ready || (!authed && !connectionError)) return <BootLoading text="正在打开本机数据" />
++    if (!connectionError) return <BootLoading />
+     return (
+-      <div className="app-loading-page">
+-        <Alert
+-          type="error"
+-          showIcon
+-          message="本机数据暂时无法打开"
+-          description={connectionError ?? '请允许浏览器保存数据，并保留当前网站数据后重试。'}
+-          action={<Button onClick={() => void reconnect()}>重试</Button>}
+-        />
+-      </div>
++      <BootError
++        title="本机数据暂时无法打开"
++        description={connectionError}
++        onRetry={() => void reconnect()}
++      />
+     )
+   }
+   if (!ready || !authed) {
+diff --git a/src/frontend/src/components/BootScreen.tsx b/src/frontend/src/components/BootScreen.tsx
+new file mode 100644
+index 0000000..165bdbd
+--- /dev/null
++++ b/src/frontend/src/components/BootScreen.tsx
+@@ -0,0 +1,64 @@
++import { Component, useEffect, useState, type ReactNode } from 'react'
++
++export function BootLoading({ waitingForPage = false }: { waitingForPage?: boolean }) {
++  const [timedOut, setTimedOut] = useState(false)
++
++  useEffect(() => {
++    if (!waitingForPage) return
++    const timer = window.setTimeout(() => setTimedOut(true), 15_000)
++    return () => window.clearTimeout(timer)
++  }, [waitingForPage])
++
++  if (timedOut) return <BootError description="页面加载超时，请重新打开。" />
++  return (
++    <div className="boot-splash">
++      <div className="boot-status" role="status">
++        <span className="boot-spinner" aria-hidden="true" />
++        <p className="boot-message">完美人生正在到来</p>
++      </div>
++    </div>
++  )
++}
++
++export function BootError({
++  title = 'Kexu 启动失败',
++  description,
++  onRetry = () => window.location.reload(),
++}: {
++  title?: string
++  description: string
++  onRetry?: () => void
++}) {
++  return (
++    <div className="boot-splash">
++      <div className="boot-error">
++        <p role="alert">
++          <strong>{title}</strong>
++          <br />
++          {description}
++        </p>
++        <button type="button" onClick={onRetry}>
++          重新加载
++        </button>
++      </div>
++    </div>
++  )
++}
++
++export class BootErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
++  state = { failed: false }
++
++  static getDerivedStateFromError() {
++    return { failed: true }
++  }
++
++  componentDidMount() {
++    window.dispatchEvent(new Event('kexu:react-mounted'))
++  }
++
++  render() {
++    return this.state.failed
++      ? <BootError description="页面资源或应用初始化失败，请重新打开。" />
++      : this.props.children
++  }
++}
+diff --git a/src/frontend/src/local/db.ts b/src/frontend/src/local/db.ts
+index 959ddde..b6b2b84 100644
+--- a/src/frontend/src/local/db.ts
++++ b/src/frontend/src/local/db.ts
+@@ -59,7 +59,7 @@ function openDatabase(): Promise<IDBDatabase> {
+       abandoned = true
+       settle(() =>
+         reject(
+-          new Error('打开本机数据超时，请关闭其他课表页面，或清除本站数据后重试'),
++          new Error('打开本机数据超时，请关闭其他 Kexu 页面后重新加载'),
+         ),
+       )
+     }, DB_OPEN_TIMEOUT_MS)
+@@ -94,17 +94,17 @@ function openDatabase(): Promise<IDBDatabase> {
+ }
+ 
+ /** Initializes in one read/write transaction so simultaneous first tabs create one dataset. */
+-async function runInitialization(): Promise<LocalState> {
++async function runInitialization(): Promise<void> {
+   const db = await openDatabase()
+   return new Promise((resolve, reject) => {
+     const tx = db.transaction(STORE_NAME, 'readwrite')
+     const store = tx.objectStore(STORE_NAME)
+-    let result: LocalState
+     let failure: unknown
+     const get = store.get(STATE_KEY)
+     get.onsuccess = () => {
+       try {
+         const original = get.result
++        let result: LocalState
+         if (original?.schemaVersion === 1) {
+           result = migrateLocalStateV1(original)
+           // Both the exact old value and new state commit together, or neither does.
+@@ -120,7 +120,7 @@ async function runInitialization(): Promise<LocalState> {
+     }
+     tx.oncomplete = () => {
+       setupChannel()
+-      resolve(structuredClone(result))
++      resolve()
+     }
+     tx.onabort = () => reject(failure ?? tx.error ?? new Error('本地数据库初始化失败'))
+     tx.onerror = () => {
+@@ -140,13 +140,10 @@ async function runInitialization(): Promise<LocalState> {
+  */
+ export function initializeLocalStore(): Promise<void> {
+   if (!initialization) {
+-    initialization = runInitialization().then(
+-      () => undefined,
+-      (error) => {
+-        initialization = null
+-        throw error
+-      },
+-    )
++    initialization = runInitialization().catch((error) => {
++      initialization = null
++      throw error
++    })
+   }
+   return initialization
+ }
+diff --git a/src/frontend/src/main.tsx b/src/frontend/src/main.tsx
+index 9ecaef5..a938c98 100644
+--- a/src/frontend/src/main.tsx
++++ b/src/frontend/src/main.tsx
+@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
+ import { BrowserRouter } from 'react-router-dom'
+ import { App as AntApp } from 'antd'
+ import App from './App'
++import { BootErrorBoundary } from './components/BootScreen'
+ import { AppProvider } from './store/AppContext'
+ import { FontProvider } from './store/FontContext'
+ import { AccentProvider } from './store/AccentContext'
+@@ -17,18 +18,20 @@ if (import.meta.env.DEV) {
+ 
+ ReactDOM.createRoot(document.getElementById('root')!).render(
+   <React.StrictMode>
+-    <FontProvider>
+-      <AccentProvider>
+-        <ThemeProvider>
+-          <AntApp>
+-            <BrowserRouter>
+-              <AppProvider>
+-                <App />
+-              </AppProvider>
+-            </BrowserRouter>
+-          </AntApp>
+-        </ThemeProvider>
+-      </AccentProvider>
+-    </FontProvider>
++    <BootErrorBoundary>
++      <FontProvider>
++        <AccentProvider>
++          <ThemeProvider>
++            <AntApp>
++              <BrowserRouter>
++                <AppProvider>
++                  <App />
++                </AppProvider>
++              </BrowserRouter>
++            </AntApp>
++          </ThemeProvider>
++        </AccentProvider>
++      </FontProvider>
++    </BootErrorBoundary>
+   </React.StrictMode>,
+ )
+diff --git a/src/frontend/src/mobile.css b/src/frontend/src/mobile.css
+index 4700c1f..d8d82ae 100644
+--- a/src/frontend/src/mobile.css
++++ b/src/frontend/src/mobile.css
+@@ -1,27 +1,3 @@
+-.app-loading-page {
+-  min-height: 100dvh;
+-  display: grid;
+-  place-items: center;
+-  box-sizing: border-box;
+-  padding: 24px;
+-}
+-.app-loading-block {
+-  display: flex;
+-  flex-direction: column;
+-  align-items: center;
+-  gap: 12px;
+-  text-align: center;
+-  color: var(--text-secondary);
+-}
+-.app-loading-block p {
+-  margin: 0;
+-  font-size: 14px;
+-  line-height: 1.5;
+-}
+-.app-loading-page > .ant-alert {
+-  width: 100%;
+-  max-width: 420px;
+-}
+ .app-shell {
+   height: 100dvh;
+ }
+diff --git a/src/frontend/src/store/FontContext.tsx b/src/frontend/src/store/FontContext.tsx
+index e978bc1..7ffd4a6 100644
+--- a/src/frontend/src/store/FontContext.tsx
++++ b/src/frontend/src/store/FontContext.tsx
+@@ -21,8 +21,20 @@ const Ctx = createContext<FontCtx>({
+ export const useFont = () => useContext(Ctx)
+ 
+ function load(key: string): number {
+-  const v = Number(localStorage.getItem(key))
+-  return Number.isFinite(v) && v > 0 ? v : DEFAULT_SCALE
++  try {
++    const v = Number(localStorage.getItem(key))
++    return Number.isFinite(v) && v > 0 ? v : DEFAULT_SCALE
++  } catch {
++    return DEFAULT_SCALE
++  }
++}
++
++function save(key: string, value: number) {
++  try {
++    localStorage.setItem(key, String(value))
++  } catch {
++    // The font setting still applies for this session.
++  }
+ }
+ 
+ /**
+@@ -45,11 +57,11 @@ export function FontProvider({ children }: { children: ReactNode }) {
+ 
+   const setGlobalScale = (v: number) => {
+     setGlobalScaleState(v)
+-    localStorage.setItem(GLOBAL_KEY, String(v))
++    save(GLOBAL_KEY, v)
+   }
+   const setTtScale = (v: number) => {
+     setTtScaleState(v)
+-    localStorage.setItem(TT_KEY, String(v))
++    save(TT_KEY, v)
+   }
+ 
+   return (
+diff --git a/src/frontend/src/store/LocalAppProvider.tsx b/src/frontend/src/store/LocalAppProvider.tsx
+index 86c9caf..80e8828 100644
+--- a/src/frontend/src/store/LocalAppProvider.tsx
++++ b/src/frontend/src/store/LocalAppProvider.tsx
+@@ -16,6 +16,7 @@ import type { LocalState } from '../local/types'
+ import { startAutoBackup } from '../backup/coordinator'
+ 
+ const SELECTION_KEY = 'kexu.local.activeSchedulePublicId'
++const STARTUP_TIMEOUT_MS = 15_000
+ 
+ /** 启动耗时打点；性能测量失败绝不能影响启动。 */
+ function mark(name: string) {
+@@ -56,7 +57,6 @@ export default function LocalAppProvider({
+   const [connectionError, setConnectionError] = useState<string | null>(null)
+   const [data, setData] = useState<LocalState | null>(null)
+   const [activeScheduleId, setActiveId] = useState<number | null>(null)
+-  const [loading, setLoading] = useState(true)
+   const dataRef = useRef<LocalState | null>(null)
+   const selectedRef = useRef(selectedPublicId())
+   const sequence = useRef(0)
+@@ -73,10 +73,7 @@ export default function LocalAppProvider({
+     }
+   }, [])
+ 
+-  const load = useCallback(async () => {
+-    const request = ++sequence.current
+-    const incoming = await readLocalState()
+-    if (request !== sequence.current) return incoming
++  const applyState = useCallback((incoming: LocalState) => {
+     const previous = dataRef.current
+     if (previous)
+       for (const key of collections) {
+@@ -89,34 +86,65 @@ export default function LocalAppProvider({
+       incoming.schedules.find((item) => item.publicId === selectedRef.current) ??
+       incoming.schedules[0]
+     setActiveScheduleId(selected?.id ?? null)
+-    return incoming
+   }, [setActiveScheduleId])
+ 
++  const load = useCallback(async () => {
++    const request = ++sequence.current
++    const incoming = await readLocalState()
++    if (request === sequence.current) applyState(incoming)
++    return incoming
++  }, [applyState])
++
+   const reconnect = useCallback(async () => {
+-    setLoading(true)
+-    setConnectionError(null)
+-    mark('kexu:init:start')
+-    try {
+-      await initializeLocalStore()
+-      mark('kexu:init:done')
+-      // 维护在首屏前完成：首屏即最终状态，避免列表在打开瞬间跳动。
+-      await runLocalMaintenance()
+-      mark('kexu:maintenance:done')
+-      await load()
+-      mark('kexu:first-load:done')
+-    } catch (error) {
++    // Reloading releases this page's pending IndexedDB requests before retrying.
++    window.location.reload()
++  }, [])
++
++  useEffect(() => {
++    let active = true
++    const fail = (error: unknown) => {
++      if (!active) return
++      active = false
+       setConnectionError(
+         error instanceof Error ? error.message : '本地数据无法打开，请检查浏览器存储权限',
+       )
+-    } finally {
+       setReady(true)
+-      setLoading(false)
+     }
+-  }, [load])
++    const timer = window.setTimeout(() => {
++      fail(new Error('读取本机数据超时。请关闭其他 Kexu 页面后重新加载。'))
++    }, STARTUP_TIMEOUT_MS)
++
++    async function start() {
++      mark('kexu:init:start')
++      try {
++        await initializeLocalStore()
++        if (!active) return
++        mark('kexu:init:done')
++        // 维护在首屏前完成，避免列表在打开瞬间跳动。
++        await runLocalMaintenance()
++        if (!active) return
++        mark('kexu:maintenance:done')
++        const incoming = await readLocalState()
++        if (!active) return
++        applyState(incoming)
++        mark('kexu:first-load:done')
++        setReady(true)
++      } catch (error) {
++        fail(error)
++      } finally {
++        window.clearTimeout(timer)
++      }
++    }
++    void start()
++    return () => {
++      active = false
++      window.clearTimeout(timer)
++    }
++  }, [applyState])
+ 
+   useEffect(() => {
++    if (!ready || connectionError) return
+     let active = true
+-    let stopBackup = () => {}
+     const refresh = () => {
+       if (active)
+         void load().catch((error) =>
+@@ -124,9 +152,9 @@ export default function LocalAppProvider({
+         )
+     }
+     const stopChanges = subscribeLocalChanges(refresh)
+-    void reconnect().then(() => {
+-      if (active && dataRef.current) stopBackup = startAutoBackup()
+-    })
++    // Reconcile writes from another tab between the first read and subscription.
++    refresh()
++    const stopBackup = startAutoBackup()
+     const maintain = () => {
+       if (document.visibilityState === 'visible')
+         void runLocalMaintenance()
+@@ -147,7 +175,7 @@ export default function LocalAppProvider({
+       window.removeEventListener('focus', maintain)
+       window.removeEventListener('storage', refresh)
+     }
+-  }, [load, reconnect])
++  }, [connectionError, load, ready])
+ 
+   const refreshAll = useCallback(async () => {
+     await load()
+@@ -181,7 +209,7 @@ export default function LocalAppProvider({
+     todos: data?.todos ?? [],
+     recurringTodos: data?.recurringRules ?? [],
+     periods: data?.periods ?? [],
+-    loading,
++    loading: !ready,
+     setActiveScheduleId,
+     refreshSchedules,
+     refreshCourses: refreshAll,
+diff --git a/src/frontend/src/theme.tsx b/src/frontend/src/theme.tsx
+index 265304b..3e51d18 100644
+--- a/src/frontend/src/theme.tsx
++++ b/src/frontend/src/theme.tsx
+@@ -17,8 +17,12 @@ export const useTheme = () => useContext(Ctx)
+ const STORAGE_KEY = 'timetable-theme'
+ 
+ function getInitialMode(): Mode {
+-  const saved = localStorage.getItem(STORAGE_KEY)
+-  if (saved === 'light' || saved === 'dark') return saved
++  try {
++    const saved = localStorage.getItem(STORAGE_KEY)
++    if (saved === 'light' || saved === 'dark') return saved
++  } catch {
++    // Preferences may be unavailable in restricted browser contexts.
++  }
+   return 'light'
+ }
+ 
+@@ -90,7 +94,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
+ 
+   useEffect(() => {
+     document.documentElement.dataset.theme = mode
+-    localStorage.setItem(STORAGE_KEY, mode)
++    try {
++      localStorage.setItem(STORAGE_KEY, mode)
++    } catch {
++      // The theme still applies for this session.
++    }
+   }, [mode])
+ 
+   const toggle = () => setMode((m) => (m === 'light' ? 'dark' : 'light'))

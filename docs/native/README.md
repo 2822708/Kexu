@@ -1,8 +1,8 @@
-# Kexu APK 与 Windows EXE（2026-11-01）
+# Kexu APK 与 Windows EXE（2026-11-11）
 
 [安装指南与 GitHub 下载](../install/README.md)提供 APK、Windows 完整便携包及升级步骤。
 
-[下载安装包与SHA256](../../releases/native/kexu-2026.11.01.1/README.md)。本机普通便携目录另放在项目空间的 `releases/native/kexu-2026.11.01.1/`，不含开发依赖或测试数据。
+[下载安装包与SHA256](../../releases/native/kexu-2026.11.11.3/README.md)。本机普通便携目录另放在项目空间的 `releases/native/kexu-2026.11.11.3/`，不含开发依赖或测试数据。
 
 本次把最新本地主数据前端封装为 Android 安装包和 Windows 便携程序。课表、待办、日任务、完成撤销、回顾和草稿共用现有 IndexedDB 业务逻辑；界面资源随包携带，打开应用不需要 Java 服务、Node 或网页服务器。AI 和云快照需要另外配置 HTTPS 服务，且服务端必须允许来自 `https://appassets.androidplatform.net` 的跨域请求。
 
@@ -27,7 +27,7 @@
 
 浏览器 PWA、APK、Windows EXE 和旧 Java 程序的数据互相隔离。迁移时先从原端导出核心 JSON，在目标端选取文件、检查预览并确认恢复。不要依靠复制浏览器缓存迁移。升级前保留备份；Windows 替换程序文件时保留 Data，Android 覆盖安装须保持应用 ID `com.kexu.local` 和同一发布签名，不能先卸载。
 
-Android 发布密钥与配置保存在固定的本机工具目录 `E:\codex work\tools\android\signing\Kexu\`，不随源码、安装包、备份或 GitHub 发布。构建复用迁移后的既有发布密钥，不以新密钥替代；后续更新仍需复用并另行离线备份它们。当前品牌版 APK 使用版本 `2026.11.01.1` / `2026110101`。Windows 当前便携包没有商业代码签名，使用系统 Evergreen WebView2 Runtime；它由 EXE、DLL、app 资源等共同组成，不能只取出 EXE。
+Android 发布密钥与配置保存在固定的本机工具目录 `E:\codex work\tools\android\signing\Kexu\`，不随源码、安装包、备份或 GitHub 发布。构建复用迁移后的既有发布密钥，不以新密钥替代；后续更新仍需复用并另行离线备份它们。当前品牌版 APK 使用版本 `2026.11.11.3` / `2026111103`。Windows 当前便携包没有商业代码签名，使用系统 Evergreen WebView2 Runtime；它由 EXE、DLL、app 资源等共同组成，不能只取出 EXE。
 
 ## 资源和文件通道
 

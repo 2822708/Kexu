@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "product": "Kexu",
+  "version": "2026.11.11.3",
+  "sourceCommit": "23aeb5424926166781acef1ccfd5b31f197c1a55",
+  "sourceTree": "28f5c55aa63ee12a266879e4fba1920522ab6fb8",
+  "sourceDirty": false,
+  "artifacts": [
+    {
+      "path": "Kexu-Android-2026.11.11.3.apk",
+      "bytes": 3062613,
+      "sha256": "151cc75dacc71ed65cb3454cd44527276a23e4d05353d204b27bcbd44e843abd"
+    },
+    {
+      "path": "Kexu-Windows-x64-2026.11.11.3.zip",
+      "bytes": 1427840,
+      "sha256": "ee47cd48be6c9a8fb87995e69f55e85ba20348c0812a232e6dde33c069b15476"
+    },
+    {
+      "path": "Kexu-Windows-x64/Kexu.exe",
+      "bytes": 50688,
+      "sha256": "f95ac704c09a2f3ce0732d53447f820d0a97d43b36fcdd17373c1d1196247bd2"
+    },
+    {
+      "path": "0001-fix-make-mobile-startup-consistent-and-recoverable.patch",
+      "bytes": 25469,
+      "sha256": "b156a25ec45087cc45812a30530053edb1b40b7101976ae6b960833e2e45134d"
+    }
+  ],
+  "frontendFiles": 31,
+  "frontendIndexSha256": "58a6252499217afce7a445f28f10ac2f8403eb41d5e11742fb2d60eddd70f460",
+  "frontendBootSha256": "79aec8ed7790969bef4a3218b972810ef7502d921760bcda00d62df75da8e63d",
+  "windowsPackageFiles": 40,
+  "android": {
+    "applicationId": "com.kexu.local",
+    "versionCode": 2026111103,
+    "versionName": "2026.11.11.3",
+    "minSdk": 26,
+    "targetSdk": 36,
+    "signatureScheme": "v2",
+    "certificateSha256": "74e5fa65a263abcfa3018b43813bb8eb13d6c9eb70498ea5cc5c1c9d37ccd332",
+    "samePreviousSigningCertificate": true,
+    "deviceTested": false
+  },
+  "windowsRuntime": "157.0.4341.46",
+  "requiresJava": false,
+  "requiresNode": false,
+  "validation": {
+    "frontendTypecheck": true,
+    "frontendLintErrors": 0,
+    "localCoreTests": 26,
+    "timetableLayoutTests": 10,
+    "swipeTests": 4,
+    "androidUnitTests": 5,
+    "androidUnitTestFailures": 0,
+    "windowsPolicyAssertions": 31,
+    "windowsTwoLaunchSmoke": true,
+    "windowsRealDailyTaskPersistedAcrossLaunch": true,
+    "zipCRC": true,
+    "portableZipSeparators": true,
+    "embeddedFrontendByteEquality": true,
+    "pwaPackageFiles": 51,
+    "pwaZipEntries": 61,
+    "pwaVerifyPackage": true,
+    "browserFailureScenarios": 6,
+    "privateDataIncluded": false,
+    "productionHttps": false,
+    "liveAiProvider": false
+  },
+  "handoffReport": "Kexu_启动页修复交接报告_2026-11-11.md"
+}

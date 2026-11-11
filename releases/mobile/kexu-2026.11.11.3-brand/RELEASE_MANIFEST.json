@@ -1,0 +1,21 @@
+{
+  "version": "2026.11.11.3",
+  "sourceCommit": "23aeb5424926166781acef1ccfd5b31f197c1a55",
+  "sourceTree": "28f5c55aa63ee12a266879e4fba1920522ab6fb8",
+  "sourceDirty": false,
+  "zip": "Kexu-PWA-2026.11.11.3.zip",
+  "bytes": 1167812,
+  "sha256": "b7b299f2412b11c296546f4066d7e47164d2866778213175c46cc59c6cc0d153",
+  "entries": 61,
+  "packageFiles": 51,
+  "packageManifestSha256": "e0db53180edb3f3525c63e6a4df4c8340359ac0e67d2c58834b7b3f54a4889be",
+  "validation": {
+    "zipCrc": true,
+    "allFilesByteEqual": true,
+    "frontendTypecheck": true,
+    "frontendLintErrors": 0,
+    "physicalPhone": false,
+    "productionHttps": false,
+    "liveAiProvider": false
+  }
+}

@@ -1,17 +1,17 @@
 {
-  "tag": "v2026.11.01.1",
-  "title": "Kexu 2026.11.01.1 · Windows / Android 预览版",
+  "tag": "v2026.11.11.3",
+  "title": "Kexu 2026.11.11.3 · Windows / Android 预览版",
   "prerelease": true,
-  "directory": "releases/native/kexu-2026.11.01.1",
-  "apk": "Kexu-Android-2026.11.01.apk",
-  "windows": "Kexu-Windows-x64.zip",
+  "directory": "releases/native/kexu-2026.11.11.3",
+  "apk": "Kexu-Android-2026.11.11.3.apk",
+  "windows": "Kexu-Windows-x64-2026.11.11.3.zip",
   "notes": "docs/install/release-notes.md",
   "publishedAssets": {
-    "INSTALL.md": "5c873d72bfdb805f3d408e0ad7d5b9fc2114b72c9bdcd3568718be8eb9e8ef02",
-    "Kexu-Android-2026.11.01.apk": "19f378936395bb44e077bdac1fba96df05ec26a10c0bc1d9d0c5b7808c017f8a",
-    "Kexu-Install.html": "86cf51d098210fd0a43ab061dbc3b31a7f634928e0c8cc7942d797ebf58d5518",
-    "Kexu-Windows-x64.zip": "ccc8f4addc64bb4594a8848660f9afc9158fd513c2dc03b4f214b50c852370e3",
-    "RELEASE_MANIFEST.json": "89285bb72bd10b0ea3958ca652ad13f9783cb955c080266dfc18703619772941",
-    "SHA256SUMS.txt": "ad704ab2f0b5191561e489258b50caf1ca1fa7c5eb831386029fa3224047b4c1"
+    "INSTALL.md": "bbbeec7dff613dce67799c7865891ea0bd79675e068b59bac864db6a25f0c21c",
+    "Kexu-Android-2026.11.11.3.apk": "151cc75dacc71ed65cb3454cd44527276a23e4d05353d204b27bcbd44e843abd",
+    "Kexu-Install.html": "2d39685cfc3c6a6f959a108cd47b4f7a80d2b5723702d41251dfa4a47bd9b779",
+    "Kexu-Windows-x64-2026.11.11.3.zip": "ee47cd48be6c9a8fb87995e69f55e85ba20348c0812a232e6dde33c069b15476",
+    "RELEASE_MANIFEST.json": "3688518ff001c3ec556fefe6bb61920493cd32e45576ed67a2d7f918162efdb0",
+    "SHA256SUMS.txt": "a09ce81a7f4303f81760a067c3cd36d41a7fadd0ce75d082cb89b76710c15b72"
   }
 }
