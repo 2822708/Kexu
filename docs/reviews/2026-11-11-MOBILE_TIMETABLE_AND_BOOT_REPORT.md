@@ -4,6 +4,7 @@
 - 分支：`release/2026.11.10.1`
 - 发行源码提交：`2745986 chore: bump version to 2026.11.11.2`
 - 版本：`2026.11.11.2` / `2026111102`
+- 后续交接：`2026.11.11.3` / `2026111103`，源码提交 `23aeb54`（见文首复核与第 9 节）
 - 范围：手机课表显示、启动加载页、左右滑动、本地预览、本地发行包
 - 结论：加载页本身是代码里的正常界面，不是浏览器错误页；长时间停留是浏览器本机数据（IndexedDB）未及时响应，已用 10 秒超时和错误提示兜底。课表已按要求加长并允许上下滚动。
 
@@ -216,3 +217,17 @@ Remove-Item src/frontend/public/__preview.html,
 - `work/edge-shot/`
 - `work/preview-tmp/`
 - `work/release-2026.11.11.2/`
+
+## 9. 本次交接复核（2026-11-11）
+
+- `23aeb54 fix: make mobile startup consistent and recoverable` 已从交接工作区快进合入当前分支，基于本报告提交 `338e2b3`。
+- 本机重新构建 `dist-shell/index.html` 为 `58a62524…70f460`，`boot.js` 为 `79aec8ed…8e63d`；与 APK、Windows 包内同名文件逐字节一致。
+- PWA `web/index.html` 为 `f5fbb1d4…9f65b`，与本机 mobile 构建一致；`boot.js` 同为 `79aec8ed…8e63d`。
+- 自动化：`typecheck` 通过、Lint 0 error；本地核心 26、课表布局 10、滑动 4 项测试通过。
+- Windows：解压交接包后两次隔离启动冒烟通过，日任务跨启动保留，WebView2 `157.0.4341.46`。
+- PWA：`deployment/verify-package.mjs` 校验 51 个文件、61 个 ZIP 条目通过。
+- 校验值：APK `151cc75d…843abd`、Windows `ee47cd48…b15476`、PWA `b7b299f2…c0d153`、源码补丁 `b156a25e…e45134d`。
+- 产物归档：
+  - `releases/native/kexu-2026.11.11.3/`：APK、Windows 包、源码补丁、交接报告、`RELEASE_MANIFEST.json`、`SHA256SUMS.txt`
+  - `releases/mobile/kexu-2026.11.11.3-brand/`：PWA 包、`RELEASE_MANIFEST.json`、`SHA256SUMS.txt`
+- 仍未验证：Android 真机覆盖安装、PWA 真机升级；沿用交接报告的边界。

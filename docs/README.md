@@ -37,7 +37,7 @@
 | [历史交付来源](WORKSPACE_SETUP.md) | 初次桌面导入与校验记录；不是当前发行包清单 |
 | [reviews/PROJECT_UNDERSTANDING.md](reviews/PROJECT_UNDERSTANDING.md) | 当前项目结构、数据关系、AI 和循环机制 |
 | [reviews/CURRENT_ISSUES.md](reviews/CURRENT_ISSUES.md) | 原始问题处理状态和剩余验证边界 |
-| [reviews/2026-11-11-MOBILE_TIMETABLE_AND_BOOT_REPORT.md](reviews/2026-11-11-MOBILE_TIMETABLE_AND_BOOT_REPORT.md) | 手机课表加长、加载页竖排与超时、预览方式和 2026.11.11.2 产物清单 |
+| [reviews/2026-11-11-MOBILE_TIMETABLE_AND_BOOT_REPORT.md](reviews/2026-11-11-MOBILE_TIMETABLE_AND_BOOT_REPORT.md) | 手机课表加长、加载页竖排与超时、预览方式、`.2` / `.3` 产物与交接复核 |
 | [reviews/OPTIMIZATION_PROPOSAL.md](reviews/OPTIMIZATION_PROPOSAL.md) | 工程架构分析、缺陷风险和分阶段优化方案 |
 | [reviews/OPTIMIZATION_STATUS.md](reviews/OPTIMIZATION_STATUS.md) | 优化实施结果、测试状态和部署前事项 |
 | [reviews/IMPORT_ASSISTANT_PLAN.md](reviews/IMPORT_ASSISTANT_PLAN.md) | 截图、文件、语音导入与 AI 提案流程设计 |
