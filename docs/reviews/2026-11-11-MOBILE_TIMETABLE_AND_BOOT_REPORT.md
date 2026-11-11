@@ -195,7 +195,7 @@
 3. PWA 的 Service Worker 可能继续使用旧缓存，需要关闭所有页面后重开两次或清站点数据。
 4. 预览页与样例数据是临时文件，未提交；下一次构建前必须删除，否则会被复制进 `dist`。
 5. 开发服务器停止后预览地址不可用；静态图片仍可单独打开。
-6. `2026.11.11.2` 仅本地生成，未发布；线上 Release 仍为 `v2026.11.01.1`。
+6. `2026.11.11.2` 未单独发布；`2026.11.11.3` 已发布为 `v2026.11.11.3`（预发布），安装页已指向该版本。
 
 ## 8. 清理清单
 
@@ -230,4 +230,5 @@ Remove-Item src/frontend/public/__preview.html,
 - 产物归档：
   - `releases/native/kexu-2026.11.11.3/`：APK、Windows 包、源码补丁、交接报告、`RELEASE_MANIFEST.json`、`SHA256SUMS.txt`
   - `releases/mobile/kexu-2026.11.11.3-brand/`：PWA 包、`RELEASE_MANIFEST.json`、`SHA256SUMS.txt`
+- GitHub Release `v2026.11.11.3` 已发布（预发布），6 个附件为 APK、Windows ZIP、`RELEASE_MANIFEST.json`、`Kexu-Install.html`、`INSTALL.md`、`SHA256SUMS.txt`；下载后已逐项复核 SHA256。安装页与根 README 的下载链接已更新，默认分支已推送 `fc3282f`。
 - 仍未验证：Android 真机覆盖安装、PWA 真机升级；沿用交接报告的边界。
