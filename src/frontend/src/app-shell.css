@@ -187,7 +187,8 @@
 
 /* 滑动切页：轨道同时承载当前页与相邻页，拖动时真实露出下一页 */
 .swipe-viewport {
-  min-height: 100%;
+  /* 保持在正常文档流里，内容超出一屏时由 .app-content 负责纵向滚动 */
+  flex: 0 0 auto;
   overflow-x: hidden;
 }
 .swipe-track {
