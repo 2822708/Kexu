@@ -7,7 +7,7 @@ export function isImageDataUrl(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value.length <= MAX_IMAGE_DATA_URL_CHARS &&
-    /^data:image\/(png|jpe?g|webp|gif);base64,/.test(value)
+    /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)
   )
 }
 

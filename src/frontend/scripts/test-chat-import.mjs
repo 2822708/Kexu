@@ -59,5 +59,7 @@ test('only bounded image data URLs are accepted for direct image messages', () =
   assert.equal(isImageDataUrl('data:image/webp;base64,AA=='), true)
   assert.equal(isImageDataUrl('https://example.com/a.png'), false)
   assert.equal(isImageDataUrl('data:text/plain;base64,AAAA'), false)
+  assert.equal(isImageDataUrl('data:image/png;base64,@@@'), false)
+  assert.equal(isImageDataUrl('data:image/png;base64,'), false)
   assert.equal(isImageDataUrl(`data:image/png;base64,${'A'.repeat(6 * 1024 * 1024)}`), false)
 })

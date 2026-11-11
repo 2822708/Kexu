@@ -243,7 +243,9 @@ export async function requestCompletion(
           ? `AI鉴权失败（HTTP ${response.status}），请检查本机Key与模型权限`
           : response.status === 429
             ? 'AI服务限流或配额不足（HTTP 429），请稍后重试'
-            : `AI请求失败（HTTP ${response.status}），请检查所选服务`,
+            : response.status >= 500
+              ? `AI服务暂时不可用（HTTP ${response.status}），请稍后重试`
+              : `AI请求失败（HTTP ${response.status}），请检查所选服务`,
       )
     }
     const result = await consumeCompletionSse(response, controller.signal, options.onDelta, limits)
