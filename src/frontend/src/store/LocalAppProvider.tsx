@@ -16,6 +16,7 @@ import type { LocalState } from '../local/types'
 import { startAutoBackup } from '../backup/coordinator'
 
 const SELECTION_KEY = 'kexu.local.activeSchedulePublicId'
+const STARTUP_TIMEOUT_MS = 15_000
 
 /** 启动耗时打点；性能测量失败绝不能影响启动。 */
 function mark(name: string) {
@@ -56,7 +57,6 @@ export default function LocalAppProvider({
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [data, setData] = useState<LocalState | null>(null)
   const [activeScheduleId, setActiveId] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
   const dataRef = useRef<LocalState | null>(null)
   const selectedRef = useRef(selectedPublicId())
   const sequence = useRef(0)
@@ -73,10 +73,7 @@ export default function LocalAppProvider({
     }
   }, [])
 
-  const load = useCallback(async () => {
-    const request = ++sequence.current
-    const incoming = await readLocalState()
-    if (request !== sequence.current) return incoming
+  const applyState = useCallback((incoming: LocalState) => {
     const previous = dataRef.current
     if (previous)
       for (const key of collections) {
@@ -89,34 +86,65 @@ export default function LocalAppProvider({
       incoming.schedules.find((item) => item.publicId === selectedRef.current) ??
       incoming.schedules[0]
     setActiveScheduleId(selected?.id ?? null)
-    return incoming
   }, [setActiveScheduleId])
 
+  const load = useCallback(async () => {
+    const request = ++sequence.current
+    const incoming = await readLocalState()
+    if (request === sequence.current) applyState(incoming)
+    return incoming
+  }, [applyState])
+
   const reconnect = useCallback(async () => {
-    setLoading(true)
-    setConnectionError(null)
-    mark('kexu:init:start')
-    try {
-      await initializeLocalStore()
-      mark('kexu:init:done')
-      // 维护在首屏前完成：首屏即最终状态，避免列表在打开瞬间跳动。
-      await runLocalMaintenance()
-      mark('kexu:maintenance:done')
-      await load()
-      mark('kexu:first-load:done')
-    } catch (error) {
-      setConnectionError(
-        error instanceof Error ? error.message : '本地数据无法打开，请检查浏览器存储权限',
-      )
-    } finally {
-      setReady(true)
-      setLoading(false)
-    }
-  }, [load])
+    // Reloading releases this page's pending IndexedDB requests before retrying.
+    window.location.reload()
+  }, [])
 
   useEffect(() => {
     let active = true
-    let stopBackup = () => {}
+    const fail = (error: unknown) => {
+      if (!active) return
+      active = false
+      setConnectionError(
+        error instanceof Error ? error.message : '本地数据无法打开，请检查浏览器存储权限',
+      )
+      setReady(true)
+    }
+    const timer = window.setTimeout(() => {
+      fail(new Error('读取本机数据超时。请关闭其他 Kexu 页面后重新加载。'))
+    }, STARTUP_TIMEOUT_MS)
+
+    async function start() {
+      mark('kexu:init:start')
+      try {
+        await initializeLocalStore()
+        if (!active) return
+        mark('kexu:init:done')
+        // 维护在首屏前完成，避免列表在打开瞬间跳动。
+        await runLocalMaintenance()
+        if (!active) return
+        mark('kexu:maintenance:done')
+        const incoming = await readLocalState()
+        if (!active) return
+        applyState(incoming)
+        mark('kexu:first-load:done')
+        setReady(true)
+      } catch (error) {
+        fail(error)
+      } finally {
+        window.clearTimeout(timer)
+      }
+    }
+    void start()
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [applyState])
+
+  useEffect(() => {
+    if (!ready || connectionError) return
+    let active = true
     const refresh = () => {
       if (active)
         void load().catch((error) =>
@@ -124,9 +152,9 @@ export default function LocalAppProvider({
         )
     }
     const stopChanges = subscribeLocalChanges(refresh)
-    void reconnect().then(() => {
-      if (active && dataRef.current) stopBackup = startAutoBackup()
-    })
+    // Reconcile writes from another tab between the first read and subscription.
+    refresh()
+    const stopBackup = startAutoBackup()
     const maintain = () => {
       if (document.visibilityState === 'visible')
         void runLocalMaintenance()
@@ -147,7 +175,7 @@ export default function LocalAppProvider({
       window.removeEventListener('focus', maintain)
       window.removeEventListener('storage', refresh)
     }
-  }, [load, reconnect])
+  }, [connectionError, load, ready])
 
   const refreshAll = useCallback(async () => {
     await load()
@@ -181,7 +209,7 @@ export default function LocalAppProvider({
     todos: data?.todos ?? [],
     recurringTodos: data?.recurringRules ?? [],
     periods: data?.periods ?? [],
-    loading,
+    loading: !ready,
     setActiveScheduleId,
     refreshSchedules,
     refreshCourses: refreshAll,

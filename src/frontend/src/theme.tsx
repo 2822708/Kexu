@@ -17,8 +17,12 @@ export const useTheme = () => useContext(Ctx)
 const STORAGE_KEY = 'timetable-theme'
 
 function getInitialMode(): Mode {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved === 'light' || saved === 'dark') return saved
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved === 'light' || saved === 'dark') return saved
+  } catch {
+    // Preferences may be unavailable in restricted browser contexts.
+  }
   return 'light'
 }
 
@@ -90,7 +94,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.dataset.theme = mode
-    localStorage.setItem(STORAGE_KEY, mode)
+    try {
+      localStorage.setItem(STORAGE_KEY, mode)
+    } catch {
+      // The theme still applies for this session.
+    }
   }, [mode])
 
   const toggle = () => setMode((m) => (m === 'light' ? 'dark' : 'light'))

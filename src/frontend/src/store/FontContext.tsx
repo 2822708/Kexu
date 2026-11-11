@@ -21,8 +21,20 @@ const Ctx = createContext<FontCtx>({
 export const useFont = () => useContext(Ctx)
 
 function load(key: string): number {
-  const v = Number(localStorage.getItem(key))
-  return Number.isFinite(v) && v > 0 ? v : DEFAULT_SCALE
+  try {
+    const v = Number(localStorage.getItem(key))
+    return Number.isFinite(v) && v > 0 ? v : DEFAULT_SCALE
+  } catch {
+    return DEFAULT_SCALE
+  }
+}
+
+function save(key: string, value: number) {
+  try {
+    localStorage.setItem(key, String(value))
+  } catch {
+    // The font setting still applies for this session.
+  }
 }
 
 /**
@@ -45,11 +57,11 @@ export function FontProvider({ children }: { children: ReactNode }) {
 
   const setGlobalScale = (v: number) => {
     setGlobalScaleState(v)
-    localStorage.setItem(GLOBAL_KEY, String(v))
+    save(GLOBAL_KEY, v)
   }
   const setTtScale = (v: number) => {
     setTtScaleState(v)
-    localStorage.setItem(TT_KEY, String(v))
+    save(TT_KEY, v)
   }
 
   return (

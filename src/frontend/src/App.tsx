@@ -1,8 +1,8 @@
 import { LOCAL_MODE } from './local/mode'
 import { lazy, Suspense } from 'react'
-import { Alert, Button, Spin } from 'antd'
 import { Navigate, Route, Routes, useLocation, type Location } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
+import { BootError, BootLoading } from './components/BootScreen'
 import SwipePager from './components/SwipePager'
 import DeviceConnectionPage from './pages/DeviceConnectionPage'
 import { useApp } from './store/AppContext'
@@ -18,22 +18,9 @@ const WidgetPreviewPage = lazy(() => import('./pages/WidgetPreviewPage'))
 
 export default function App() {
   return (
-    <>
-      <Suspense fallback={<BootLoading text="正在打开页面…" />}>
-        <AppRoutes />
-      </Suspense>
-    </>
-  )
-}
-
-function BootLoading({ text }: { text: string }) {
-  return (
-    <div className="app-loading-page" role="status" aria-live="polite">
-      <div className="app-loading-block">
-        <Spin size="large" />
-        <p>{text}</p>
-      </div>
-    </div>
+    <Suspense fallback={<BootLoading waitingForPage />}>
+      <AppRoutes />
+    </Suspense>
   )
 }
 
@@ -51,17 +38,13 @@ function AppRoutes() {
   }
 
   if (LOCAL_MODE && (!ready || !authed)) {
-    if (!ready || (!authed && !connectionError)) return <BootLoading text="正在打开本机数据" />
+    if (!connectionError) return <BootLoading />
     return (
-      <div className="app-loading-page">
-        <Alert
-          type="error"
-          showIcon
-          message="本机数据暂时无法打开"
-          description={connectionError ?? '请允许浏览器保存数据，并保留当前网站数据后重试。'}
-          action={<Button onClick={() => void reconnect()}>重试</Button>}
-        />
-      </div>
+      <BootError
+        title="本机数据暂时无法打开"
+        description={connectionError}
+        onRetry={() => void reconnect()}
+      />
     )
   }
   if (!ready || !authed) {

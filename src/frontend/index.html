@@ -6,29 +6,32 @@
     <meta name="theme-color" content="#f5f8fa" />
     <link rel="icon" type="image/svg+xml" href="/pwa/icon.svg" />
     <title>Kexu · 课表、待办与专注</title>
-    <script>
-      // 在样式与脚本加载前应用主题，避免深色用户看到白色闪屏。
-      try {
-        var mode = localStorage.getItem('timetable-theme')
-        if (mode === 'dark' || mode === 'light') document.documentElement.dataset.theme = mode
-      } catch (e) {}
-    </script>
+    <script src="/boot.js"></script>
     <style>
       html, body { margin: 0; background: #f5f8fa; }
       html[data-theme='dark'], html[data-theme='dark'] body { background: #101d27; }
-      #root { min-height: 100vh; }
+      #root { min-height: 100vh; min-height: 100dvh; }
       .boot-splash {
         min-height: 100vh;
+        min-height: 100dvh;
+        box-sizing: border-box;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 16px;
+        padding: 16px;
+        text-align: center;
         color: #52606b;
         font: 400 14px/1.6 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
       }
+      .boot-status:not([hidden]) {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
       html[data-theme='dark'] .boot-splash { color: #97afbb; }
       .boot-spinner {
+        box-sizing: border-box;
         width: 38px;
         height: 38px;
         border-radius: 50%;
@@ -42,8 +45,19 @@
       }
       .boot-message {
         margin: 0;
-        white-space: nowrap;
         letter-spacing: 0.02em;
+      }
+      .boot-error { max-width: 30em; }
+      .boot-error p { margin: 0 0 16px; overflow-wrap: anywhere; }
+      .boot-error button {
+        min-height: 44px;
+        padding: 8px 16px;
+        border: 1px solid currentColor;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
       }
       @keyframes boot-spin {
         to { transform: rotate(360deg); }
@@ -55,9 +69,19 @@
   </head>
   <body>
     <div id="root">
-      <div class="boot-splash" role="status" aria-live="polite">
-        <span class="boot-spinner" aria-hidden="true"></span>
-        <p class="boot-message">完美人生正在到来</p>
+      <div class="boot-splash">
+        <div id="boot-start-status" class="boot-status" role="status">
+          <span class="boot-spinner" aria-hidden="true"></span>
+          <p class="boot-message">完美人生正在到来</p>
+        </div>
+        <div id="boot-start-error" class="boot-error" hidden>
+          <p role="alert"><strong>Kexu 启动失败</strong><br />页面资源暂时无法加载，请重新打开。</p>
+          <button id="boot-start-retry" type="button">重新加载</button>
+        </div>
+        <noscript>
+          <style>#boot-start-status { display: none; }</style>
+          <p>请启用 JavaScript 后重新打开 Kexu。</p>
+        </noscript>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

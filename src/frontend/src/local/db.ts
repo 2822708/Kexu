@@ -59,7 +59,7 @@ function openDatabase(): Promise<IDBDatabase> {
       abandoned = true
       settle(() =>
         reject(
-          new Error('打开本机数据超时，请关闭其他课表页面，或清除本站数据后重试'),
+          new Error('打开本机数据超时，请关闭其他 Kexu 页面后重新加载'),
         ),
       )
     }, DB_OPEN_TIMEOUT_MS)
@@ -94,17 +94,17 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 /** Initializes in one read/write transaction so simultaneous first tabs create one dataset. */
-async function runInitialization(): Promise<LocalState> {
+async function runInitialization(): Promise<void> {
   const db = await openDatabase()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const store = tx.objectStore(STORE_NAME)
-    let result: LocalState
     let failure: unknown
     const get = store.get(STATE_KEY)
     get.onsuccess = () => {
       try {
         const original = get.result
+        let result: LocalState
         if (original?.schemaVersion === 1) {
           result = migrateLocalStateV1(original)
           // Both the exact old value and new state commit together, or neither does.
@@ -120,7 +120,7 @@ async function runInitialization(): Promise<LocalState> {
     }
     tx.oncomplete = () => {
       setupChannel()
-      resolve(structuredClone(result))
+      resolve()
     }
     tx.onabort = () => reject(failure ?? tx.error ?? new Error('本地数据库初始化失败'))
     tx.onerror = () => {
@@ -140,13 +140,10 @@ async function runInitialization(): Promise<LocalState> {
  */
 export function initializeLocalStore(): Promise<void> {
   if (!initialization) {
-    initialization = runInitialization().then(
-      () => undefined,
-      (error) => {
-        initialization = null
-        throw error
-      },
-    )
+    initialization = runInitialization().catch((error) => {
+      initialization = null
+      throw error
+    })
   }
   return initialization
 }

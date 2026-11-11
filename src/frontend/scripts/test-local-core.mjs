@@ -9,7 +9,7 @@ import ts from 'typescript'
 
 // fake-indexeddb implements IndexedDB requests/transactions, rather than mocking our DB facade.
 // Each case receives a fresh database factory; close/reopen retains that factory's persisted records.
-function setup(indexedDB = new IDBFactory()) {
+function setup(indexedDB = new IDBFactory(), globals = {}) {
   const modules = new Map()
   const nativeRequire = createRequire(import.meta.url)
   const context = vm.createContext({
@@ -21,6 +21,7 @@ function setup(indexedDB = new IDBFactory()) {
     clearTimeout,
     Intl,
     Date,
+    ...globals,
   })
   function loadSource(url) {
     if (modules.has(url.href)) return modules.get(url.href).exports
@@ -99,6 +100,12 @@ test('concurrent first initialization shares one dataset and survives database r
   assert.equal(restored.datasetId, first.datasetId)
   assert.equal(restored.schedules[0].name, scheduleBody.name)
   assert.equal(restored.revision, 1)
+})
+test('initialization commits and settles without cloning a discarded snapshot', async () => {
+  const x = setup(new IDBFactory(), { structuredClone: undefined })
+  assert.equal(await x.initializeLocalStore(), undefined)
+  assert.equal((await x.readLocalState()).periods.length, 12)
+  await x.closeLocalStore()
 })
 test('40 concurrent IDB writes allocate unique IDs and commit every record', async () => {
   const x = setup()

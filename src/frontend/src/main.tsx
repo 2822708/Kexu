@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { App as AntApp } from 'antd'
 import App from './App'
+import { BootErrorBoundary } from './components/BootScreen'
 import { AppProvider } from './store/AppContext'
 import { FontProvider } from './store/FontContext'
 import { AccentProvider } from './store/AccentContext'
@@ -17,18 +18,20 @@ if (import.meta.env.DEV) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <FontProvider>
-      <AccentProvider>
-        <ThemeProvider>
-          <AntApp>
-            <BrowserRouter>
-              <AppProvider>
-                <App />
-              </AppProvider>
-            </BrowserRouter>
-          </AntApp>
-        </ThemeProvider>
-      </AccentProvider>
-    </FontProvider>
+    <BootErrorBoundary>
+      <FontProvider>
+        <AccentProvider>
+          <ThemeProvider>
+            <AntApp>
+              <BrowserRouter>
+                <AppProvider>
+                  <App />
+                </AppProvider>
+              </BrowserRouter>
+            </AntApp>
+          </ThemeProvider>
+        </AccentProvider>
+      </FontProvider>
+    </BootErrorBoundary>
   </React.StrictMode>,
 )
