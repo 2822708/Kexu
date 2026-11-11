@@ -47,7 +47,7 @@
 
 同时：
 
-- `indexedDB.databases()` 返回 `tangent-timetable-local-v1` version 2
+- `indexedDB.databases()` 返回应用沿用的 IndexedDB 数据库，名称由 `legacyNames.localDatabase` 定义，版本为 2。
 - 页面内直接 `indexedDB.open(..., 2)` 4 秒内成功
 - 控制台无异常，只有 React Router / antd 的弃用警告
 
@@ -119,7 +119,7 @@
 
 - 1 秒：加载页
 - 3 秒：课表可交互
-- 数据库：`tangent-timetable-local-v1` v2
+- 数据库版本为 2，数据库名称沿用 `legacyNames.localDatabase`。
 - 控制台异常：0
 
 ### 自动化验证
