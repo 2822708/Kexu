@@ -184,3 +184,23 @@
 @media (prefers-reduced-motion: no-preference) {
   .app-sidebar { transition: transform 160ms ease, visibility 160ms ease; }
 }
+
+/* 滑动切页：轨道同时承载当前页与相邻页，拖动时真实露出下一页 */
+.swipe-viewport {
+  min-height: 100%;
+  overflow-x: hidden;
+}
+.swipe-track {
+  position: relative;
+  width: 100%;
+}
+.swipe-page {
+  width: 100%;
+}
+.swipe-page-neighbor {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}

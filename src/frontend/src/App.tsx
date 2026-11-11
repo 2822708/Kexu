@@ -1,10 +1,13 @@
 import { LOCAL_MODE } from './local/mode'
 import { lazy, Suspense } from 'react'
 import { Alert, Button, Spin } from 'antd'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, type Location } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
+import SwipePager from './components/SwipePager'
 import DeviceConnectionPage from './pages/DeviceConnectionPage'
 import { useApp } from './store/AppContext'
+
+const SWIPE_ROUTES = ['/timetable', '/tasks', '/ai', '/settings'] as const
 
 const TimetablePage = lazy(() => import('./pages/TimetablePage'))
 const TasksPage = lazy(() => import('./pages/TasksPage'))
@@ -75,17 +78,32 @@ function AppRoutes() {
 
   return (
     <AppLayout>
-      <Routes>
-        <Route path="/timetable" element={<TimetablePage />} />
-        <Route path="/tasks" element={<TasksPage />} />
-        <Route path="/todos" element={<TaskRedirect view="all" />} />
-        <Route path="/focus" element={<TaskRedirect view="today" />} />
-        <Route path="/ai" element={<AiChatPage />} />
-        <Route path="/manual" element={<UserManualPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/timetable" replace />} />
-      </Routes>
+      <SwipePager
+        routes={SWIPE_ROUTES}
+        renderPage={(pageLocation) => (
+          <Suspense fallback={null}>
+            <MainRoutes location={pageLocation} />
+          </Suspense>
+        )}
+      >
+        <MainRoutes location={location} />
+      </SwipePager>
     </AppLayout>
+  )
+}
+
+function MainRoutes({ location }: { location: Location }) {
+  return (
+    <Routes location={location}>
+      <Route path="/timetable" element={<TimetablePage />} />
+      <Route path="/tasks" element={<TasksPage />} />
+      <Route path="/todos" element={<TaskRedirect view="all" />} />
+      <Route path="/focus" element={<TaskRedirect view="today" />} />
+      <Route path="/ai" element={<AiChatPage />} />
+      <Route path="/manual" element={<UserManualPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="*" element={<Navigate to="/timetable" replace />} />
+    </Routes>
   )
 }
 
