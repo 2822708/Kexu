@@ -322,3 +322,14 @@
     padding-top: 3px;
   }
 }
+
+/* 窄屏课表：去掉次要说明，压缩表头与工具条，把空间留给网格 */
+@media (max-width: 767px) {
+  .tt-page { gap: 10px; }
+  .daily-timetable-page .timetable-page-header { gap: 8px; }
+  .daily-timetable-page .timetable-term-note { display: none; }
+  .daily-timetable-page .timetable-week-total { display: none; }
+  .daily-timetable-page .timetable-week-label { min-width: 64px; }
+  .daily-timetable-page .timetable-view-toolbar { padding-bottom: 4px; }
+  .daily-timetable-page .timetable-page-header .daily-page-heading { gap: 2px; }
+}

@@ -128,9 +128,9 @@ export default function TimetableGrid({
       <div
         className="timetable-grid timetable-grid-explicit"
         style={{
-          minWidth: `${56 + dayLaneCounts.reduce((sum, count) => sum + count * 112, 0)}px`,
-          gridTemplateColumns: `56px ${dayLaneCounts.map((count) => `minmax(${count * 112}px, 1fr)`).join(' ')}`,
-          gridTemplateRows: `auto repeat(${periodList.length}, minmax(calc(68px * var(--tt-scale, 1)), auto))`,
+          minWidth: `calc(var(--tt-axis-width, 56px) + ${dayLaneCounts.reduce((sum, count) => sum + count, 0)} * var(--tt-day-min, 112px))`,
+          gridTemplateColumns: `var(--tt-axis-width, 56px) ${dayLaneCounts.map((count) => `minmax(calc(${count} * var(--tt-day-min, 112px)), 1fr)`).join(' ')}`,
+          gridTemplateRows: `auto repeat(${periodList.length}, minmax(calc(var(--tt-row-min, 68px) * var(--tt-scale, 1)), 1fr))`,
         }}
       >
         <div className="tt-cell tt-head" style={{ gridColumn: 1, gridRow: 1 }}>

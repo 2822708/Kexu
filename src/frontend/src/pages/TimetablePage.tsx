@@ -401,7 +401,7 @@ export default function TimetablePage() {
             onClick={() => setWeek((w) => Math.max(1, w - 1))}
           />
           <Typography.Text strong className="timetable-week-label">
-            第 {week} 周 / 共 {total} 周
+            第 {week} 周<span className="timetable-week-total"> / 共 {total} 周</span>
           </Typography.Text>
           <Button
             icon={<RightOutlined />}

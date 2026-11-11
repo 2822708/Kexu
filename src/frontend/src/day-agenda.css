@@ -155,20 +155,6 @@
   .tt-page .tt-scroll {
     touch-action: pan-x pan-y;
   }
-  .tt-page .tt-scroll .timetable-grid {
-    min-width: 820px;
-    grid-template-columns: 56px repeat(7, minmax(0, 1fr));
-    font-size: calc(12px * var(--tt-scale, 1));
-    grid-auto-rows: minmax(calc(48px * var(--tt-scale, 1)), 1fr);
-  }
-  .tt-page .tt-scroll .tt-cell {
-    padding: 3px;
-    min-height: 42px;
-  }
-  .tt-page .tt-scroll .tt-period span:not(.tt-period-num) {
-    font-size: 0.9em;
-    line-height: 1.3;
-  }
   .tt-page .tt-scroll .course-block {
     padding: 6px 4px;
   }
