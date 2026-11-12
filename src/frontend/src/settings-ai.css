@@ -134,6 +134,20 @@
 .ai-connection-actions .ant-btn {
   min-height: 44px;
 }
+/*
+ * 开关行：给整行 44px 的点按高度，而不是把 .ant-switch 轨道拉高。
+ * 拉高轨道会让 18px 的圆点上下不居中（下方多出一条灰色）。
+ */
+.ai-connection-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.ai-connection-switch-row .ant-switch {
+  flex: none;
+}
 @media (max-width: 767px) {
   .ai-connection-fields {
     grid-template-columns: minmax(0, 1fr);
@@ -468,8 +482,17 @@
   .ai-chat-page .assistant-new-conversation.ant-btn,
   .ai-chat-page .conv-toggle-btn {
     min-width: 44px;
-    padding-inline: 8px;
-    font-size: 0;
+    padding-inline: 0;
+  }
+
+  /*
+   * 图标按钮只留图标。不能只用 font-size: 0 隐藏文字：文字节点仍留在 flex 里，
+   * antd 的图标-文字 8px 间距不会消失，图标会偏左 4px。直接移出布局才能居中。
+   */
+  .ai-chat-page .conv-toggle-btn > .ant-btn-icon + span,
+  .ai-chat-page .assistant-new-conversation > .ant-btn-icon + span,
+  .ai-chat-page .assistant-send-button > .ant-btn-icon + span {
+    display: none;
   }
 
   .ai-chat-page .assistant-new-conversation .anticon,
@@ -492,7 +515,15 @@
     gap: 6px;
   }
 
+  /* 左侧课表名不被压缩，右侧说明才能正常省略，而不是整段被硬裁 */
+  .ai-chat-page .assistant-context > div > .ant-typography:first-child {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
   .ai-chat-page .assistant-context-week {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -560,7 +591,6 @@
     min-width: 44px;
     min-height: 44px;
     padding: 0;
-    font-size: 0;
   }
 
   .ai-chat-page .assistant-send-button .anticon {
@@ -571,6 +601,13 @@
     min-height: 44px;
     padding: 10px 48px 10px 10px;
     font-size: 16px;
+  }
+
+  /* 窄屏下占位文字放不下一行时省略，而不是折行后压到输入框下边框上 */
+  .ai-chat-page .ai-chat-composer-field .ai-chat-composer-text::placeholder {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
   }
 
   .ai-chat-page .ai-chat-composer-images {

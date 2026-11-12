@@ -246,7 +246,15 @@ export default function AiConnectionSettings() {
       >
         此模型支持图片；我允许识别截图时把选中的图片发给上述服务
       </Checkbox>
-      <Space>
+      <div
+        className="ai-connection-switch-row"
+        onClick={(event) => {
+          // 点整行都能切换；开关自身的点击交给它自己的 onChange，避免切换两次。
+          if (testing || (event.target as HTMLElement).closest('.ant-switch')) return
+          setEnabled((value) => !value)
+          setResult(null)
+        }}
+      >
         <Switch
           aria-label="启用AI助手"
           checked={enabled}
@@ -254,7 +262,7 @@ export default function AiConnectionSettings() {
           onChange={(value) => { setEnabled(value); setResult(null) }}
         />
         <span>启用AI助手</span>
-      </Space>
+      </div>
       <Space wrap className="ai-connection-actions">
         <Button type="primary" onClick={save} disabled={testing}>保存连接</Button>
         <Button onClick={() => void test()} loading={testing}>测试连接（少量调用）</Button>

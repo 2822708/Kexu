@@ -19,6 +19,7 @@
 | [design/APP_MODE_GUARD_2026_11_01.md](design/APP_MODE_GUARD_2026_11_01.md) | 运行模式单一判定、双向构建断言、连接失败诊断 |
 | [design/RUNTIME_ROBUSTNESS_2026_11_01.md](design/RUNTIME_ROBUSTNESS_2026_11_01.md) | 健壮性清理的技术决策与行业方案取舍 |
 | [design/STARTUP_PERFORMANCE_2026_11_02.md](design/STARTUP_PERFORMANCE_2026_11_02.md) | 启动前摇定位、初始化缓存、首屏骨架与实测 |
+| [design/MOBILE_UI_FIXES_2026_11_12.md](design/MOBILE_UI_FIXES_2026_11_12.md) | 手机端图标居中、开关尺寸、占位文字折行与上下文省略 |
 | [native/README.md](native/README.md) | 最新本地前端封装 APK 与 Windows EXE 的工程、数据迁移、构建和验收边界 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 新目录下的开发命令和 Git 工作流 |
 | [WORKSPACE_SETUP.md](WORKSPACE_SETUP.md) | 项目来源、整理范围、基线及验证 |
