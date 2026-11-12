@@ -1,9 +1,9 @@
 # Kexu APK & Windows EXE — 2026.10.20
 
-两个应用随包携带最新 Kexu 本地页面，启动及核心课表、待办、日任务和回顾不需要 Java、Node 或在线网站。数据保存在各自设备和应用空间中。
+此历史发行的两个应用随包携带当时的 Kexu 本地页面，启动及核心课表、待办、日任务和回顾不需要 Java、Node 或在线网站。数据保存在各自设备和应用空间中。
 
-- [Android APK](Kexu-Android-2026.10.20.apk)
-- [Windows x64 完整便携包](Kexu-Windows-x64.zip)
+- [Android APK](https://github.com/2822708/Kexu/blob/f8dbc7ffcabe0a2b1ea101ab6d6b73debd5b4395/releases/native/kexu-2026.10.20-native.2/Kexu-Android-2026.10.20.apk)
+- [Windows x64 完整便携包](https://github.com/2822708/Kexu/blob/f8dbc7ffcabe0a2b1ea101ab6d6b73debd5b4395/releases/native/kexu-2026.10.20-native.2/Kexu-Windows-x64.zip)
 - [发行清单](RELEASE_MANIFEST.json) · [SHA256](SHA256SUMS.txt)
 - [本轮验证记录](../../../docs/branding/VALIDATION_2026_10_20.md) · [PWA 运行包](../../mobile/kexu-2026.10.20-brand/README.md)
 
