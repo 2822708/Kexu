@@ -80,6 +80,7 @@
 }
 .icon-btn-round:hover { color: var(--accent-ink); background: var(--accent-soft); }
 .icon-btn-round:disabled { cursor: wait; opacity: .5; }
+.github-star { text-decoration: none; }
 .theme-toggle { font-size: 18px; }
 .topbar-menu-btn { display: none; }
 .app-body { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }

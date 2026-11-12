@@ -16,7 +16,7 @@ import {
   Typography,
   message,
 } from 'antd'
-import { CopyOutlined } from '@ant-design/icons'
+import { CopyOutlined, DownloadOutlined, GithubOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
 import { aiApi, periodApi } from '../api'
@@ -471,6 +471,47 @@ export default function SettingsPage() {
       />
     </Card>
   )
+  const aboutSection = (
+    <Card title="关于 Kexu">
+      <Space direction="vertical" size={14} style={{ width: '100%' }}>
+        <Typography.Paragraph style={{ margin: 0 }}>
+          Kexu 是开源项目，课表、待办与日任务优先保存在本机。如果它帮到了你，欢迎在 GitHub
+          点一个 Star，让更多人看到。
+        </Typography.Paragraph>
+        <Space wrap>
+          <Button
+            type="primary"
+            icon={<GithubOutlined />}
+            href="https://github.com/2822708/Kexu"
+            target="_blank"
+            rel="noreferrer"
+          >
+            去 GitHub 点 Star
+          </Button>
+          <Button
+            icon={<DownloadOutlined />}
+            href="https://github.com/2822708/Kexu/releases"
+            target="_blank"
+            rel="noreferrer"
+          >
+            下载安装包
+          </Button>
+          <Button
+            href="https://2822708.github.io/Kexu/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            在线试用
+          </Button>
+        </Space>
+        <Alert
+          type="info"
+          showIcon
+          message="数据保存在当前浏览器或设备中；清除站点数据会删除本机课表，请先导出备份。"
+        />
+      </Space>
+    </Card>
+  )
   return (
     <div className="settings-page">
       <header className="settings-page-heading">
@@ -547,6 +588,15 @@ export default function SettingsPage() {
             children: (
               <section aria-label="AI 连接" className="settings-section">
                 {aiSection}
+              </section>
+            ),
+          },
+          {
+            key: 'about',
+            label: '关于',
+            children: (
+              <section aria-label="关于" className="settings-section">
+                {aboutSection}
               </section>
             ),
           },

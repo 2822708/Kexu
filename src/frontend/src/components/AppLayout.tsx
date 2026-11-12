@@ -5,6 +5,7 @@ import {
   BookOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
+  GithubOutlined,
   MenuOutlined,
   MessageOutlined,
   MoonOutlined,
@@ -119,6 +120,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             >
               {mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
             </button>
+          </Tooltip>
+          <Tooltip title="GitHub 仓库 · 点个 Star">
+            <a
+              className="icon-btn-round github-star"
+              href="https://github.com/2822708/Kexu"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="在 GitHub 查看 Kexu 并点 Star"
+            >
+              <GithubOutlined />
+            </a>
           </Tooltip>
         </div>
       </header>
