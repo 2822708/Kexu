@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Modal, Space, Typography } from 'antd'
+import { Alert, Button, Dropdown, Modal, Space, Typography } from 'antd'
 import { DownloadOutlined, ReloadOutlined, WifiOutlined } from '@ant-design/icons'
 import { findWaitingUpdate } from '../pwa/updateState'
 import { useLocation } from 'react-router-dom'
@@ -273,16 +273,42 @@ export default function PwaStatus() {
           </Button>
         )}
         {!standalone && (
-          <Button
-            size="small"
-            aria-label="安装应用"
-            title="安装Kexu到主屏幕"
-            icon={<DownloadOutlined />}
-            loading={installing}
-            onClick={() => void install()}
+          <Dropdown
+            trigger={['click']}
+            menu={{
+              items: [
+                {
+                  key: 'install',
+                  icon: <DownloadOutlined />,
+                  label: '安装到主屏幕',
+                  onClick: () => void install(),
+                },
+                {
+                  key: 'releases',
+                  icon: <DownloadOutlined />,
+                  label: (
+                    <a
+                      href="https://github.com/2822708/Kexu/releases"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      下载安装包（GitHub Releases）
+                    </a>
+                  ),
+                },
+              ],
+            }}
           >
-            安装
-          </Button>
+            <Button
+              size="small"
+              aria-label="安装到主屏幕或下载安装包"
+              title="安装到主屏幕，或下载安装包"
+              icon={<DownloadOutlined />}
+              loading={installing}
+            >
+              安装
+            </Button>
+          </Dropdown>
         )}
         {standalone && offlineStatus !== 'ready' && (
           <Button size="small" onClick={() => setGuideOpen(true)}>
