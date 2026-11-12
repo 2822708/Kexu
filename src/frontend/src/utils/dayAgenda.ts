@@ -1,4 +1,4 @@
-import type { Course, Exam, PeriodConfig, Schedule } from '../types'
+import type { Course, Exam, Schedule } from '../types'
 import { currentWeekOf, dayjs } from './schedule'
 
 export type TermDayStatus = 'in-term' | 'before-term' | 'after-term' | 'invalid'
@@ -42,11 +42,4 @@ export function dayAgenda(
           .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.id - b.id)
       : [],
   }
-}
-
-/** Only display configured clock times; missing period settings must not invent a time. */
-export function courseClockTime(course: Course, periods: PeriodConfig[]): string | null {
-  const start = periods.find((period) => period.periodNumber === course.startPeriod)?.startTime
-  const end = periods.find((period) => period.periodNumber === course.endPeriod)?.endTime
-  return start && end ? `${start.slice(0, 5)}–${end.slice(0, 5)}` : null
 }

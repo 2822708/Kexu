@@ -1,8 +1,8 @@
 # Kexu PWA — 2026.10.20
 
-当前品牌版使用 Kexu 名称，核心数据在设备 IndexedDB 保存；云只提供加密快照与版本文件。日任务、完成撤销、今日回顾、课程与考试使用同一套本地业务逻辑。
+此历史发行版使用 Kexu 名称，核心数据在设备 IndexedDB 保存；云只提供加密快照与版本文件。日任务、完成撤销、今日回顾、课程与考试使用同一套本地业务逻辑。
 
-- [下载 PWA 运行包](Kexu-2026.10.20-preview.4.zip)
+- [下载历史 PWA 运行包](https://github.com/2822708/Kexu/blob/f8dbc7ffcabe0a2b1ea101ab6d6b73debd5b4395/releases/mobile/kexu-2026.10.20-brand/Kexu-2026.10.20-preview.4.zip)
 - [发行清单](RELEASE_MANIFEST.json) · [SHA256](SHA256SUMS.txt)
 - [本轮验证记录](../../../docs/branding/VALIDATION_2026_10_20.md) · [APK / Windows EXE](../../native/kexu-2026.10.20-native.2/README.md)
 

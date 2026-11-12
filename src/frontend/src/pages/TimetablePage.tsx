@@ -29,7 +29,6 @@ import {
   recordPublicId,
   type LocalEditorScope,
 } from '../local/editorScope'
-import '../day-agenda.css'
 import '../daily-pages.css'
 
 export default function TimetablePage() {

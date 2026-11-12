@@ -10,18 +10,22 @@ const compiled = ts.transpileModule(
 
 const moduleObject = { exports: {} }
 new Function('exports', 'module', compiled)(moduleObject.exports, moduleObject)
-const { swipeDirection, stepIndex, routeIndex } = moduleObject.exports
+const { classifySwipeStart, shouldCommitSwipe, stepIndex, routeIndex } = moduleObject.exports
 
-test('left swipe goes next, right swipe goes previous', () => {
-  assert.equal(swipeDirection(-80, 6), 1)
-  assert.equal(swipeDirection(80, -6), -1)
+test('a gesture starts a horizontal drag or yields to vertical scrolling', () => {
+  assert.equal(classifySwipeStart(7, 0), 'pending')
+  assert.equal(classifySwipeStart(-8, 0), 'horizontal')
+  assert.equal(classifySwipeStart(10, 12), 'pending')
+  assert.equal(classifySwipeStart(10, 13), 'vertical')
+  assert.equal(classifySwipeStart(-24, 20), 'horizontal')
+  assert.equal(classifySwipeStart(23, -20), 'vertical')
 })
 
-test('short or mostly vertical gestures do not page', () => {
-  assert.equal(swipeDirection(30, 2), 0)
-  assert.equal(swipeDirection(-80, 90), 0)
-  assert.equal(swipeDirection(40, 38), 0)
-  assert.equal(swipeDirection(-30, 120), 0)
+test('release commits only above the width-based threshold capped at 72 pixels', () => {
+  assert.equal(shouldCommitSwipe(30, 320), false)
+  assert.equal(shouldCommitSwipe(-58, 320), true)
+  assert.equal(shouldCommitSwipe(-72, 500), false)
+  assert.equal(shouldCommitSwipe(73, 500), true)
 })
 
 test('page stepping stops at both ends', () => {
