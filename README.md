@@ -4,10 +4,11 @@
 
 仓库：[2822708/Kexu](https://github.com/2822708/Kexu)。项目空间示例：`E:\codex work\projects\Kexu`。使用 [Kexu.code-workspace](Kexu.code-workspace) 打开源码与文档。
 
-**[下载安装 Kexu](docs/install/README.md)** · [Windows / Android 下载页](https://github.com/2822708/Kexu/releases/tag/v2026.11.11.3)
+**[在线试用 Kexu](https://2822708.github.io/Kexu/)**（数据保存在本机浏览器） · **[下载安装 Kexu](docs/install/README.md)** · [Windows / Android 下载页](https://github.com/2822708/Kexu/releases/tag/v2026.11.11.3)
 
 ## 使用与下载
 
+- [在线试用](https://2822708.github.io/Kexu/)：GitHub Pages 本地模式，课表与任务保存在当前浏览器 IndexedDB，不上传服务器。
 - [安装指南与下载链接](docs/install/README.md)：Android APK、Windows 完整便携包、更新与数据保留步骤。仓库当前为公开仓库，无需登录即可下载。
 - [PWA 运行与部署](docs/mobile/README.md)：离线读写，自动加密云备份，恢复前预览并手动确认。
 - [Android APK 与 Windows EXE](docs/native/README.md)：界面资源随包携带，核心业务不需要 Java、Node 或网页服务器。
