@@ -7,7 +7,6 @@ import {
   Popconfirm,
   Select,
   Space,
-  Switch,
   Typography,
   message,
 } from 'antd'
@@ -246,15 +245,20 @@ export default function AiConnectionSettings() {
       >
         此模型支持图片；我允许识别截图时把选中的图片发给上述服务
       </Checkbox>
-      <Space>
-        <Switch
-          aria-label="启用AI助手"
-          checked={enabled}
-          disabled={testing}
-          onChange={(value) => { setEnabled(value); setResult(null) }}
-        />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        className="ai-connection-switch-row"
+        disabled={testing}
+        onClick={() => {
+          setEnabled((value) => !value)
+          setResult(null)
+        }}
+      >
+        <span className="ai-connection-switch-track" aria-hidden="true" />
         <span>启用AI助手</span>
-      </Space>
+      </button>
       <Space wrap className="ai-connection-actions">
         <Button type="primary" onClick={save} disabled={testing}>保存连接</Button>
         <Button onClick={() => void test()} loading={testing}>测试连接（少量调用）</Button>

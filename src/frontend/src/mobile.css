@@ -277,9 +277,6 @@
   .exam-time-fields > .ant-space-item {
     width: 100%;
   }
-  .ant-switch {
-    min-height: 28px;
-  }
   .login-wrapper {
     min-height: 100dvh;
     padding: max(12px, env(safe-area-inset-top, 0px)) 12px

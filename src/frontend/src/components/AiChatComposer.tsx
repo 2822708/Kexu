@@ -456,7 +456,7 @@ export default function AiChatComposer({
           }}
           placeholder={
             mobile
-              ? '描述你的安排，可附截图'
+              ? '描述你的安排'
               : '描述你的安排，或拖入文件、截图；Enter 发送，Shift+Enter 换行'
           }
           autoSize={{ minRows: 1, maxRows: 4 }}

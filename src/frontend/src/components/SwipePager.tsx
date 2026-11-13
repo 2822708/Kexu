@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   NavigationType,
   UNSAFE_LocationContext,
@@ -33,6 +33,8 @@ const BLOCKED_SELECTOR = [
 const OUT_MS = 220
 const BACK_MS = 200
 const EASING = 'cubic-bezier(0.22, 1, 0.36, 1)'
+/** 拖动时两页之间的可见缝隙；提交动画也按 页面宽度 + 缝隙 平移，落位后不会跳。 */
+const GAP_PX = 12
 
 function isBlockedTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
@@ -49,23 +51,31 @@ function isBlockedTarget(target: EventTarget | null): boolean {
   return false
 }
 
-function animate(node: HTMLElement, transform: string, duration: number): Promise<void> {
-  return new Promise((resolve) => {
-    let settled = false
-    const done = () => {
-      if (settled) return
-      settled = true
-      node.removeEventListener('transitionend', onEnd)
-      resolve()
-    }
-    const onEnd = (event: TransitionEvent) => {
-      if (event.target === node && event.propertyName === 'transform') done()
-    }
-    node.style.transition = duration > 0 ? `transform ${duration}ms ${EASING}` : 'none'
-    node.style.transform = transform
-    node.addEventListener('transitionend', onEnd)
-    window.setTimeout(done, duration + 80)
-  })
+function animate(node: HTMLElement, transform: string, duration: number, onComplete: () => void) {
+  const cancel = () => {
+    window.clearTimeout(timer)
+    node.removeEventListener('transitionend', onEnd)
+  }
+  const finish = () => {
+    cancel()
+    onComplete()
+  }
+  const onEnd = (event: TransitionEvent) => {
+    if (event.target === node && event.propertyName === 'transform') finish()
+  }
+  // 减少动态效果或浏览器未触发 transitionend 时仍会完成动画。
+  const timer = window.setTimeout(finish, duration > 0 ? duration + 80 : 0)
+  node.style.transition = duration > 0 ? `transform ${duration}ms ${EASING}` : 'none'
+  node.style.transform = transform
+  node.addEventListener('transitionend', onEnd)
+  return cancel
+}
+
+function resetTrack(track: HTMLElement) {
+  track.style.transition = ''
+  track.style.transform = ''
+  track.style.willChange = ''
+  track.style.userSelect = ''
 }
 
 interface Props {
@@ -85,18 +95,19 @@ export default function SwipePager({ routes, renderPage, children }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
   const [neighbor, setNeighbor] = useState<{ path: string; side: 'left' | 'right' } | null>(null)
-  const neighborRef = useRef(neighbor)
-  neighborRef.current = neighbor
 
   const neighborLocation = useMemo<Location | null>(() => {
     if (!neighbor) return null
     return { pathname: neighbor.path, search: '', hash: '', state: null, key: `peek-${neighbor.path}` }
   }, [neighbor])
 
-  useEffect(() => {
+  // 路由提交时在绘制前重置轨道，取消旧页面的手势、动画和导航回调。
+  useLayoutEffect(() => {
     const viewport = viewportRef.current
     const track = trackRef.current
     if (!viewport || !track) return
+    // 手势挂在滚动容器上，页面下半的空白区域也能翻页。
+    const surface = (viewport.closest('.app-content') as HTMLElement | null) ?? viewport
     const media = window.matchMedia('(max-width: 767px)')
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
     const state = {
@@ -106,19 +117,43 @@ export default function SwipePager({ routes, renderPage, children }: Props) {
       startX: 0,
       startY: 0,
       dx: 0,
+      sourceUrl: '',
       index: routeIndex(location.pathname, routes),
     }
+    let settling = false
     let suppressClick = false
+    let cancelAnimation: (() => void) | undefined
+    let routeTimer: number | undefined
+    let clickTimer: number | undefined
+    let neighborSide: 'left' | 'right' | null = null
+    setNeighbor(null)
 
     const reset = () => {
-      track.style.transition = ''
-      track.style.transform = ''
-      track.style.willChange = ''
-      track.style.userSelect = ''
+      cancelAnimation?.()
+      cancelAnimation = undefined
+      window.clearTimeout(routeTimer)
+      state.tracking = false
+      state.dragging = false
+      settling = false
+      resetTrack(track)
+    }
+
+    const clearNeighbor = () => {
+      neighborSide = null
+      setNeighbor(null)
+    }
+
+    const finishGesture = () => {
+      reset()
+      clearNeighbor()
     }
 
     const onStart = (event: TouchEvent) => {
-      state.tracking = false
+      // 新的触摸可以产生自己的点击，不能沿用上一手势的点击拦截。
+      suppressClick = false
+      window.clearTimeout(clickTimer)
+      if (settling) return
+      if (state.tracking) finishGesture()
       if (!media.matches || event.touches.length !== 1 || state.index < 0) return
       const touch = event.touches[0]
       state.tracking = true
@@ -127,14 +162,13 @@ export default function SwipePager({ routes, renderPage, children }: Props) {
       state.startX = touch.clientX
       state.startY = touch.clientY
       state.dx = 0
+      state.sourceUrl = window.location.href
     }
 
     const onMove = (event: TouchEvent) => {
       if (!state.tracking || state.blocked) return
       if (event.touches.length !== 1) {
-        state.tracking = false
-        setNeighbor(null)
-        reset()
+        finishGesture()
         return
       }
       const touch = event.touches[0]
@@ -155,12 +189,14 @@ export default function SwipePager({ routes, renderPage, children }: Props) {
       const target = stepIndex(state.index, routes.length, direction)
       if (target === null) {
         state.dx = dx * 0.28
+        if (neighborSide) clearNeighbor()
       } else {
         state.dx = dx
         const side = direction > 0 ? 'right' : 'left'
-        const current = neighborRef.current
-        if (!current || current.path !== routes[target] || current.side !== side)
+        if (neighborSide !== side) {
+          neighborSide = side
           setNeighbor({ path: routes[target], side })
+        }
       }
       track.style.transform = `translate3d(${state.dx}px, 0, 0)`
     }
@@ -170,8 +206,9 @@ export default function SwipePager({ routes, renderPage, children }: Props) {
       state.tracking = false
       if (!state.dragging) return
       state.dragging = false
+      settling = true
       suppressClick = true
-      window.setTimeout(() => {
+      clickTimer = window.setTimeout(() => {
         suppressClick = false
       }, 80)
 
@@ -179,59 +216,70 @@ export default function SwipePager({ routes, renderPage, children }: Props) {
       const target = stepIndex(state.index, routes.length, direction)
       const width = track.clientWidth || window.innerWidth
       const commit = target !== null && Math.abs(state.dx) > Math.min(72, width * 0.18)
+      const distance = width + GAP_PX
+      state.dx = 0
 
-      void (async () => {
-        if (commit && target !== null) {
-          await animate(track, `translate3d(${direction > 0 ? -width : width}px, 0, 0)`, reduce.matches ? 0 : OUT_MS)
-          navigate(routes[target])
-          track.style.transition = 'none'
-          track.style.transform = 'translate3d(0, 0, 0)'
-          setNeighbor(null)
-        } else {
-          await animate(track, 'translate3d(0, 0, 0)', reduce.matches ? 0 : BACK_MS)
-          setNeighbor(null)
-        }
-        state.dx = 0
-        reset()
-      })()
+      if (commit && target !== null) {
+        cancelAnimation = animate(
+          track,
+          `translate3d(${direction > 0 ? -distance : distance}px, 0, 0)`,
+          reduce.matches ? 0 : OUT_MS,
+          () => {
+            // BrowserRouter 可能已更新地址栏，下一页内容仍在等待 React 提交。
+            if (window.location.href !== state.sourceUrl) {
+              finishGesture()
+              return
+            }
+            routeTimer = window.setTimeout(finishGesture, 600)
+            navigate(routes[target])
+          },
+        )
+      } else {
+        cancelAnimation = animate(track, 'translate3d(0, 0, 0)', reduce.matches ? 0 : BACK_MS, finishGesture)
+      }
     }
 
     const onCancel = () => {
-      state.tracking = false
-      state.dragging = false
-      setNeighbor(null)
-      reset()
+      if (state.tracking) finishGesture()
     }
 
     const onClick = (event: MouseEvent) => {
-      if (!suppressClick) return
+      if (!suppressClick || event.detail === 0) return
       event.preventDefault()
       event.stopPropagation()
       suppressClick = false
     }
 
-    viewport.addEventListener('touchstart', onStart, { passive: true })
-    viewport.addEventListener('touchmove', onMove, { passive: false })
-    viewport.addEventListener('touchend', onEnd, { passive: true })
-    viewport.addEventListener('touchcancel', onCancel, { passive: true })
-    window.addEventListener('click', onClick, true)
+    surface.addEventListener('touchstart', onStart, { passive: true })
+    surface.addEventListener('touchmove', onMove, { passive: false })
+    surface.addEventListener('touchend', onEnd, { passive: true })
+    surface.addEventListener('touchcancel', onCancel, { passive: true })
+    surface.addEventListener('click', onClick, true)
+    window.addEventListener('popstate', finishGesture)
     return () => {
-      viewport.removeEventListener('touchstart', onStart)
-      viewport.removeEventListener('touchmove', onMove)
-      viewport.removeEventListener('touchend', onEnd)
-      viewport.removeEventListener('touchcancel', onCancel)
-      window.removeEventListener('click', onClick, true)
+      surface.removeEventListener('touchstart', onStart)
+      surface.removeEventListener('touchmove', onMove)
+      surface.removeEventListener('touchend', onEnd)
+      surface.removeEventListener('touchcancel', onCancel)
+      surface.removeEventListener('click', onClick, true)
+      window.removeEventListener('popstate', finishGesture)
+      window.clearTimeout(clickTimer)
+      reset()
     }
-  }, [location.pathname, navigate, routes])
+  }, [location, navigate, routes])
 
   return (
     <div className="swipe-viewport" ref={viewportRef}>
-      <div className="swipe-track" ref={trackRef}>
+      <div
+        className="swipe-track"
+        ref={trackRef}
+        style={{ '--swipe-gap': `${GAP_PX}px` } as CSSProperties}
+      >
         <div className="swipe-page">{children}</div>
         {neighborLocation && neighbor ? (
           <div
             className="swipe-page swipe-page-neighbor"
-            style={neighbor.side === 'right' ? { left: '100%' } : { right: '100%' }}
+            data-side={neighbor.side}
             aria-hidden="true"
           >
             <UNSAFE_LocationContext.Provider
