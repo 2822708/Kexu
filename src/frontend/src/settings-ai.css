@@ -134,19 +134,49 @@
 .ai-connection-actions .ant-btn {
   min-height: 44px;
 }
-/*
- * 开关行：给整行 44px 的点按高度，而不是把 .ant-switch 轨道拉高。
- * 拉高轨道会让 18px 的圆点上下不居中（下方多出一条灰色）。
- */
 .ai-connection-switch-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
   cursor: pointer;
 }
-.ai-connection-switch-row .ant-switch {
+.ai-connection-switch-row:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ai-connection-switch-track {
+  --ai-switch-height: calc(1em + 8px);
+  position: relative;
   flex: none;
+  inline-size: calc(var(--ai-switch-height) * 2);
+  block-size: var(--ai-switch-height);
+  border-radius: 999px;
+  background: var(--text-secondary);
+}
+.ai-connection-switch-track::before {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: calc(var(--ai-switch-height) - 4px);
+  block-size: calc(var(--ai-switch-height) - 4px);
+  border-radius: 50%;
+  background: var(--bg-card);
+  content: '';
+}
+.ai-connection-switch-row[aria-checked='true'] .ai-connection-switch-track {
+  background: var(--accent);
+}
+.ai-connection-switch-row[aria-checked='true'] .ai-connection-switch-track::before {
+  inset-inline-start: calc(50% + 2px);
 }
 @media (max-width: 767px) {
   .ai-connection-fields {
@@ -510,23 +540,25 @@
   }
 
   .ai-chat-page .assistant-context > div {
+    flex: 1 1 100%;
     flex-wrap: nowrap;
-    overflow: hidden;
     gap: 6px;
   }
 
-  /* 左侧课表名不被压缩，右侧说明才能正常省略，而不是整段被硬裁 */
-  .ai-chat-page .assistant-context > div > .ant-typography:first-child {
-    flex: 0 0 auto;
-    min-width: 0;
-  }
-
-  .ai-chat-page .assistant-context-week {
-    flex: 1 1 auto;
+  .ai-chat-page .assistant-context > div > .ant-typography {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .ai-chat-page .assistant-context > div > .ant-typography:first-child {
+    flex: 0 1 auto;
+    max-inline-size: 55%;
+  }
+
+  .ai-chat-page .assistant-context-week {
+    flex: 1 1 0;
     font-size: 12px;
   }
 
