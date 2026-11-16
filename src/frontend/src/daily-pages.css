@@ -43,7 +43,34 @@
 .daily-timetable-page .timetable-page-header {
   flex-shrink: 0;
 }
-.timetable-term-note { font-size: 12px; }
+.daily-timetable-page .timetable-term-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.timetable-term-note strong { color: var(--text-primary); font-weight: 600; }
+.tt-paper-title {
+  margin: 0;
+  font-family: var(--paper-heading);
+  font-size: clamp(26px, 4vw, 42px);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+.tt-paper-empty-content {
+  margin-top: 20px;
+  padding: clamp(24px, 6vw, 76px);
+  border: 1px solid var(--paper-rule);
+  border-radius: var(--paper-radius);
+  background: var(--paper-panel);
+}
+.tt-paper-empty-content h2 { margin: 0; font-size: 20px; }
+.tt-paper-empty-content p { margin: 6px 0 20px; color: var(--text-secondary); }
+.tt-paper-empty-content .ant-btn { min-height: 44px; }
 .timetable-add-short { display: none; }
 .timetable-week-label {
   display: inline-block;
@@ -327,7 +354,7 @@
 @media (max-width: 767px) {
   .tt-page { gap: 10px; }
   .daily-timetable-page .timetable-page-header { gap: 8px; }
-  .daily-timetable-page .timetable-term-note { display: none; }
+  .daily-timetable-page .timetable-term-note span { display: none; }
   .daily-timetable-page .timetable-week-total { display: none; }
   .daily-timetable-page .timetable-week-label { min-width: 64px; }
   .daily-timetable-page .timetable-view-toolbar { padding-bottom: 4px; }

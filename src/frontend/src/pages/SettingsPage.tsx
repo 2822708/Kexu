@@ -28,8 +28,10 @@ import { ACCENT_PRESETS, CUSTOM_ACCENT, presetSwatch } from '../accent'
 import type { AiConfig, PeriodCategory, PeriodConfig } from '../types'
 import { dayjs } from '../utils/schedule'
 import BackupSettings from '../components/BackupSettings'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { Link } from 'react-router-dom'
 import '../settings-ai.css'
+import '../settings-notebook.css'
 
 const TIME_FORMAT = 'HH:mm'
 
@@ -43,6 +45,7 @@ const CATEGORY_OPTIONS: { value: PeriodCategory; label: string }[] = [
 ]
 
 export default function SettingsPage() {
+  const wideLayout = useMediaQuery('(min-width: 1000px)')
   const {
     periods,
     refreshPeriods,
@@ -54,11 +57,12 @@ export default function SettingsPage() {
   } = useApp()
   const { globalScale, ttScale, setGlobalScale, setTtScale } = useFont()
   const { choice: accentChoice, setChoice: setAccentChoice } = useAccent()
-  const accentLabel = accentChoice
-    ? accentChoice.id === 'custom'
-      ? `自定义 · ${accentChoice.hue}°`
-      : (ACCENT_PRESETS.find((preset) => preset.id === accentChoice.id)?.label ?? '自定义')
-    : '默认青蓝'
+  const selectedPreset = ACCENT_PRESETS.find(
+    (preset) => preset.id === (accentChoice?.id ?? 'default'),
+  )
+  const accentLabel = accentChoice?.id === 'custom'
+    ? `自定义 · ${accentChoice.hue}°`
+    : (selectedPreset?.label ?? '自定义')
   const [rows, setRows] = useState<PeriodConfig[]>([])
   const [widgetKey] = useState(() => (LOCAL_MODE ? '' : (getApiKey() ?? '')))
   const [aiConfig, setAiConfig] = useState<AiConfig | null>(null)
@@ -351,9 +355,9 @@ export default function SettingsPage() {
         </Button>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+      <div className="settings-appearance">
+        <div className="settings-preference">
+          <div className="settings-preference-heading">
             <Typography.Text strong>界面文字</Typography.Text>
             <Typography.Text type="secondary">{globalScale.toFixed(2)}×</Typography.Text>
           </div>
@@ -366,8 +370,8 @@ export default function SettingsPage() {
             marks={{ 0.8: '小', 1: '默认', 1.4: '大' }}
           />
         </div>
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div className="settings-preference">
+          <div className="settings-preference-heading">
             <Typography.Text strong>课表文字</Typography.Text>
             <Typography.Text type="secondary">{ttScale.toFixed(2)}×</Typography.Text>
           </div>
@@ -380,8 +384,8 @@ export default function SettingsPage() {
             marks={{ 0.8: '小', 1: '默认', 1.4: '大' }}
           />
         </div>
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div className="settings-preference">
+          <div className="settings-preference-heading">
             <Typography.Text strong>主题色</Typography.Text>
             <Typography.Text type="secondary">{accentLabel}</Typography.Text>
           </div>
@@ -415,7 +419,7 @@ export default function SettingsPage() {
               min={0}
               max={360}
               step={1}
-              value={accentChoice ? accentChoice.hue : 205}
+              value={accentChoice?.hue ?? selectedPreset?.hue ?? CUSTOM_ACCENT.hue}
               onChange={(hue) => setAccentChoice({ ...CUSTOM_ACCENT, hue })}
               marks={{ 0: '红', 60: '黄', 120: '绿', 180: '青', 240: '蓝', 300: '紫' }}
             />
@@ -480,7 +484,6 @@ export default function SettingsPage() {
         </Typography.Paragraph>
         <Space wrap>
           <Button
-            type="primary"
             icon={<GithubOutlined />}
             href="https://github.com/2822708/Kexu"
             target="_blank"
@@ -489,6 +492,7 @@ export default function SettingsPage() {
             去 GitHub 点 Star
           </Button>
           <Button
+            type="primary"
             icon={<DownloadOutlined />}
             href="https://github.com/2822708/Kexu/releases"
             target="_blank"
@@ -513,35 +517,22 @@ export default function SettingsPage() {
     </Card>
   )
   return (
-    <div className="settings-page">
+    <div className="settings-page settings-notebook">
       <header className="settings-page-heading">
-        <div>
-          <Typography.Title level={2}>我的</Typography.Title>
-          <Typography.Paragraph type="secondary">
-            {LOCAL_MODE
-              ? '管理这台设备的数据、学习安排与使用偏好。'
-              : '管理数据备份、作息与使用偏好。'}
-          </Typography.Paragraph>
-        </div>
+        <Typography.Title level={1}>我的</Typography.Title>
         <span className="settings-mode-label">{LOCAL_MODE ? '本机数据' : '服务连接'}</span>
       </header>
       <Tabs
         className="settings-tabs"
+        tabPosition={wideLayout ? 'left' : 'top'}
+        tabBarGutter={wideLayout ? 0 : 16}
         defaultActiveKey={window.location.hash === '#ai' ? 'ai' : 'data'}
         items={[
           {
             key: 'data',
-            label: '数据与快照',
+            label: !wideLayout ? '数据' : '数据与快照',
             children: (
               <section aria-label="数据与快照" className="settings-section">
-                <div className="settings-section-intro">
-                  <Typography.Title level={3}>数据与快照</Typography.Title>
-                  <Typography.Paragraph type="secondary">
-                    {LOCAL_MODE
-                      ? '日常编辑先保存在本机；最近云备份状态在下方单独显示，恢复前需要预览并确认。'
-                      : '在这里查看可用备份与恢复入口。'}
-                  </Typography.Paragraph>
-                </div>
                 {backupSection || (
                   <Alert type="info" showIcon message="备份由此部署的管理员管理。" />
                 )}
@@ -550,7 +541,7 @@ export default function SettingsPage() {
           },
           {
             key: 'schedule',
-            label: '学期与作息',
+            label: !wideLayout ? '学期' : '学期与作息',
             children: (
               <section aria-label="学期与作息" className="settings-section">
                 <Card title="当前学期">
@@ -575,7 +566,7 @@ export default function SettingsPage() {
           },
           {
             key: 'appearance',
-            label: '显示偏好',
+            label: !wideLayout ? '外观' : '显示偏好',
             children: (
               <section aria-label="显示偏好" className="settings-section">
                 {appearanceSection}
@@ -584,7 +575,7 @@ export default function SettingsPage() {
           },
           {
             key: 'ai',
-            label: 'AI 连接',
+            label: !wideLayout ? 'AI' : 'AI 连接',
             children: (
               <section aria-label="AI 连接" className="settings-section">
                 {aiSection}

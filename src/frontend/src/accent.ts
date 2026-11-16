@@ -34,13 +34,13 @@ export interface AccentPalette {
 }
 
 const WHITE = '#ffffff'
-const DARK_CARD = '#172a35'
+const DARK_CARD = '#202b24'
 
-/** 预设与默认值。default 保持现有配色，不参与计算。 */
-export const DEFAULT_ACCENT_HEX = '#167d9a'
+/** 预设与默认值。default 使用内置配色，不参与计算。 */
+export const DEFAULT_ACCENT_HEX = '#33624c'
 
 export const ACCENT_PRESETS: AccentPreset[] = [
-  { id: 'default', label: '默认青蓝', hue: 205, chroma: 0.09 },
+  { id: 'default', label: '默认松绿', hue: 158, chroma: 0.07 },
   { id: 'pine', label: '松针绿', hue: 158, chroma: 0.09 },
   { id: 'moss', label: '苔绿', hue: 120, chroma: 0.09 },
   { id: 'terracotta', label: '陶土', hue: 45, chroma: 0.125 },

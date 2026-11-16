@@ -281,6 +281,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
   const todoTab = (
     <>
       <div className="todo-filter-toolbar">
+        <div className="todo-filter-controls">
           <Segmented
             aria-label="任务显示范围"
             value={filter}
@@ -291,6 +292,12 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
               { value: 'all', label: '全部' },
             ]}
           />
+          {embedded && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal(null)}>
+              新建任务
+            </Button>
+          )}
+        </div>
         <div className="todo-summary-line">
           <span>待完成 <strong>{stats.active}</strong></span>
           <span>24小时内 <strong>{stats.soon}</strong></span>
@@ -501,18 +508,14 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
 
   return (
     <div className={`daily-todos-page${embedded ? ' task-pool' : ''}`}>
-      {embedded ? (
-        <div className="task-pool-actions">
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal(null)}>新建任务</Button>
+      {!embedded && (
+        <div className="page-header daily-page-header">
+          <div className="daily-page-heading">
+            <Typography.Title level={2} style={{ margin: 0 }}>待办</Typography.Title>
+            <Typography.Text type="secondary">按截止时间整理任务，循环安排也在这里。</Typography.Text>
+          </div>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal(null)}>新建待办</Button>
         </div>
-      ) : (
-      <div className="page-header daily-page-header">
-        <div className="daily-page-heading">
-          <Typography.Title level={2} style={{ margin: 0 }}>待办</Typography.Title>
-          <Typography.Text type="secondary">按截止时间整理任务，循环安排也在这里。</Typography.Text>
-        </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal(null)}>新建待办</Button>
-      </div>
       )}
       {embedded ? todoTab : (
       <Tabs

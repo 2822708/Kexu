@@ -14,7 +14,7 @@ const accent = moduleObject.exports
 
 test('默认主题色保持既有主色', () => {
   const preset = accent.ACCENT_PRESETS.find((item) => item.id === 'default')
-  assert.equal(accent.presetSwatch(preset), '#167d9a')
+  assert.equal(accent.presetSwatch(preset), '#33624c')
 })
 
 test('任意色相下浅色主题的白字对比度不低于 4.5:1', () => {
@@ -35,7 +35,7 @@ test('浅底强调文字与深色主题主色均可读', () => {
     const palette = accent.buildPalette({ id: 'custom', hue, chroma: 0.09 })
     const onSoft = accent.contrastRatio(palette.light.ink, palette.light.soft)
     assert.ok(onSoft >= 4.5, `hue ${hue} 浅底文字对比度 ${onSoft.toFixed(2)} 低于 4.5`)
-    const onDark = accent.contrastRatio(palette.dark.base, '#172a35')
+    const onDark = accent.contrastRatio(palette.dark.base, '#202b24')
     assert.ok(onDark >= 4.5, `hue ${hue} 深色主色对比度 ${onDark.toFixed(2)} 低于 4.5`)
   }
 })
@@ -45,7 +45,7 @@ test('预设主题色同样满足对比度要求', () => {
     const palette = accent.buildPalette(preset)
     assert.ok(accent.contrastRatio(palette.light.base, '#ffffff') >= 4.5, preset.label)
     assert.ok(accent.contrastRatio(palette.light.ink, palette.light.soft) >= 4.5, preset.label)
-    assert.ok(accent.contrastRatio(palette.dark.base, '#172a35') >= 4.5, preset.label)
+    assert.ok(accent.contrastRatio(palette.dark.base, '#202b24') >= 4.5, preset.label)
   }
 })
 

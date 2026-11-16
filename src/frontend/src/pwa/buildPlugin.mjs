@@ -95,8 +95,8 @@ export function mobilePwa() {
         start_url: base,
         scope: base,
         display: 'standalone',
-        background_color: '#f5f8fa',
-        theme_color: '#167d9a',
+        background_color: '#f6f4ec',
+        theme_color: '#33624c',
         icons: [192, 512].map((size) => ({
           src: `${base}pwa/icon-${size}.png`,
           sizes: `${size}x${size}`,

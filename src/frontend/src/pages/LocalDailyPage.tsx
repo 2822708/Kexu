@@ -336,11 +336,14 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   return (
     <div className="daily-workspace">
       <header className="daily-heading">
-        {embedded ? (
-          <h2 className="tasks-day-label">{isPast ? '回顾' : isFuture ? '计划' : '今天'}</h2>
-        ) : (
-          <h1>{isPast ? '回顾' : isFuture ? '计划' : '今日'}</h1>
-        )}
+        <div className="daily-heading-date">
+          {embedded ? (
+            <h2 className="tasks-day-label">{isPast ? '回顾' : isFuture ? '计划' : '今天'}</h2>
+          ) : (
+            <h1>{isPast ? '回顾' : isFuture ? '计划' : '今日'}</h1>
+          )}
+          <time dateTime={date}>{dayjs(date).format('dddd')}</time>
+        </div>
         <div className="daily-date-control">
           <Button
             aria-label="前一天"
@@ -378,29 +381,6 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
       )}
       {error && <Alert type="error" message={error} />}
       <section className="daily-main" aria-label="日任务">
-        <div className="daily-list-toolbar">
-          <div className="daily-list-tabs" role="tablist" aria-label="日任务状态">
-            <button
-              role="tab"
-              aria-selected={filter === 'active'}
-              onClick={() => setFilter('active')}
-            >
-              待做 <span>{active.length}</span>
-            </button>
-            <button
-              role="tab"
-              aria-selected={filter === 'completed'}
-              onClick={() => setFilter('completed')}
-            >
-              已完成 <span>{done.length}</span>
-            </button>
-          </div>
-          <div className="daily-list-tools">
-            <Button type="text" onClick={() => setPrioritiesOpen(true)} disabled={!canEdit}>
-              重点
-            </Button>
-          </div>
-        </div>
         {canEdit && (
           <div
             className={`daily-quick-composer${effectId === 'composer' ? ' is-celebrating' : ''}`}
@@ -435,7 +415,9 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
                 icon={<PlusOutlined />}
                 disabled={!title.trim()}
                 loading={busy.has('create')}
-              />
+              >
+                添加
+              </Button>
             </form>
             <div className="daily-composer-modes">
               <button aria-pressed={!backfill} onClick={() => setBackfill(false)}>
@@ -451,6 +433,29 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
             )}
           </div>
         )}
+        <div className="daily-list-toolbar">
+          <div className="daily-list-tabs" role="tablist" aria-label="日任务状态">
+            <button
+              role="tab"
+              aria-selected={filter === 'active'}
+              onClick={() => setFilter('active')}
+            >
+              待做 <span>{active.length}</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={filter === 'completed'}
+              onClick={() => setFilter('completed')}
+            >
+              已完成 <span>{done.length}</span>
+            </button>
+          </div>
+          <div className="daily-list-tools">
+            <Button type="text" onClick={() => setPrioritiesOpen(true)} disabled={!canEdit}>
+              重点
+            </Button>
+          </div>
+        </div>
         <div
           className="daily-entry-list"
           role="tabpanel"
@@ -458,8 +463,8 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
         >
           {visible.length === 0 && (
             <div className="daily-empty">
-              {filter === 'completed' ? '还没有已完成的日任务' : '把想做的事记在这里'}
-              <p>可以快速记录一件事，或从待办中选入。</p>
+              {filter === 'completed' ? '还没有已完成的日任务' : '还没有待做的日任务'}
+              {filter === 'active' && canEdit && <p>可以快速记录一件事，或从待办中选入。</p>}
             </div>
           )}
           {visible.map((entry) => (

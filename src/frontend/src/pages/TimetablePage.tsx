@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Dropdown, Empty, Space, Typography, message } from 'antd'
+import { Button, Dropdown, Space, Typography, message } from 'antd'
 import {
   ImportOutlined,
   LeftOutlined,
@@ -332,14 +332,15 @@ export default function TimetablePage() {
 
   if (schedules.length === 0) {
     return (
-      <Card>
-        <Empty description="还没有课表，先创建一个学期课表吧">
-          <Space>
-            <Button type="primary" onClick={() => setCreateOpen(true)}>
-              新建课表
-            </Button>
-          </Space>
-        </Empty>
+      <section className="tt-paper-empty" aria-labelledby="tt-empty-heading">
+        <h1 id="tt-empty-heading" className="tt-paper-title">周课表</h1>
+        <div className="tt-paper-empty-content">
+          <h2>创建你的第一张课表</h2>
+          <p>选择学期日期，开始安排每周课程和考试。</p>
+          <Button icon={<PlusOutlined />} type="primary" onClick={() => setCreateOpen(true)}>
+            新建课表
+          </Button>
+        </div>
         <ScheduleCreateModal
           open={createOpen}
           onCancel={() => setCreateOpen(false)}
@@ -353,7 +354,7 @@ export default function TimetablePage() {
           onUpdate={updateSchedule}
           onDelete={deleteSchedule}
         />
-      </Card>
+      </section>
     )
   }
 
@@ -361,12 +362,10 @@ export default function TimetablePage() {
     <div className="tt-page daily-timetable-page">
       <div className="page-header daily-page-header timetable-page-header">
         <div className="daily-page-heading">
-          <Typography.Title level={2} style={{ margin: 0 }}>
-            {activeSchedule?.name ?? '课表'}
-          </Typography.Title>
+          <h1 className="tt-paper-title">周课表</h1>
           <Typography.Text type="secondary" className="timetable-term-note">
             {activeSchedule
-              ? `${activeSchedule.periodStartDate} — ${activeSchedule.periodEndDate} · 共 ${total} 周`
+              ? <><strong>{activeSchedule.name}</strong><span>{activeSchedule.periodStartDate} — {activeSchedule.periodEndDate}</span></>
               : '选择一个学期，查看课程与考试安排'}
           </Typography.Text>
         </div>
