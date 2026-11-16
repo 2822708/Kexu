@@ -6,7 +6,7 @@ import {
   useNavigate,
   type Location,
 } from 'react-router-dom'
-import { routeIndex, stepIndex } from '../utils/swipeNavigation'
+import { classifySwipeStart, routeIndex, shouldCommitSwipe, stepIndex } from '../utils/swipeNavigation'
 
 const BLOCKED_SELECTOR = [
   'input',
@@ -175,8 +175,9 @@ export default function SwipePager({ routes, renderPage, children }: Props) {
       const dx = touch.clientX - state.startX
       const dy = touch.clientY - state.startY
       if (!state.dragging) {
-        if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.2) {
-          if (Math.abs(dy) > 12) state.tracking = false
+        const gesture = classifySwipeStart(dx, dy)
+        if (gesture !== 'horizontal') {
+          if (gesture === 'vertical') state.tracking = false
           return
         }
         state.dragging = true
@@ -215,7 +216,7 @@ export default function SwipePager({ routes, renderPage, children }: Props) {
       const direction = state.dx < 0 ? 1 : -1
       const target = stepIndex(state.index, routes.length, direction)
       const width = track.clientWidth || window.innerWidth
-      const commit = target !== null && Math.abs(state.dx) > Math.min(72, width * 0.18)
+      const commit = shouldCommitSwipe(state.dx, width)
       const distance = width + GAP_PX
       state.dx = 0
 

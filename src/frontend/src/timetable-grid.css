@@ -128,3 +128,15 @@
   display: grid;
   gap: 10px;
 }
+
+@media (max-width: 767px) {
+  .tt-page .tt-scroll {
+    touch-action: pan-x pan-y;
+  }
+  .tt-page .tt-scroll .course-block {
+    padding: 6px 4px;
+  }
+  .tt-page .tt-scroll .course-block-meta {
+    font-size: 0.9em;
+  }
+}

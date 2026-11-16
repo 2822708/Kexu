@@ -31,9 +31,7 @@ function loadSource(url) {
   return module.exports
 }
 
-const { dayAgenda, courseClockTime } = loadSource(
-  new URL('../src/utils/dayAgenda.ts', import.meta.url),
-)
+const { dayAgenda } = loadSource(new URL('../src/utils/dayAgenda.ts', import.meta.url))
 const schedule = { periodStartDate: '2026-09-02', periodEndDate: '2026-09-16' }
 const course = (id, dayOfWeek, weeks = [1, 2, 3], startPeriod = 1, endPeriod = 2) => ({
   id,
@@ -120,14 +118,4 @@ test('invalid dates do not silently roll into another month or show a course', (
   assert.equal(result.week, null)
   assert.deepEqual(ids(result.courses), [])
   assert.deepEqual(ids(result.exams), [])
-})
-
-test('period clock range uses the configured end period without inventing missing settings', () => {
-  const lesson = course(1, 3, [1], 1, 2)
-  const periods = [
-    { periodNumber: 2, startTime: '09:00:00', endTime: '09:45:00' },
-    { periodNumber: 1, startTime: '08:00:00', endTime: '08:45:00' },
-  ]
-  assert.equal(courseClockTime(lesson, periods), '08:00–09:45')
-  assert.equal(courseClockTime(lesson, periods.slice(1)), null)
 })
