@@ -314,7 +314,7 @@ test('mobile build plugin precaches lazy routes, transitive parser workers, publ
     'assets/TodosPage-AbCd1234.js',
     'assets/parser-AbCd1234.js',
     'assets/pdf-worker-AbCd1234.mjs',
-    'pwa/icon.svg',
+    'pwa/icon.png',
     'manifest.webmanifest',
   ])
     assert.ok(paths.includes(`/timetable/${file}`), file)

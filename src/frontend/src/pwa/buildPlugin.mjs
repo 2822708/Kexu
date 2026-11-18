@@ -101,7 +101,7 @@ export function mobilePwa() {
           src: `${base}pwa/icon-${size}.png`,
           sizes: `${size}x${size}`,
           type: 'image/png',
-          purpose: 'any maskable',
+          purpose: 'any',
         })),
       }
       const manifestSource = JSON.stringify(manifest, null, 2)

@@ -84,6 +84,8 @@ components:
 
 # Design System: Kexu
 
+Logo 采用深蓝几何 K 字与绿色增长曲线，原图见 `assets/brand/kexu-logo-original.png`。应用图标保留原图的白色底板与构图，导航使用深蓝与绿色的原始标识。
+
 ## Overview
 
 **学期手帐**

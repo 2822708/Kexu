@@ -1,10 +1,14 @@
 # Kexu 命名与兼容边界
 
-更新日期：2026-10-20。当前产品的英文名称统一为 **Kexu**，仓库地址为 [2822708/Kexu](https://github.com/2822708/Kexu)，项目路径示例为 `E:\codex work\projects\Kexu`。
+更新日期：2026-11-18。当前产品的英文名称统一为 **Kexu**，仓库地址为 [2822708/Kexu](https://github.com/2822708/Kexu)，项目路径示例为 `E:\codex work\projects\Kexu`。
 
 ## 当前名称
 
 仓库首页、页面与安装显示名、源码包说明、工程配置、构建命令、导出文件名和新发行包采用 Kexu。编辑器工作区使用 `Kexu.code-workspace`。业务术语 timetable 仍表示“课表”，不是另一套产品名称。
+
+## 视觉标识
+
+Logo 使用深蓝几何 K 字与绿色增长曲线。原始 1254×1254 PNG 保存在 [assets/brand/kexu-logo-original.png](../assets/brand/kexu-logo-original.png)，SHA256 为 `98f4bb504295b6dd5d3995d309956b3bdfac7ed27705ea30edc697553aa3b33d`。网页、PWA、Android 与 Windows 图标均按原图等比缩放，保留白色底板与原始构图。PWA 声明普通图标用途，避免系统把带底板的图片当作自适应前景裁切。
 
 ## 用户数据与安装身份
 
