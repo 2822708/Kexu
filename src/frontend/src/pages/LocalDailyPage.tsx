@@ -1,6 +1,6 @@
 import { readCompatiblePreference } from '../../../shared/brandCompatibility.mjs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, DatePicker, Dropdown, Input, Modal, Spin, message } from 'antd'
+import { Button, DatePicker, Dropdown, Input, Modal, Spin, message } from 'antd'
 import {
   CalendarOutlined,
   CheckOutlined,
@@ -39,7 +39,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
     validDate(search.get('date')) ? search.get('date')! : todayInShanghai(),
   )
   const [today, setToday] = useState(todayInShanghai)
-  const { workspace, error, refresh } = useDailyWorkspace(date)
+  const { workspace, refresh } = useDailyWorkspace(date)
   const [filter, setFilter] = useState<'active' | 'completed'>('active')
   const [tool, setTool] = useState<Tool>(null)
   const [title, setTitle] = useState('')
@@ -71,9 +71,9 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   >({})
   const drafts = useRef(new Map<string, string>())
   const asked = useRef(new Set<string>())
-  const currentScope = useRef({ date, generation: workspace?.generation })
-  currentScope.current = { date, generation: workspace?.generation }
-  const generation = workspace?.generation
+  const generation = workspace.generation
+  const currentScope = useRef({ date, generation })
+  currentScope.current = { date, generation }
   const previousGeneration = useRef(generation)
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
     return () => window.clearInterval(interval)
   }, [])
   useEffect(() => {
-    if (previousGeneration.current && generation && previousGeneration.current !== generation) {
+    if (previousGeneration.current !== generation) {
       setReviewDate(null)
       setQuestionOpen(false)
       setConvert(null)
@@ -92,7 +92,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
       setPrioritiesOpen(false)
       setNotice('本机数据已恢复，旧操作已关闭。未保存的任务输入已保留，请确认后再保存。')
     }
-    if (generation) previousGeneration.current = generation
+    previousGeneration.current = generation
   }, [generation])
   useEffect(() => {
     if (!notice) return
@@ -118,24 +118,23 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   const isPast = date < today
   const isFuture = date > today
   const canEdit = !isPast || editingPast
-  const entries = workspace?.entries ?? []
+  const entries = workspace.entries
   const active = entries.filter((item) => !item.completed)
   const done = entries.filter((item) => item.completed)
   const visible = entries.filter((item) =>
     filter === 'active' ? !item.completed || effectId === item.publicId : item.completed,
   )
-  const reviewState = workspace?.state
-  const reviewFacts = reviewState && reviewDate ? projectDailyReview(reviewState, reviewDate) : null
+  const reviewState = workspace.state
+  const reviewFacts = reviewDate ? projectDailyReview(reviewState, reviewDate) : null
   const yesterday = dayjs(today).subtract(1, 'day').format('YYYY-MM-DD')
-  const yesterdayAvailable = reviewState ? hasDailyReviewMaterial(reviewState, yesterday) : false
-  const review = reviewState?.dailyReviews.find((item) => item.date === reviewDate)
-  const reviewStatus = reviewState ? dailyReviewStatus(reviewState, date) : ''
+  const yesterdayAvailable = hasDailyReviewMaterial(reviewState, yesterday)
+  const review = reviewState.dailyReviews.find((item) => item.date === reviewDate)
+  const reviewStatus = dailyReviewStatus(reviewState, date)
   const agenda = useMemo(
     () => (activeSchedule ? dayAgenda(date, activeSchedule, courses, exams) : null),
     [activeSchedule, courses, exams, date],
   )
   const context = () => {
-    if (!workspace) throw new Error('日任务仍在加载，请稍后重试')
     return {
       expectedGeneration: workspace.generation,
       operationId: crypto.randomUUID(),
@@ -194,6 +193,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
     })
     const next = await refresh()
     if (
+      next.generation !== ctx.expectedGeneration ||
       currentScope.current.date !== expectedDate ||
       currentScope.current.generation !== ctx.expectedGeneration
     )
@@ -252,7 +252,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   const openReview = () => {
     setTool(null)
     setReviewError('')
-    if (!reviewState || isFuture) return
+    if (isFuture) return
     const key = `${reviewState.datasetId}:${today}`
     let prompted = asked.current.has(key)
     try {
@@ -277,7 +277,6 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
     } else openReviewDate(date)
   }
   const openReviewDate = (value: string) => {
-    if (!workspace) return
     reviewSession.current = {
       date: value,
       generation: workspace.generation,
@@ -315,23 +314,6 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   const focusTargets = active
     .filter((item) => !item.missingSource && !item.examLinked)
     .map((item) => ({ key: item.publicId, title: item.title }))
-
-  if (!workspace)
-    return (
-      <div className="daily-workspace-loading">
-        {error ? (
-          <Alert
-            type="error"
-            message={error}
-            action={<Button onClick={() => void refresh()}>重试</Button>}
-          />
-        ) : (
-          <Spin tip="正在读取日任务">
-            <div style={{ height: 80 }} />
-          </Spin>
-        )}
-      </div>
-    )
 
   return (
     <div className="daily-workspace">
@@ -379,7 +361,6 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
       {date !== today && date === dayjs(today).subtract(1, 'day').format('YYYY-MM-DD') && (
         <p className="daily-muted">新的一天已开始，未完成事项仍保留在原日期。</p>
       )}
-      {error && <Alert type="error" message={error} />}
       <section className="daily-main" aria-label="日任务">
         {canEdit && (
           <div

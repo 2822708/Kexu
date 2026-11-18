@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { message } from 'antd'
 import type { AppState } from './AppContext'
+import { LocalStateContext } from './LocalStateContext'
 import { initializeLocalStore, readLocalState, subscribeLocalChanges } from '../local/db'
 import { runLocalMaintenance } from '../local/domain'
 import type { LocalState } from '../local/types'
@@ -181,6 +182,7 @@ export default function LocalAppProvider({
     await load()
   }, [load])
   const refreshSchedules = useCallback(async () => (await load()).schedules, [load])
+  const localState = useMemo(() => data && { state: data, refresh: load }, [data, load])
   const activeSchedule = useMemo(
     () => data?.schedules.find((item) => item.id === activeScheduleId) ?? null,
     [data?.schedules, activeScheduleId],
@@ -220,5 +222,9 @@ export default function LocalAppProvider({
     refreshAll,
   }
   const Provider = context.Provider
-  return <Provider value={value}>{children}</Provider>
+  return (
+    <Provider value={value}>
+      <LocalStateContext.Provider value={localState}>{children}</LocalStateContext.Provider>
+    </Provider>
+  )
 }

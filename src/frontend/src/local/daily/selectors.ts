@@ -1,5 +1,5 @@
 import type { LocalState } from '../types'
-import type { DailyEvent, DailyResolvedEntry, DailyReview } from './types'
+import type { DailyEvent, DailyResolvedEntry, DailyReview, DailyWorkspace } from './types'
 
 /** ISO business day, intentionally independent of the device's local timezone. */
 export function dailyBusinessDate(value: string | Date = new Date()): string {
@@ -76,6 +76,27 @@ export function resolveDailyEntries(state: LocalState, date: string): DailyResol
         a.position - b.position ||
         a.publicId.localeCompare(b.publicId),
     )
+}
+
+export function projectDailyWorkspace(state: LocalState, date: string): DailyWorkspace {
+  return {
+    state,
+    date,
+    generation: state.dataGeneration,
+    entries: resolveDailyEntries(state, date),
+    candidateTodos: state.todos.filter(
+      (todo) =>
+        !todo.completed &&
+        todo.examId == null &&
+        !state.dayEntries.some(
+          (entry) =>
+            entry.kind === 'todo' && entry.todoPublicId === todo.publicId && entry.plannedDate === date,
+        ),
+    ),
+    unfinishedEntries: [...new Set(state.dayEntries.map((entry) => entry.plannedDate))]
+      .flatMap((plannedDate) => resolveDailyEntries(state, plannedDate))
+      .filter((entry) => !entry.completed && !entry.missingSource),
+  }
 }
 
 export function dailyReviewFor(state: LocalState, date: string): DailyReview | undefined {

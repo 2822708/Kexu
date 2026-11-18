@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Button,
-  Alert,
   Card,
   Checkbox,
   DatePicker,
@@ -14,7 +13,6 @@ import {
   Popconfirm,
   Segmented,
   Space,
-  Spin,
   Tabs,
   Tag,
   Tooltip,
@@ -53,17 +51,16 @@ export default function TodosPage(props: TodosPageProps) {
 
 function LocalTodosPage(props: TodosPageProps) {
   const [date, setDate] = useState(() => nowLocalDateTime().slice(0, 10))
-  const { workspace, error, refresh } = useDailyWorkspace(date)
+  const { workspace, refresh } = useDailyWorkspace(date)
   useEffect(() => {
     const timer = window.setInterval(() => setDate(nowLocalDateTime().slice(0, 10)), 30_000)
     return () => window.clearInterval(timer)
   }, [])
-  return <TodosPageContent {...props} dailyWorkspace={workspace} dailyError={error} refreshDaily={refresh} />
+  return <TodosPageContent {...props} dailyWorkspace={workspace} refreshDaily={refresh} />
 }
 
-function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refreshDaily }: TodosPageProps & {
-  dailyWorkspace?: DailyWorkspace | null
-  dailyError?: string
+function TodosPageContent({ embedded = false, dailyWorkspace, refreshDaily }: TodosPageProps & {
+  dailyWorkspace?: DailyWorkspace
   refreshDaily?: () => Promise<DailyWorkspace>
 }) {
   const {
@@ -311,8 +308,6 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
           倒计时仅在页面内显示；当前版本不会发送系统通知，关闭页面后也不会弹窗提醒。
         </Typography.Paragraph>
       </details>
-      {dailyError && <Alert type="error" message={dailyError} action={<Button onClick={() => void refreshDaily?.().catch(() => undefined)}>重试</Button>} />}
-      {LOCAL_MODE && !dailyWorkspace && !dailyError && <Spin tip="正在读取日任务"><div style={{ minHeight: 48 }} /></Spin>}
       {groups.length === 0 && (!LOCAL_MODE || dailyWorkspace) && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filter === 'completed' ? '还没有已完成的任务' : '暂无任务'} />}
       {groups.map((group) => (
       <section key={group.key} className="todo-group" aria-label={group.title}>

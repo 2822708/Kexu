@@ -1,6 +1,6 @@
 import { LOCAL_MODE } from './local/mode'
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes, useLocation, type Location } from 'react-router-dom'
+import { Navigate, Route, Routes, matchPath, useLocation, type Location, type To } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import { BootError, BootLoading } from './components/BootScreen'
 import SwipePager from './components/SwipePager'
@@ -51,11 +51,14 @@ function AppRoutes() {
     return <DeviceConnectionPage />
   }
 
-  if (LOCAL_MODE && widgetRoute) return <Navigate to="/tasks" replace />
+  if (LOCAL_MODE && widgetRoute) return <LocalPageRedirect to="/tasks" />
 
   if (widgetRoute) {
     return <WidgetPreviewPage />
   }
+  if (matchPath('/focus', location.pathname)) return <TaskRedirect view="today" />
+  if (matchPath('/todos', location.pathname)) return <TaskRedirect view="all" />
+  if (LOCAL_MODE && location.pathname === '/') return <LocalPageRedirect to="/timetable" />
 
   return (
     <AppLayout>
@@ -78,8 +81,6 @@ function MainRoutes({ location }: { location: Location }) {
     <Routes location={location}>
       <Route path="/timetable" element={<TimetablePage />} />
       <Route path="/tasks" element={<TasksPage />} />
-      <Route path="/todos" element={<TaskRedirect view="all" />} />
-      <Route path="/focus" element={<TaskRedirect view="today" />} />
       <Route path="/ai" element={<AiChatPage />} />
       <Route path="/manual" element={<UserManualPage />} />
       <Route path="/settings" element={<SettingsPage />} />
@@ -92,5 +93,15 @@ function TaskRedirect({ view }: { view: 'today' | 'all' }) {
   const location = useLocation()
   const search = new URLSearchParams(location.search)
   search.set('view', view)
-  return <Navigate to={{ pathname: '/tasks', search: `?${search}`, hash: location.hash }} replace />
+  const to = { pathname: '/tasks', search: `?${search}`, hash: location.hash }
+  return LOCAL_MODE ? <LocalPageRedirect to={to} /> : <Navigate to={to} replace />
+}
+
+function LocalPageRedirect({ to }: { to: To }) {
+  return (
+    <>
+      <BootLoading />
+      <Navigate to={to} replace />
+    </>
+  )
 }

@@ -2,7 +2,7 @@ import { mutateLocalState, readLocalState } from '../db'
 import { nowLocalDateTime, setFocusCompletion, setLocalTodoCompleted } from '../domain'
 import { newPublicId, nextLocalId, type LocalState } from '../types'
 import { assertLocal, normalizeDateTime, requireText, validDate } from '../validation'
-import { resolveDailyEntries } from './selectors'
+import { projectDailyWorkspace } from './selectors'
 import { projectDailyReview } from './review'
 import type {
   DailyCommandContext,
@@ -142,25 +142,7 @@ function contentOf(content: DailyReviewContent): DailyReviewContent {
 export const dailyApi = {
   async readWorkspace(date: string) {
     assertLocal(validDate(date), '日期不合法')
-    const state = await readLocalState()
-    const entries = resolveDailyEntries(state, date)
-    return {
-      state,
-      date,
-      generation: state.dataGeneration,
-      entries,
-      candidateTodos: state.todos.filter(
-        (t) =>
-          !t.completed &&
-          t.examId == null &&
-          !state.dayEntries.some(
-            (e) => e.kind === 'todo' && e.todoPublicId === t.publicId && e.plannedDate === date,
-          ),
-      ),
-      unfinishedEntries: [...new Set(state.dayEntries.map((e) => e.plannedDate))]
-        .flatMap((d) => resolveDailyEntries(state, d))
-        .filter((e) => !e.completed && !e.missingSource),
-    }
+    return projectDailyWorkspace(await readLocalState(), date)
   },
   createTask(
     body: Context & { date: string; title: string; completed?: boolean; isPriority?: boolean },
