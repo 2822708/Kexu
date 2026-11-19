@@ -6,6 +6,7 @@ import { registerVault, uploadCloudSnapshot, validateCredential, validateServerU
 import {
   changeBackupState,
   initialBackupState,
+  inspectBackupState,
   readBackupState,
   type BackupJob,
   type BackupState,
@@ -20,12 +21,29 @@ let started = false
 let running = false
 let rerunRequested = false
 let rerunForced = false
-const owner = crypto.randomUUID()
+let inFlight: { controller: AbortController; owner: string; scopeId: string } | undefined
 let statusChannel: BroadcastChannel | undefined
+function hasActiveLease(state: BackupState, scopeId: string, owner: string): boolean {
+  return Boolean(
+    state.config?.enabled &&
+      state.config.credentialSaved &&
+      state.config.scopeId === scopeId &&
+      state.lease?.owner === owner &&
+      state.lease.until > Date.now(),
+  )
+}
 function setupStatusChannel() {
   if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined' && !statusChannel) {
     statusChannel = new BroadcastChannel(`${legacyNames.backupDatabase}:changed`)
-    statusChannel.onmessage = () => listeners.forEach((callback) => callback())
+    statusChannel.onmessage = () => {
+      const active = inFlight
+      if (active) {
+        void inspectBackupState((state) => {
+          if (!hasActiveLease(state, active.scopeId, active.owner)) active.controller.abort()
+        }).catch(() => active.controller.abort())
+      }
+      listeners.forEach((callback) => callback())
+    }
   }
 }
 const notify = () => {
@@ -63,6 +81,7 @@ export async function importRecoveryCredential(value: unknown): Promise<void> {
       },
     }),
   )
+  inFlight?.controller.abort()
   notify()
 }
 export async function exportRecoveryCredential(): Promise<RecoveryCredential> {
@@ -77,12 +96,15 @@ export async function setAutoBackup(enabled: boolean, credentialSaved = false): 
       throw new Error('请先另存恢复凭证，再开启自动备份')
     state.config.credentialSaved ||= credentialSaved
     state.config.enabled = enabled
+    if (!enabled) state.lease = null
   })
+  if (!enabled) inFlight?.controller.abort()
   notify()
   if (enabled) void runBackup(true)
 }
 export async function disconnectBackup(): Promise<void> {
   await changeBackupState((state) => Object.assign(state, initialBackupState()))
+  inFlight?.controller.abort()
   notify()
 }
 export function acceptUpload(state: BackupState, job: BackupJob, uploadedAt: string): boolean {
@@ -114,6 +136,7 @@ export async function runBackup(force = false): Promise<void> {
     return
   }
   running = true
+  const owner = crypto.randomUUID()
   let scopeId: string | undefined
   try {
     const now = Date.now()
@@ -158,17 +181,22 @@ export async function runBackup(force = false): Promise<void> {
         sha256: await sha256(new TextEncoder().encode(body)),
       }
       const prepared = job
-      const saved = await changeBackupState((state) => {
-        if (state.config?.enabled && state.config.scopeId === scopeId) state.job = prepared
+      await changeBackupState((state) => {
+        if (hasActiveLease(state, prepared.scopeId, owner)) state.job = prepared
       })
-      if (
-        saved.config?.scopeId !== scopeId ||
-        !saved.config.enabled ||
-        saved.job?.snapshotId !== job.snapshotId
-      )
-        return
     }
-    const metadata = await uploadCloudSnapshot(config, job.body)
+    const uploaded = job
+    // Start fetch inside the same IndexedDB decision that observes the latest pause/lease state.
+    // The readonly transaction is released without waiting for the network.
+    const metadata = await inspectBackupState((state) => {
+      if (!hasActiveLease(state, uploaded.scopeId, owner) || state.job?.snapshotId !== uploaded.snapshotId)
+        return null
+      const controller = new AbortController()
+      inFlight = { controller, owner, scopeId: uploaded.scopeId }
+      setupStatusChannel()
+      return uploadCloudSnapshot(config, uploaded.body, controller.signal)
+    })
+    if (!metadata) return
     if (
       metadata.snapshotId !== job.snapshotId ||
       metadata.sha256 !== job.sha256 ||
@@ -177,22 +205,27 @@ export async function runBackup(force = false): Promise<void> {
       metadata.revision !== job.revision
     )
       throw new Error('云端回执校验失败，已保留本机重试队列')
-    const uploaded = job
+    let accepted = false
     await changeBackupState((state) => {
-      acceptUpload(state, uploaded, new Date().toISOString())
+      if (hasActiveLease(state, uploaded.scopeId, owner) && state.job?.snapshotId === uploaded.snapshotId)
+        accepted = acceptUpload(state, uploaded, new Date().toISOString())
     })
+    if (!accepted) return
     const latest = await readLocalState()
     if (latest.datasetId === job.datasetId && latest.revision > job.revision)
       schedule(MIN_INTERVAL_MS)
   } catch (error) {
+    let retry = false
     await changeBackupState((state) => {
-      if (scopeId && state.config?.scopeId !== scopeId) return
+      if (!state.config?.enabled || (scopeId && !hasActiveLease(state, scopeId, owner))) return
       state.error = error instanceof Error ? error.message : '云备份失败，本地数据仍已保存'
       state.failures = Math.min(12, state.failures + 1)
       state.nextAttemptAt = Date.now() + Math.min(30 * 60_000, 15_000 * 2 ** state.failures)
+      retry = true
     }).catch(() => {})
-    schedule(60_000)
+    if (retry) schedule(60_000)
   } finally {
+    if (inFlight?.owner === owner) inFlight = undefined
     await changeBackupState((state) => {
       if (state.lease?.owner === owner) state.lease = null
     }).catch(() => {})
