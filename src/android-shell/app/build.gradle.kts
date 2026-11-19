@@ -13,8 +13,8 @@ android {
         applicationId = "com.kexu.local"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2026111103
-        versionName = "2026.11.11.3"
+        versionCode = 2026111901
+        versionName = "2026.11.19.1"
     }
     buildFeatures { buildConfig = true }
     compileOptions {
