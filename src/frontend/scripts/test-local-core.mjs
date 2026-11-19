@@ -136,6 +136,34 @@ test('shortening a schedule never strands previously reachable course weeks or e
   await x.closeLocalStore()
 })
 
+test('course writes use the latest term range while keeping old stranded weeks editable', async () => {
+  const factory = new IDBFactory()
+  const editor = setup(factory), manager = setup(factory)
+  const schedule = await editor.localScheduleApi.create(scheduleBody)
+  const course = await editor.localCourseApi.create(schedule.id, { ...courseBody, weeks: [1] })
+  try {
+    // A form still using the old term cannot save courses in weeks that just became unavailable.
+    await manager.localScheduleApi.update(schedule.id, { ...scheduleBody, periodEndDate: '2026-09-06' })
+    await assert.rejects(editor.localCourseApi.update(course.id, courseBody), /超出当前学期/)
+    await assert.rejects(editor.localCourseApi.create(schedule.id, courseBody), /超出当前学期/)
+    await assert.rejects(
+      editor.localCourseApi.batchCreate(schedule.id, [{ ...courseBody, name: '本批新课', weeks: [1] }, courseBody]),
+      /超出当前学期/,
+    )
+    assert.equal((await editor.localCourseApi.listBySchedule(schedule.id)).length, 1)
+
+    // Imported or older stored courses may already include an out-of-range week.
+    await editor.mutateLocalState((state) => { state.courses[0].weeks.push(3) })
+    await editor.localCourseApi.update(course.id, { ...courseBody, weeks: [1, 3], location: '新教室' })
+    await assert.rejects(editor.localCourseApi.update(course.id, { ...courseBody, weeks: [1, 3, 4] }), /超出当前学期/)
+    assert.deepEqual(normal((await editor.localCourseApi.listBySchedule(schedule.id))[0].weeks), [1, 3])
+    await editor.localCourseApi.update(course.id, { ...courseBody, weeks: [1] })
+  } finally {
+    await editor.closeLocalStore()
+    await manager.closeLocalStore()
+  }
+})
+
 test('concurrent first initialization shares one dataset and survives database reopen', async () => {
   const factory = new IDBFactory(),
     a = setup(factory),

@@ -115,18 +115,31 @@ function removeSchedule(state: LocalState, id: number) {
   return null
 }
 function createCourse(state: LocalState, scheduleId: number, body: CoursePayload): LocalCourse {
-  scheduleOf(state, scheduleId)
-  const row = { ...metadata(state), ...validateCourse(body), scheduleId }
+  const schedule = scheduleOf(state, scheduleId)
+  const validated = validateCourse(body)
+  assertCourseWeeks(schedule, validated.weeks)
+  const row = { ...metadata(state), ...validated, scheduleId }
   state.courses.push(row)
   return row
 }
 function updateCourse(state: LocalState, id: number, body: CoursePayload) {
   const row = find(state.courses, id, '课程')
-  Object.assign(row, validateCourse(body), { updatedAt: stamp() })
+  const schedule = scheduleOf(state, row.scheduleId)
+  const validated = validateCourse(body)
+  assertCourseWeeks(schedule, validated.weeks, row.weeks)
+  Object.assign(row, validated, { updatedAt: stamp() })
   state.focusCompletions = state.focusCompletions.filter(
-    (f) => f.courseId !== id || isCourseOccurrence(scheduleOf(state, row.scheduleId), row, f.date),
+    (f) => f.courseId !== id || isCourseOccurrence(schedule, row, f.date),
   )
   return row
+}
+function assertCourseWeeks(schedule: Schedule, weeks: number[], existing: number[] = []) {
+  const maximum = teachingWeek(schedule.periodStartDate, new Date(`${schedule.periodEndDate}T00:00:00Z`))
+  // Existing out-of-range weeks remain editable so old courses can be corrected without data loss.
+  assertLocal(
+    weeks.every((week) => week <= maximum || existing.includes(week)),
+    `课程周次超出当前学期的 ${maximum} 周，请调整上课周次后保存`,
+  )
 }
 function removeCourse(state: LocalState, id: number) {
   find(state.courses, id, '课程')
