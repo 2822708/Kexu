@@ -51,15 +51,11 @@ class FocusServiceImplTest {
 
     @Test
     void recordsAndRemovesCompletionForOneCourseOccurrence() {
-        FocusCourseCompletion existing = new FocusCourseCompletion();
-        existing.setId(31L);
-        when(completionMapper.selectOne(any(Wrapper.class))).thenReturn(null, existing);
-
         service.setCourseCompleted(11L, 21L, classDate, true, "user-key");
         service.setCourseCompleted(11L, 21L, classDate, false, "user-key");
 
-        verify(completionMapper).insert(any(FocusCourseCompletion.class));
-        verify(completionMapper).deleteById(31L);
+        verify(completionMapper).ensureCompleted(any(FocusCourseCompletion.class));
+        verify(completionMapper).delete(any(Wrapper.class));
     }
 
     @Test
@@ -69,6 +65,6 @@ class FocusServiceImplTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("上课日");
 
-        verify(completionMapper, never()).insert(any(FocusCourseCompletion.class));
+        verify(completionMapper, never()).ensureCompleted(any(FocusCourseCompletion.class));
     }
 }

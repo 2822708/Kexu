@@ -1,5 +1,6 @@
 package com.timetable.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.timetable.config.ValidatedFlywayMigration;
 import com.timetable.dto.*;
 import com.timetable.entity.*;
@@ -55,7 +56,7 @@ class OptimizationRegressionTest {
     @Import({ValidatedFlywayMigration.class, AdminAuthorizationService.class,
             RequestValidationService.class, ScheduleServiceImpl.class, CourseServiceImpl.class, ExamServiceImpl.class,
             TodoServiceImpl.class, RecurringTodoServiceImpl.class, RecurringScriptEvaluator.class,
-            PeriodConfigServiceImpl.class, AiServiceImpl.class})
+            PeriodConfigServiceImpl.class, FocusServiceImpl.class, AiServiceImpl.class})
     static class TestApplication {
         @Bean
         MutableClock clock() { return new MutableClock(); }
@@ -74,6 +75,8 @@ class OptimizationRegressionTest {
     @Autowired ScheduleService schedules;
     @Autowired CourseService courses;
     @Autowired ExamService exams;
+    @Autowired FocusService focus;
+    @Autowired ObjectMapper json;
     @Autowired TodoService todos;
     @Autowired RecurringTodoService recurring;
     @Autowired AiService ai;
@@ -367,6 +370,161 @@ class OptimizationRegressionTest {
         assertThat(recurring.generateDueTodos()).isZero();
         assertThat(todos.list(OWNER)).hasSize(5);
         assertThat(rules.selectById(rule.getId()).getNextTriggerAt()).isAfter(LocalDateTime.now(clock));
+    }
+
+    @Test
+    void semesterShrinkRejectsOrphanedCourseWeeksAndKeepsExistingData() {
+        Schedule schedule = schedule(OWNER, "Semester");
+        CourseRequest request = courseRequest("Late class");
+        request.setWeeks(List.of(18));
+        Course course = courses.create(schedule.getId(), request, OWNER);
+        ScheduleRequest shrink = new ScheduleRequest();
+        shrink.setName("Shorter semester");
+        shrink.setPeriodStartDate(schedule.getPeriodStartDate());
+        shrink.setPeriodEndDate(shrink.getPeriodStartDate().plusWeeks(12).minusDays(1));
+
+        assertThatThrownBy(() -> schedules.update(schedule.getId(), shrink, OWNER))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Late class");
+        assertThat(schedules.getById(schedule.getId(), OWNER).getPeriodEndDate())
+                .isEqualTo(schedule.getPeriodEndDate());
+        assertThat(courses.listByScheduleId(schedule.getId(), OWNER).get(0).getWeeks()).containsExactly(18);
+
+        request.setWeeks(List.of(12));
+        courses.update(course.getId(), request, OWNER);
+        schedules.update(schedule.getId(), shrink, OWNER);
+        assertThat(schedules.getById(schedule.getId(), OWNER).getPeriodEndDate())
+                .isEqualTo(shrink.getPeriodEndDate());
+    }
+
+    @Test
+    void optionalFieldsCanBeClearedWhileOmittedFieldsAndExamTodoArePreserved() throws Exception {
+        Schedule schedule = schedule(OWNER, "Optional fields");
+        CourseRequest original = courseRequest("Topology");
+        original.setLocation("A101");
+        original.setTeacher("A");
+        Course course = courses.create(schedule.getId(), original, OWNER);
+        CourseRequest changes = json.readValue("""
+                {"name":"Topology II","teacher":null,"dayOfWeek":1,"startPeriod":1,
+                 "endPeriod":2,"weeks":[1]}
+                """, CourseRequest.class);
+        assertThat(courses.update(course.getId(), changes, OWNER).getLocation()).isEqualTo("A101");
+        assertThat(courses.listByScheduleId(schedule.getId(), OWNER)).singleElement()
+                .satisfies(saved -> {
+                    assertThat(saved.getLocation()).isEqualTo("A101");
+                    assertThat(saved.getTeacher()).isNull();
+                });
+        changes.setLocation(null);
+        changes.setTeacher("B");
+        courses.update(course.getId(), changes, OWNER);
+        assertThat(courses.listByScheduleId(schedule.getId(), OWNER)).singleElement()
+                .satisfies(saved -> {
+                    assertThat(saved.getLocation()).isNull();
+                    assertThat(saved.getTeacher()).isEqualTo("B");
+                });
+
+        ExamRequest originalExam = examRequest("Original exam");
+        originalExam.setLocation("B201");
+        Exam exam = exams.create(schedule.getId(), originalExam, OWNER);
+        ExamRequest examChanges = json.readValue("""
+                {"name":"Moved exam","examDate":"2026-10-03","startTime":"10:00","endTime":"12:00"}
+                """, ExamRequest.class);
+        assertThat(exams.update(exam.getId(), examChanges, OWNER).getLocation()).isEqualTo("B201");
+        examChanges.setLocation(null);
+        assertThat(exams.update(exam.getId(), examChanges, OWNER).getLocation()).isNull();
+        assertThat(exams.listByScheduleId(schedule.getId(), OWNER)).singleElement()
+                .satisfies(saved -> assertThat(saved.getLocation()).isNull());
+        assertThat(todos.list(OWNER)).singleElement()
+                .satisfies(todo -> {
+                    assertThat(todo.getExamId()).isEqualTo(exam.getId());
+                    assertThat(todo.getTitle()).contains("Moved exam");
+                    assertThat(todo.getDdl()).isEqualTo(LocalDateTime.of(2026, 10, 3, 10, 0));
+                });
+    }
+
+    @Test
+    void exactDuplicateImportsRollBackWhileManualAndDistinctCoursesCanOverlap() {
+        Schedule schedule = schedule(OWNER, "Import duplicates");
+        CourseRequest course = courseRequest("Topology");
+        course.setWeeks(List.of(2, 1));
+        CourseRequest same = courseRequest(" Topology ");
+        same.setTeacher(" ");
+        same.setWeeks(List.of(1, 2, 1));
+        BatchCourseRequest batch = new BatchCourseRequest();
+        batch.setCourses(List.of(course, same));
+        assertThatThrownBy(() -> courses.batchCreate(schedule.getId(), batch, OWNER))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("完全重复");
+        assertThat(courses.listByScheduleId(schedule.getId(), OWNER)).isEmpty();
+
+        batch.setCourses(List.of(course));
+        courses.batchCreate(schedule.getId(), batch, OWNER);
+        batch.setCourses(List.of(courseRequest("Distinct class"), same));
+        assertThatThrownBy(() -> courses.batchCreate(schedule.getId(), batch, OWNER))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("完全重复");
+        assertThat(courses.listByScheduleId(schedule.getId(), OWNER)).hasSize(1);
+
+        same.setTeacher("Different teacher");
+        batch.setCourses(List.of(same));
+        courses.batchCreate(schedule.getId(), batch, OWNER);
+        courses.create(schedule.getId(), course, OWNER);
+        assertThat(courses.listByScheduleId(schedule.getId(), OWNER)).hasSize(3);
+    }
+
+    @Test
+    void secondAssistantConfirmationCannotAddSameCourse() {
+        Schedule schedule = schedule(OWNER, "AI duplicates");
+        AiConversation conversation = conversation(schedule.getId(), OWNER);
+        AiActionDto first = propose(conversation, createCourseJson("Topology")).getActions().get(0);
+        ai.executeAction(conversation.getId(), first.getActionId(), OWNER);
+        AiActionDto second = propose(conversation, createCourseJson("Topology")).getActions().get(0);
+        assertThatThrownBy(() -> ai.executeAction(conversation.getId(), second.getActionId(), OWNER))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("完全重复");
+        assertThat(courses.listByScheduleId(schedule.getId(), OWNER)).hasSize(1);
+    }
+
+    @Test
+    void parallelImportsAndParallelCourseCompletionAreIdempotent() throws Exception {
+        Schedule schedule = schedule(OWNER, "Parallel writes");
+        BatchCourseRequest batch = new BatchCourseRequest();
+        batch.setCourses(List.of(courseRequest("Topology")));
+        Callable<Integer> importCourse = () -> {
+            try {
+                courses.batchCreate(schedule.getId(), batch, OWNER);
+                return 200;
+            } catch (BusinessException rejected) {
+                return rejected.getCode();
+            }
+        };
+        assertThat(runInParallel(importCourse)).containsExactlyInAnyOrder(200, 409);
+        List<Course> saved = courses.listByScheduleId(schedule.getId(), OWNER);
+        assertThat(saved).hasSize(1);
+
+        Long courseId = saved.get(0).getId();
+        LocalDate occurrence = schedule.getPeriodStartDate();
+        Callable<Integer> complete = () -> {
+            focus.setCourseCompleted(schedule.getId(), courseId, occurrence, true, OWNER);
+            return 200;
+        };
+        assertThat(runInParallel(complete)).containsExactly(200, 200);
+        assertThat(focus.completedCourseIds(schedule.getId(), occurrence, OWNER)).containsExactly(courseId);
+        focus.setCourseCompleted(schedule.getId(), courseId, occurrence, false, OWNER);
+        focus.setCourseCompleted(schedule.getId(), courseId, occurrence, false, OWNER);
+        assertThat(focus.completedCourseIds(schedule.getId(), occurrence, OWNER)).isEmpty();
+    }
+
+    private static <T> List<T> runInParallel(Callable<T> task) throws Exception {
+        CyclicBarrier start = new CyclicBarrier(2);
+        Callable<T> request = () -> {
+            start.await(5, TimeUnit.SECONDS);
+            return task.call();
+        };
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<T> first = pool.submit(request);
+            Future<T> second = pool.submit(request);
+            return List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     private Schedule schedule(String key, String name) {

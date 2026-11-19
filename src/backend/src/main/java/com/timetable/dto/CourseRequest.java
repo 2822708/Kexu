@@ -21,6 +21,9 @@ public class CourseRequest {
     @Size(max = 100, message = "教师名称不能超过 100 个字符")
     private String teacher;
 
+    private boolean locationProvided;
+    private boolean teacherProvided;
+
     @NotNull(message = "星期不能为空")
     @Min(value = 1, message = "星期范围为 1-7")
     @Max(value = 7, message = "星期范围为 1-7")
@@ -44,9 +47,19 @@ public class CourseRequest {
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getLocation() { return location; }
-    public void setLocation(String location) { this.location = location; }
+    public void setLocation(String location) {
+        this.location = location;
+        this.locationProvided = true;
+    }
+    @JsonIgnore
+    public boolean isLocationProvided() { return locationProvided; }
     public String getTeacher() { return teacher; }
-    public void setTeacher(String teacher) { this.teacher = teacher; }
+    public void setTeacher(String teacher) {
+        this.teacher = teacher;
+        this.teacherProvided = true;
+    }
+    @JsonIgnore
+    public boolean isTeacherProvided() { return teacherProvided; }
     public Integer getDayOfWeek() { return dayOfWeek; }
     public void setDayOfWeek(Integer dayOfWeek) { this.dayOfWeek = dayOfWeek; }
     public Integer getStartPeriod() { return startPeriod; }

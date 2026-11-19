@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.timetable.dto.ScheduleRequest;
 import com.timetable.entity.Schedule;
+import com.timetable.entity.Course;
 import com.timetable.entity.Exam;
 import com.timetable.entity.Todo;
 import com.timetable.entity.AiConversation;
@@ -18,9 +19,11 @@ import com.timetable.mapper.ScheduleMapper;
 import com.timetable.service.ScheduleService;
 import com.timetable.service.RequestValidationService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class ScheduleServiceImpl implements ScheduleService {
@@ -62,6 +65,18 @@ public class ScheduleServiceImpl implements ScheduleService {
         return schedule;
     }
 
+    @Override
+    public Schedule getByIdForUpdate(Long id, String apiKey) {
+        Schedule schedule = scheduleMapper.selectOne(Wrappers.<Schedule>lambdaQuery()
+                .eq(Schedule::getId, id)
+                .eq(Schedule::getApiKey, apiKey)
+                .last("FOR UPDATE"));
+        if (schedule == null || !schedule.getApiKey().equals(apiKey)) {
+            throw new BusinessException(404, "课表不存在");
+        }
+        return schedule;
+    }
+
     private void validateDateRange(ScheduleRequest request) {
         if (request.getPeriodStartDate() != null && request.getPeriodEndDate() != null
                 && request.getPeriodEndDate().isBefore(request.getPeriodStartDate())) {
@@ -83,11 +98,26 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Schedule update(Long id, ScheduleRequest request, String apiKey) {
         requestValidation.requireValid(request);
         validateDateRange(request);
-        Schedule schedule = getById(id, apiKey);
+        Schedule schedule = getByIdForUpdate(id, apiKey);
+        int previousMaximum = CourseServiceImpl.maximumWeek(schedule.getPeriodStartDate(), schedule.getPeriodEndDate());
+        int nextMaximum = CourseServiceImpl.maximumWeek(request.getPeriodStartDate(), request.getPeriodEndDate());
+        if (nextMaximum < previousMaximum) {
+            List<Course> affected = courseMapper.selectList(Wrappers.<Course>lambdaQuery()
+                    .eq(Course::getScheduleId, id)).stream()
+                    .filter(course -> course.getWeeks() != null
+                            && course.getWeeks().stream().anyMatch(week -> week != null && week > nextMaximum))
+                    .toList();
+            if (!affected.isEmpty()) {
+                String names = affected.stream().map(Course::getName).distinct().limit(3)
+                        .collect(Collectors.joining("、"));
+                throw new BusinessException(409, "缩短学期会使 " + affected.size()
+                        + " 门课程超出第 " + nextMaximum + " 周：" + names);
+            }
+        }
         schedule.setName(request.getName());
         schedule.setPeriodStartDate(request.getPeriodStartDate());
         schedule.setPeriodEndDate(request.getPeriodEndDate());
@@ -105,7 +135,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Override
     @Transactional
     public void delete(Long id, String apiKey) {
-        getById(id, apiKey);
+        getByIdForUpdate(id, apiKey);
         List<Exam> exams = examMapper.selectList(Wrappers.<Exam>lambdaQuery()
                 .eq(Exam::getScheduleId, id));
         if (!exams.isEmpty()) {
@@ -115,8 +145,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                     .in(Todo::getExamId, examIds));
             examMapper.delete(Wrappers.<Exam>lambdaQuery().eq(Exam::getScheduleId, id));
         }
-        courseMapper.delete(Wrappers.<com.timetable.entity.Course>lambdaQuery()
-                .eq(com.timetable.entity.Course::getScheduleId, id));
+        courseMapper.delete(Wrappers.<Course>lambdaQuery().eq(Course::getScheduleId, id));
         actionMapper.update(null, Wrappers.<AiAction>lambdaUpdate()
                 .eq(AiAction::getApiKey, apiKey)
                 .eq(AiAction::getScheduleId, id)
