@@ -21,14 +21,16 @@ import {
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AiActionCard from '../components/AiActionCard'
-import AiChatComposer from '../components/AiChatComposer'
+import AiChatComposer, { type AiChatImage } from '../components/AiChatComposer'
+import ScheduleCreateModal from '../components/ScheduleCreateModal'
 import { aiApi } from '../api'
 import { useApp } from '../store/AppContext'
-import type { AiConversation, AiMessage } from '../types'
+import type { AiConversation, AiMessage, Schedule } from '../types'
 import { formatWeekInfo } from '../utils/schedule'
 import { isImageDataUrl, MAX_CHAT_IMAGES } from '../utils/chatImport'
 import { subscribeAiSettings } from '../local/ai/settings'
 import { localAiApi, localAiStream } from '../local/ai'
+import { createImageSchedule, type ImageScheduleScope } from '../local/ai/imageSchedule'
 import { readLocalState, subscribeLocalChanges } from '../local/db'
 import { currentImportConversation, localChatView } from '../local/ai/uiState'
 import '../settings-ai.css'
@@ -45,6 +47,16 @@ interface StreamState {
   phase: 'thinking' | 'text' | 'planning'
   text: string
   userText: string
+}
+
+interface ImageDraft {
+  scope: ImageScheduleScope
+  text: string
+  images: AiChatImage[]
+}
+
+interface ImageSetup extends ImageDraft {
+  resolve: (sendWithoutSchedule: boolean) => void
 }
 
 function conversationIdentity(conversation: AiConversation | undefined): string | null {
@@ -82,7 +94,10 @@ export default function AiChatPage() {
   const [convPanelOpen, setConvPanelOpen] = useState(false)
   const [messages, setMessages] = useState<AiMessage[]>([])
   const [input, setInput] = useState('')
-  const [pendingImages, setPendingImages] = useState<Array<{ dataUrl: string; name: string }>>([])
+  const [pendingImages, setPendingImages] = useState<AiChatImage[]>([])
+  const [imageSetup, setImageSetup] = useState<ImageSetup | null>(null)
+  const [imageHandoff, setImageHandoff] = useState<(ImageDraft & { scheduleId: number }) | null>(null)
+  const imageSetupRef = useRef<ImageSetup | null>(null)
   const [composerEpoch, setComposerEpoch] = useState(0)
   const clearPendingImages = useCallback(() => setPendingImages([]), [])
   const [loadingMessages, setLoadingMessages] = useState(false)
@@ -110,11 +125,20 @@ export default function AiChatPage() {
   const stream = currentId !== null ? streams[currentId] : undefined
   const sending = stream !== undefined || creatingConversation
 
+  const finishImageSetup = useCallback((setup: ImageSetup | null, sendWithoutSchedule = false) => {
+    if (!setup || imageSetupRef.current !== setup) return
+    imageSetupRef.current = null
+    setImageSetup(null)
+    setup.resolve(sendWithoutSchedule)
+  }, [])
+
   const changeConversation = useCallback(
     (id: number | null, abort = true, publicId: string | null = null) => {
       const identityChanged = id !== null && publicId !== null &&
         selectedPublicIdRef.current !== null && publicId !== selectedPublicIdRef.current
       if (id !== currentIdRef.current || identityChanged) {
+        finishImageSetup(imageSetupRef.current)
+        setImageHandoff(null)
         if (abort) {
           setInput('')
           setComposerEpoch((value) => value + 1)
@@ -133,12 +157,14 @@ export default function AiChatPage() {
         setCurrentId(id)
       }
     },
-    [],
+    [finishImageSetup],
   )
 
   useEffect(() => {
     return () => {
       activeAbortRef.current?.abort()
+      imageSetupRef.current?.resolve(false)
+      imageSetupRef.current = null
       messageRequestRef.current++
       conversationRequestRef.current++
       currentIdRef.current = null
@@ -172,6 +198,28 @@ export default function AiChatPage() {
   const convScheduleMissing =
     currentConv?.scheduleId != null && !schedules.some((s) => s.id === currentConv?.scheduleId)
 
+  // The first schedule changes the composer's scope. Restore the draft only after
+  // both the app selection and the original conversation's binding have arrived.
+  useEffect(() => {
+    if (!imageHandoff || imageSetup) return
+    const { scope, scheduleId, text, images } = imageHandoff
+    if (
+      localDatasetRef.current !== scope.dataset ||
+      currentIdRef.current !== scope.conversationId ||
+      selectedPublicIdRef.current !== scope.conversationPublicId ||
+      (activeScheduleId !== null && activeScheduleId !== scheduleId)
+    ) {
+      setImageHandoff(null)
+      return
+    }
+    if (activeScheduleId !== scheduleId || (currentId !== null && currentConv?.scheduleId !== scheduleId))
+      return
+    setInput(text)
+    setPendingImages(images)
+    setImageHandoff(null)
+    message.success('课表已创建，图片已保留')
+  }, [activeScheduleId, currentConv?.scheduleId, currentId, imageHandoff, imageSetup])
+
   const patchStream = useCallback((convId: number, patch: Partial<StreamState>) => {
     setStreams((prev) => {
       const cur = prev[convId]
@@ -204,6 +252,7 @@ export default function AiChatPage() {
     }
     const changed = () => {
       activeAbortRef.current?.abort()
+      finishImageSetup(imageSetupRef.current)
       setEnabled(null)
       refresh()
     }
@@ -222,7 +271,7 @@ export default function AiChatPage() {
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', visible)
     }
-  }, [])
+  }, [finishImageSetup])
 
   const loadConversations = useCallback(async () => {
     const version = ++conversationRequestRef.current
@@ -288,6 +337,8 @@ export default function AiChatPage() {
         const replaced = localDatasetRef.current !== null && localDatasetRef.current !== dataset
         localDatasetRef.current = dataset
         if (replaced) {
+          finishImageSetup(imageSetupRef.current)
+          setImageHandoff(null)
           activeAbortRef.current?.abort()
           setStreams({})
           setInput('')
@@ -345,7 +396,7 @@ export default function AiChatPage() {
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', visible)
     }
-  }, [changeConversation, refreshMessages])
+  }, [changeConversation, finishImageSetup, refreshMessages])
 
   const loadOlderMessages = async () => {
     if (currentId === null || !messageCursor || loadingOlder || sending) return
@@ -594,9 +645,33 @@ export default function AiChatPage() {
     }
   }
 
-  const send = async (draft: string = input, images: string[] = []): Promise<boolean> => {
+  const isImageScopeCurrent = (scope: ImageScheduleScope) =>
+    localDatasetRef.current === scope.dataset &&
+    currentIdRef.current === scope.conversationId &&
+    selectedPublicIdRef.current === scope.conversationPublicId
+
+  const createScheduleForImage = async (
+    setup: ImageSetup,
+    payload: Omit<Schedule, 'id'>,
+  ) => {
+    if (imageSetupRef.current !== setup || !isImageScopeCurrent(setup.scope) || activeScheduleRef.current !== null)
+      throw new Error('当前课表或对话已变化，请重新发送图片')
+    const schedule = await createImageSchedule(payload, setup.scope)
+    if (imageSetupRef.current === setup && isImageScopeCurrent(setup.scope)) {
+      setImageHandoff({
+        scope: setup.scope,
+        text: setup.text,
+        images: setup.images,
+        scheduleId: schedule.id,
+      })
+      await Promise.allSettled([refreshSchedules(), loadConversations()])
+    }
+  }
+
+  const send = async (draft: string = input, attachments: AiChatImage[] = []): Promise<boolean> => {
     const content = draft.trim()
-    if ((!content && !images.length) || sending || activeAbortRef.current) return false
+    const images = attachments.map(({ dataUrl }) => dataUrl)
+    if ((!content && !images.length) || sending || activeAbortRef.current || imageSetupRef.current) return false
     if (workspaceMismatch) {
       message.warning(
         currentConv?.scheduleId == null
@@ -604,6 +679,28 @@ export default function AiChatPage() {
           : '该对话属于另一个课表，请切换到对应课表后再继续，或新建对话',
       )
       return false
+    }
+
+    let readImageOnly = false
+    if (LOCAL_MODE && images.length && activeScheduleId === null && !importIntentRef.current) {
+      const dataset = localDatasetRef.current
+      if (!dataset) {
+        message.info('本机对话正在加载，图片已保留')
+        return false
+      }
+      const scope = {
+        dataset,
+        conversationId: currentIdRef.current,
+        conversationPublicId: selectedPublicIdRef.current,
+      }
+      const sendWithoutSchedule = await new Promise<boolean>((resolve) => {
+        const setup = { scope, text: input, images: attachments, resolve }
+        imageSetupRef.current = setup
+        setImageSetup(setup)
+      })
+      if (!sendWithoutSchedule || !isImageScopeCurrent(scope) || activeScheduleRef.current !== null || activeAbortRef.current)
+        return false
+      readImageOnly = true
     }
 
     let convId = currentId
@@ -666,8 +763,9 @@ export default function AiChatPage() {
           }),
         onPlanning: () => patchStream(cid, { phase: 'planning' }),
       }
-      const intent =
-        LOCAL_MODE && importIntentRef.current?.conversationId === cid
+      const intent = readImageOnly
+        ? 'READ_IMAGE'
+        : importIntentRef.current?.conversationId === cid
           ? importIntentRef.current.kind
           : undefined
       if (LOCAL_MODE)
@@ -1123,6 +1221,14 @@ export default function AiChatPage() {
             onInitialImagesApplied={clearPendingImages}
           />
         </div>
+        {imageSetup && (
+          <ScheduleCreateModal
+            open
+            onCancel={() => finishImageSetup(imageSetup)}
+            onCreate={(payload) => createScheduleForImage(imageSetup, payload)}
+            imageImport={{ onSendWithoutSchedule: () => finishImageSetup(imageSetup, true) }}
+          />
+        )}
       </section>
     </div>
   )

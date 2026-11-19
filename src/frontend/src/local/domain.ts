@@ -57,7 +57,7 @@ function metadata(state: LocalState) {
 }
 const scheduleOf = (s: LocalState, id: number) => find(s.schedules, id, '课表')
 
-function createSchedule(state: LocalState, body: Omit<Schedule, 'id'>) {
+export function createSchedule(state: LocalState, body: Omit<Schedule, 'id'>) {
   const row = { ...metadata(state), ...validateSchedule(body) }
   state.schedules.push(row)
   return row

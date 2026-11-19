@@ -22,6 +22,14 @@ export const DEFAULT_COMPLETION_LIMITS: CompletionLimits = {
   idleMs: 20000,
 }
 
+function supportsDeepSeekJson(url: string, model: string): boolean {
+  return (
+    (url === 'https://api.deepseek.com/chat/completions' ||
+      url === 'https://api.deepseek.com/v1/chat/completions') &&
+    (model === 'deepseek-flash' || model === 'deepseek-v4-pro')
+  )
+}
+
 function aborted() {
   return new DOMException('请求已取消', 'AbortError')
 }
@@ -192,11 +200,21 @@ export async function requestCompletion(
     signal?: AbortSignal
     onDelta?: (delta: string) => void
     limits?: CompletionLimits
+    expectJson?: boolean
   } = {},
 ): Promise<string> {
   const connection = validateAiSettings(settings)
   if (!connection.endpoint || !connection.model || !connection.apiKey)
     throw new Error('请先设置你选择的AI服务地址、模型和API Key')
+  const url = completionUrl(connection.endpoint)
+  // Keep the compatible payload for other services and plain-text requests.
+  const jsonOutput = options.expectJson && supportsDeepSeekJson(url, connection.model)
+  const body = {
+    model: connection.model,
+    messages,
+    stream: true,
+    ...(jsonOutput ? { response_format: { type: 'json_object' }, max_tokens: 16384 } : {}),
+  }
   const controller = new AbortController()
   const limits = options.limits ?? DEFAULT_COMPLETION_LIMITS
   let timedOut = false
@@ -212,13 +230,13 @@ export async function requestCompletion(
   try {
     let response: Response
     try {
-      response = await fetch(completionUrl(connection.endpoint), {
+      response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${connection.apiKey}`,
         },
-        body: JSON.stringify({ model: connection.model, messages, stream: true }),
+        body: JSON.stringify(body),
         signal: controller.signal,
         credentials: 'omit',
         cache: 'no-store',

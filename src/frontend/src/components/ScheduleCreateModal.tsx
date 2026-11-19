@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, DatePicker, Form, Input, message, Modal, Space } from 'antd'
 import type { Dayjs } from 'dayjs'
 import type { Schedule } from '../types'
@@ -7,6 +7,7 @@ interface Props {
   open: boolean
   onCancel: () => void
   onCreate: (payload: Omit<Schedule, 'id'>) => Promise<void>
+  imageImport?: { onSendWithoutSchedule: () => void }
 }
 
 interface FormValues {
@@ -21,28 +22,34 @@ function semesterDisabledDate(current: Dayjs) {
   return d !== 0 && d !== 1
 }
 
-export default function ScheduleCreateModal({ open, onCancel, onCreate }: Props) {
+export default function ScheduleCreateModal({ open, onCancel, onCreate, imageImport }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [saving, setSaving] = useState(false)
+  const submitRef = useRef(false)
 
   useEffect(() => {
     if (open) form.resetFields()
   }, [open, form])
 
   const submit = async () => {
-    const values = await form.validateFields()
-    const payload = {
-      name: values.name.trim(),
-      periodStartDate: values.range[0].format('YYYY-MM-DD'),
-      periodEndDate: values.range[1].format('YYYY-MM-DD'),
-    }
-    setSaving(true)
+    if (submitRef.current) return
+    submitRef.current = true
     try {
-      await onCreate(payload)
-      onCancel()
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : '保存失败')
+      const values = await form.validateFields().catch(() => null)
+      if (!values) return
+      setSaving(true)
+      try {
+        await onCreate({
+          name: values.name.trim(),
+          periodStartDate: values.range[0].format('YYYY-MM-DD'),
+          periodEndDate: values.range[1].format('YYYY-MM-DD'),
+        })
+        onCancel()
+      } catch (e) {
+        message.error(e instanceof Error ? e.message : '保存失败')
+      }
     } finally {
+      submitRef.current = false
       setSaving(false)
     }
   }
@@ -51,13 +58,16 @@ export default function ScheduleCreateModal({ open, onCancel, onCreate }: Props)
     <Modal
       open={open}
       maskClosable={false}
-      title="新建课表"
+      title={imageImport ? '为这张图片新建课表' : '新建课表'}
       onCancel={onCancel}
+      closable={!saving}
+      keyboard={!saving}
       footer={null}
       width={520}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical" requiredMark={false}>
+      {imageImport && <p>先填写学期，图片会留在输入框。发送后可逐条确认识别出的课程。</p>}
+      <Form form={form} layout="vertical" requiredMark={false} disabled={saving}>
         <Form.Item
           name="name"
           label="课表名称"
@@ -87,9 +97,14 @@ export default function ScheduleCreateModal({ open, onCancel, onCreate }: Props)
         </Form.Item>
         <Space>
           <Button type="primary" loading={saving} onClick={submit}>
-            创建
+            {imageImport ? '创建课表' : '创建'}
           </Button>
           <Button onClick={onCancel}>取消</Button>
+          {imageImport && (
+            <Button type="link" onClick={imageImport.onSendWithoutSchedule}>
+              仅识别图片
+            </Button>
+          )}
         </Space>
       </Form>
     </Modal>

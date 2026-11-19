@@ -300,7 +300,7 @@ export function parsePlannerReply(
   try {
     parsed = JSON.parse(extractJsonPayload(raw))
   } catch {
-    throw new Error('AI未返回完整JSON；没有生成可执行提案，请重试或换兼容模型')
+    throw new Error('AI未返回完整JSON，本次没有生成提案')
   }
   const obj = object(parsed, 'AI回复')
   exact(obj, ['reply', 'actions'], 'AI回复')
@@ -308,7 +308,9 @@ export function parsePlannerReply(
   const proposals = normalizeProposals(obj.actions, state, scheduleId)
   if (allowedTypes && proposals.some((proposal) => !allowedTypes.includes(proposal.type)))
     throw new Error(
-      '当前导入草稿只授权新增待办或考试；修改、删除及其他动作已拒绝，请在普通对话中明确提出',
+      allowedTypes.length === 0
+        ? '本次只识别图片内容，AI 返回的操作提案未保存'
+        : '当前导入草稿只授权新增待办或考试；修改、删除及其他动作已拒绝，请在普通对话中明确提出',
     )
   return { reply, proposals }
 }

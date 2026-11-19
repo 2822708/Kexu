@@ -212,6 +212,15 @@ function configure(x, endpoint) {
     visionEnabled: false,
   })
 }
+function completionReply(content) {
+  const event = (choice) => `data: ${JSON.stringify({ choices: [choice] })}\n\n`
+  return new Response(
+    event({ delta: { content }, finish_reason: null }) +
+      event({ delta: {}, finish_reason: 'stop' }) +
+      'data: [DONE]\n\n',
+    { headers: { 'content-type': 'text/event-stream' } },
+  )
+}
 async function withMock(options, run) {
   const mock = await createMockOpenAiServer(options)
   try {
@@ -802,6 +811,112 @@ test('screenshots and scanned PDF pages reach the planner as images in one reque
     const messages = await x.localAiApi.listMessages(conv.id)
     assert.match(messages.find((message) => message.role === 'user').text, /附图 1 张/)
   }))
+
+test('read-only screenshot requests cannot save operations proposed by the model', async () => {
+  let request
+  const x = setup({
+    fetcher: async (_, init) => {
+      request = JSON.parse(init.body)
+      return completionReply(JSON.stringify({
+        reply: '识别到一条待办。',
+        actions: [{ type: 'CREATE_TODO', data: { todos: [todoFixture] } }],
+      }))
+    },
+  })
+  x.saveAiSettings({
+    endpoint: 'https://ai.example.test',
+    model: 'mock-model',
+    apiKey: syntheticKey,
+    enabled: true,
+    allowContext: true,
+    visionEnabled: true,
+  })
+  const conversation = await x.localAiApi.createConversation(null)
+  await assert.rejects(
+    x.localAiStream(conversation.id, '只识别图片', null, {}, undefined, 'READ_IMAGE', [
+      'data:image/jpeg;base64,AAAA',
+    ]),
+    /本次只识别图片内容/,
+  )
+  const state = await x.readLocalState()
+  assert.equal(request.messages.length, 3, 'only prompts and the selected image are sent')
+  assert.equal(state.todos.length, 0)
+  assert.equal(state.messages.flatMap((item) => item.actions ?? []).length, 0)
+})
+
+test('official DeepSeek Flash photo chat requests JSON and keeps recognized courses pending', async () => {
+  const requests = []
+  let response = JSON.stringify({
+    reply: '请确认识别到的课程。',
+    actions: [{ type: 'CREATE_COURSE', data: { courses: [courseFixture] } }],
+  })
+  const x = setup({
+    fetcher: async (url, init) => {
+      requests.push({ url, body: JSON.parse(init.body) })
+      return completionReply(response)
+    },
+  })
+  const schedule = await x.localScheduleApi.create(scheduleBody)
+  const conversation = await x.localAiApi.createConversation(schedule.id)
+  x.saveAiSettings({
+    endpoint: 'https://api.deepseek.com/v1/',
+    model: 'deepseek-flash',
+    apiKey: syntheticKey,
+    enabled: true,
+    allowContext: true,
+    visionEnabled: true,
+  })
+  const image = 'data:image/jpeg;base64,AAAA'
+  const reply = await x.localAiStream(conversation.id, '导入这张课表', schedule.id, {}, undefined, undefined, [image])
+  assert.equal(requests.length, 1)
+  assert.equal(requests[0].url, 'https://api.deepseek.com/v1/chat/completions')
+  assert.deepEqual(requests[0].body.response_format, { type: 'json_object' })
+  assert.deepEqual(requests[0].body.messages.at(-1).content.at(-1), {
+    type: 'image_url', image_url: { url: image },
+  })
+  assert.equal(reply.actions[0].status, 'PENDING')
+  assert.equal((await x.readLocalState()).courses.length, 0)
+  await x.localAiApi.execute(conversation.id, reply.actions[0].actionId)
+  assert.equal((await x.readLocalState()).courses[0].name, courseFixture.name)
+
+  response = '没有按规定格式输出'
+  await assert.rejects(
+    x.localAiStream(conversation.id, '再次识别图片', schedule.id, {}, undefined, undefined, [image]),
+    /未返回完整JSON/,
+  )
+  assert.equal(requests.length, 2, 'an invalid reply must not silently retry')
+  assert.equal((await x.readLocalState()).courses.length, 1)
+})
+
+test('plain-text calls and other providers retain the compatible request payload', async () => {
+  const requests = []
+  const x = setup({
+    fetcher: async (_, init) => {
+      requests.push(JSON.parse(init.body))
+      return completionReply('图片识别文字')
+    },
+  })
+  const settings = x.saveAiSettings({
+    endpoint: 'https://api.deepseek.com',
+    model: 'deepseek-flash',
+    apiKey: syntheticKey,
+    enabled: true,
+    allowContext: true,
+    visionEnabled: true,
+  })
+  assert.equal((await x.localAiApi.parseImageText('data:image/png;base64,AAAA')).text, '图片识别文字')
+  assert.equal((await x.testAiConnection(settings)).ok, true)
+  await x.requestCompletion(
+    { ...settings, endpoint: 'https://ai.example.test' },
+    [{ role: 'user', content: '返回 JSON' }],
+    { expectJson: true },
+  )
+  assert.equal(requests.length, 3)
+  for (const request of requests) {
+    assert.equal(request.response_format, undefined)
+    assert.equal(request.max_tokens, undefined)
+  }
+})
 
 test('AI can propose a new schedule and only writes it after confirmation', async () => {
   const output = JSON.stringify({
