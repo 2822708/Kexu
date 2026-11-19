@@ -464,8 +464,16 @@ export const localCourseApi = {
         return created
       })
     }),
-  update: (id: number, body: CoursePayload) => mutateLocalState((s) => updateCourse(s, id, body)),
-  remove: (id: number) => mutateLocalState((s) => removeCourse(s, id)),
+  update: (id: number, body: CoursePayload, guard?: (state: LocalState) => void) =>
+    mutateLocalState((state) => {
+      guard?.(state)
+      return updateCourse(state, id, body)
+    }),
+  remove: (id: number, guard?: (state: LocalState) => void) =>
+    mutateLocalState((state) => {
+      guard?.(state)
+      return removeCourse(state, id)
+    }),
 }
 export const localTodoApi = {
   list: async () => {

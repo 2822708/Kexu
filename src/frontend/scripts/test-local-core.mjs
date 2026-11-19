@@ -85,6 +85,39 @@ const recurringBody = {
 }
 const normal = (x) => JSON.parse(JSON.stringify(x))
 
+test('local course editor checks its original record in the write transaction', async () => {
+  const factory = new IDBFactory()
+  const first = setup(factory), second = setup(factory)
+  const schedule = await first.localScheduleApi.create(scheduleBody)
+  const course = await first.localCourseApi.create(schedule.id, { ...courseBody, location: '原教室' })
+  const other = await first.localCourseApi.create(schedule.id, { ...courseBody, name: '另一门课程' })
+  const scope = first.captureEditorScope(schedule)
+  const guard = (state) => first.assertCourseEditorCurrent(state, scope, schedule, course)
+  try {
+    await second.localCourseApi.update(other.id, { ...courseBody, name: '另一门已改课程' })
+    await first.localCourseApi.update(course.id, { ...courseBody, location: '原教室' }, guard)
+    const [opened] = await first.localCourseApi.listBySchedule(schedule.id)
+    const checkOpened = (state) => first.assertCourseEditorCurrent(state, scope, schedule, opened)
+    await second.localCourseApi.update(course.id, { ...courseBody, location: '新教室' })
+    await assert.rejects(
+      first.localCourseApi.update(course.id, { ...courseBody, location: '原教室', teacher: '新老师' }, checkOpened),
+      (error) => error instanceof first.LocalCourseEditConflict && error.latest.location === '新教室',
+    )
+    await assert.rejects(first.localCourseApi.remove(course.id, checkOpened), first.LocalCourseEditConflict)
+    const [current] = await first.localCourseApi.listBySchedule(schedule.id)
+    assert.equal(current.location, '新教室')
+    assert.equal(current.teacher, null)
+    await second.localCourseApi.remove(course.id)
+    await assert.rejects(
+      first.localCourseApi.update(course.id, courseBody, checkOpened),
+      first.LocalEditorScopeError,
+    )
+  } finally {
+    await first.closeLocalStore()
+    await second.closeLocalStore()
+  }
+})
+
 test('concurrent first initialization shares one dataset and survives database reopen', async () => {
   const factory = new IDBFactory(),
     a = setup(factory),

@@ -21,14 +21,17 @@ import type { Course, CoursePayload, Exam, ExamPayload, Schedule } from '../type
 import { currentWeekOf, totalWeeks } from '../utils/schedule'
 import { LOCAL_MODE } from '../local/mode'
 import {
+  assertCourseEditorCurrent,
   assertEditorRecord,
   assertEditorGeneration,
   assertEditorScope,
   captureEditorScope,
+  LocalCourseEditConflict,
   LocalEditorScopeError,
   recordPublicId,
   type LocalEditorScope,
 } from '../local/editorScope'
+import type { LocalState } from '../local/types'
 import '../daily-pages.css'
 
 export default function TimetablePage() {
@@ -51,6 +54,7 @@ export default function TimetablePage() {
     course: Course | null
     defaults: { dayOfWeek?: number; startPeriod?: number } | null
     scope: LocalEditorScope | null
+    latest?: Course
   }>({ open: false, course: null, defaults: null, scope: null })
   const [saving, setSaving] = useState(false)
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
@@ -147,7 +151,7 @@ export default function TimetablePage() {
       importGeneration.current++
       setCourseModal({
         open: true,
-        course,
+        course: { ...course, weeks: [...(course.weeks ?? [])] },
         defaults: null,
         scope: LOCAL_MODE ? captureEditorScope(activeScheduleRef.current) : null,
       })
@@ -201,20 +205,38 @@ export default function TimetablePage() {
     [activeScheduleId],
   )
 
+  const guardCourseEditor = (course: Course, generation: number) => (state: LocalState) => {
+    if (generation !== importGeneration.current)
+      throw new LocalEditorScopeError('编辑窗口已关闭或课表已切换，本次修改已取消')
+    assertCourseEditorCurrent(state, courseModal.scope, activeScheduleRef.current, course)
+  }
+  const handleCourseFailure = (error: unknown, generation: number, fallback: string) => {
+    if (error instanceof LocalCourseEditConflict) {
+      if (generation === importGeneration.current)
+        setCourseModal((modal) => ({ ...modal, latest: error.latest }))
+    } else {
+      handleScopeFailure(error, generation)
+      message.error(error instanceof Error ? error.message : fallback)
+    }
+  }
+
   const submitCourse = async (payload: CoursePayload) => {
     if (!activeScheduleId) return
     setSaving(true)
     const generation = importGeneration.current
     try {
-      const target = await validateScope(
-        courseModal.scope,
-        courseModal.course ? { collection: 'courses', value: courseModal.course } : undefined,
-      )
-      if (!target) throw new Error('请先选择课表')
-      if (courseModal.course) {
-        await courseApi.update(courseModal.course.id, payload)
+      const course = courseModal.course
+      if (course) {
+        if (LOCAL_MODE) {
+          const { localCourseApi } = await import('../local/domain')
+          await localCourseApi.update(course.id, payload, guardCourseEditor(course, generation))
+        } else {
+          await courseApi.update(course.id, payload)
+        }
         message.success('课程已更新')
       } else {
+        const target = await validateScope(courseModal.scope)
+        if (!target) throw new Error('请先选择课表')
         await courseApi.create(target, payload)
         message.success('课程已添加')
       }
@@ -222,8 +244,7 @@ export default function TimetablePage() {
         setCourseModal({ open: false, course: null, defaults: null, scope: null })
       await refreshCourses()
     } catch (e) {
-      handleScopeFailure(e, generation)
-      message.error(e instanceof Error ? e.message : '保存失败')
+      handleCourseFailure(e, generation, '保存失败')
     } finally {
       setSaving(false)
     }
@@ -232,22 +253,18 @@ export default function TimetablePage() {
   const deleteCourse = async (course: Course) => {
     const generation = importGeneration.current
     try {
-      await validateScope(
-        courseModal.open && courseModal.course?.id === course.id
-          ? courseModal.scope
-          : LOCAL_MODE
-            ? captureEditorScope(activeScheduleRef.current)
-            : null,
-        { collection: 'courses', value: course },
-      )
-      await courseApi.remove(course.id)
+      if (LOCAL_MODE) {
+        const { localCourseApi } = await import('../local/domain')
+        await localCourseApi.remove(course.id, guardCourseEditor(course, generation))
+      } else {
+        await courseApi.remove(course.id)
+      }
       message.success('课程已删除')
       if (generation === importGeneration.current)
         setCourseModal({ open: false, course: null, defaults: null, scope: null })
       await refreshCourses()
     } catch (e) {
-      handleScopeFailure(e, generation)
-      message.error(e instanceof Error ? e.message : '删除失败')
+      handleCourseFailure(e, generation, '删除失败')
     }
   }
 
@@ -432,6 +449,10 @@ export default function TimetablePage() {
         totalWeeks={total}
         currentWeek={realCurrentWeek}
         saving={saving}
+        latest={courseModal.latest}
+        onLoadLatest={() => {
+          if (courseModal.latest) openEditCourse(courseModal.latest)
+        }}
         onCancel={() => {
           importGeneration.current++
           setCourseModal({ open: false, course: null, defaults: null, scope: null })
