@@ -37,8 +37,11 @@ export function latestDailyCompletions(state: LocalState): Map<string, DailyEven
   return events
 }
 
-export function resolveDailyEntries(state: LocalState, date: string): DailyResolvedEntry[] {
-  const completions = latestDailyCompletions(state)
+export function resolveDailyEntries(
+  state: LocalState,
+  date: string,
+  completions: ReadonlyMap<string, DailyEvent> = latestDailyCompletions(state),
+): DailyResolvedEntry[] {
   return state.dayEntries
     .filter((entry) => entry.plannedDate === date)
     .map((entry): DailyResolvedEntry => {
@@ -79,11 +82,12 @@ export function resolveDailyEntries(state: LocalState, date: string): DailyResol
 }
 
 export function projectDailyWorkspace(state: LocalState, date: string): DailyWorkspace {
+  const completions = latestDailyCompletions(state)
   return {
     state,
     date,
     generation: state.dataGeneration,
-    entries: resolveDailyEntries(state, date),
+    entries: resolveDailyEntries(state, date, completions),
     candidateTodos: state.todos.filter(
       (todo) =>
         !todo.completed &&
@@ -94,7 +98,7 @@ export function projectDailyWorkspace(state: LocalState, date: string): DailyWor
         ),
     ),
     unfinishedEntries: [...new Set(state.dayEntries.map((entry) => entry.plannedDate))]
-      .flatMap((plannedDate) => resolveDailyEntries(state, plannedDate))
+      .flatMap((plannedDate) => resolveDailyEntries(state, plannedDate, completions))
       .filter((entry) => !entry.completed && !entry.missingSource),
   }
 }
