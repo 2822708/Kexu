@@ -422,6 +422,34 @@ test('another tab can pause or disconnect a claimed retry before it sends', asyn
   }
 })
 
+test('an expired upload lease never sends and the still-enabled space is scheduled again', async () => {
+  let elapsed = 0, sends = 0
+  class Clock extends Date {
+    static now() { return Date.now() + elapsed }
+  }
+  const delays = []
+  const x = setup({
+    Date: Clock,
+    setTimeout: (_task, delay) => { delays.push(delay); return null },
+    fetch: async () => { sends++; throw new Error('unexpected request') },
+  })
+  const job = await prepareQueuedBackup(x)
+  delays.length = 0
+  const db = x.load('local/db')
+  const originalRead = db.readLocalState
+  db.readLocalState = () => {
+    elapsed += 61_000
+    return originalRead()
+  }
+  await x.runBackup(true)
+  const state = await x.storage.readBackupState()
+  assert.equal(sends, 0)
+  assert.equal(state.lease, null)
+  assert.deepEqual(normal(state.job), normal(job))
+  assert.deepEqual(delays, [1000])
+  await x.closeLocalStore()
+})
+
 test('pausing cancels a running request and ignores its late successful response', async () => {
   let onFetch, respond
   const started = new Promise((resolve) => { onFetch = resolve })

@@ -226,13 +226,19 @@ export async function runBackup(force = false): Promise<void> {
     if (retry) schedule(60_000)
   } finally {
     if (inFlight?.owner === owner) inFlight = undefined
+    let expiredLease = false
     await changeBackupState((state) => {
-      if (state.lease?.owner === owner) state.lease = null
+      if (state.lease?.owner !== owner) return
+      expiredLease = Boolean(
+        state.config?.enabled && state.config.credentialSaved &&
+        state.config.scopeId === scopeId && state.lease.until <= Date.now(),
+      )
+      state.lease = null
     }).catch(() => {})
     running = false
     notify()
-    if (rerunRequested) {
-      const forced = rerunForced
+    if (rerunRequested || expiredLease) {
+      const forced = rerunForced || (expiredLease && force)
       rerunRequested = false
       rerunForced = false
       schedule(1000, forced)
