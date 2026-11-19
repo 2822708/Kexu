@@ -53,26 +53,6 @@ export async function createSnapshotServer(options = {}) {
   await chmod(dataDir, 0o700)
   const vaults = new Map()
   let totalBytes = 0
-  for (const entry of await readdir(dataDir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !UUID.test(entry.name)) continue
-    let indexText
-    try { indexText = await readFile(path.join(dataDir, entry.name, 'index.json'), 'utf8') }
-    catch (error) {
-      // A failed first registration may leave only its new directory, never an issued token.
-      if (error?.code === 'ENOENT') continue
-      throw error
-    }
-    const index = JSON.parse(indexText)
-    if (index.vaultId !== entry.name || !/^[0-9a-f]{64}$/.test(index.tokenHash)) throw new Error('Invalid private vault index')
-    for (const item of index.snapshots) {
-      if (!UUID.test(item.snapshotId) || !Number.isSafeInteger(item.size) || item.size < 1) throw new Error('Invalid private snapshot index')
-      // An interrupted write can leave an unindexed object. Indexed objects must exist.
-      const bytes = await readFile(path.join(dataDir, entry.name, `${item.snapshotId}.json`))
-      if (bytes.length !== item.size || digest(bytes) !== item.sha256) throw new Error('Private snapshot integrity check failed')
-      totalBytes += item.size
-    }
-    vaults.set(entry.name, index)
-  }
   const windows = new Map()
   let serial = Promise.resolve()
   const exclusive = async (fn) => {
@@ -95,6 +75,55 @@ export async function createSnapshotServer(options = {}) {
   const saveIndex = async (index) => {
     const dir = path.join(dataDir, index.vaultId)
     await atomicWrite(path.join(dir, 'index.json'), JSON.stringify(index))
+  }
+  const snapshotPath = (vaultId, snapshotId) => path.join(dataDir, vaultId, `${snapshotId}.json`)
+  const finishDeletion = async (index, item) => {
+    try {
+      await unlink(snapshotPath(index.vaultId, item.snapshotId))
+    } catch (error) {
+      // The deletion may have been interrupted after the file was removed.
+      if (error?.code !== 'ENOENT') throw error
+    }
+    await syncDirectory(path.join(dataDir, index.vaultId))
+    const next = {
+      ...index,
+      snapshots: index.snapshots.filter((entry) => entry.snapshotId !== item.snapshotId),
+      pendingDeletions: index.pendingDeletions.filter((id) => id !== item.snapshotId),
+    }
+    if (next.pendingDeletions.length === 0) delete next.pendingDeletions
+    await saveIndex(next)
+    index.snapshots = next.snapshots
+    index.pendingDeletions = next.pendingDeletions
+    totalBytes -= item.size
+  }
+  for (const entry of await readdir(dataDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !UUID.test(entry.name)) continue
+    let indexText
+    try { indexText = await readFile(path.join(dataDir, entry.name, 'index.json'), 'utf8') }
+    catch (error) {
+      // A failed first registration may leave only its new directory, never an issued token.
+      if (error?.code === 'ENOENT') continue
+      throw error
+    }
+    const index = JSON.parse(indexText)
+    if (index.vaultId !== entry.name || !/^[0-9a-f]{64}$/.test(index.tokenHash)) throw new Error('Invalid private vault index')
+    const pending = index.pendingDeletions ?? []
+    if (!Array.isArray(pending) || new Set(pending).size !== pending.length ||
+      pending.some((id) => !index.snapshots.some((item) => item.snapshotId === id))) throw new Error('Invalid private deletion journal')
+    for (const item of index.snapshots) {
+      if (!UUID.test(item.snapshotId) || !Number.isSafeInteger(item.size) || item.size < 1) throw new Error('Invalid private snapshot index')
+      if (!pending.includes(item.snapshotId)) {
+        // Indexed objects must exist unless an authorized deletion was interrupted.
+        const bytes = await readFile(snapshotPath(index.vaultId, item.snapshotId))
+        if (bytes.length !== item.size || digest(bytes) !== item.sha256) throw new Error('Private snapshot integrity check failed')
+      }
+      totalBytes += item.size
+    }
+    for (const item of index.snapshots.filter((snapshot) => pending.includes(snapshot.snapshotId))) {
+      // Keep the indexed record and usage if storage is still unavailable. DELETE can retry it.
+      await finishDeletion(index, item).catch(() => {})
+    }
+    vaults.set(entry.name, index)
   }
   const rateLimit = (key, maximum, period) => {
     const now = Date.now()
@@ -191,13 +220,14 @@ export async function createSnapshotServer(options = {}) {
         return await exclusive(async () => {
           const previous = index.snapshots.find((item) => item.snapshotId === envelope.snapshotId)
           if (previous) {
+            if (index.pendingDeletions?.includes(previous.snapshotId)) fail(409, '此快照正在删除，请稍后重试')
             if (previous.sha256 !== sha256 || previous.size !== bytes.length) fail(409, '快照 ID 已存在且内容不同')
             return send(res, 200, previous)
           }
           const used = index.snapshots.reduce((n, s) => n + s.size, 0)
           if (index.snapshots.length >= limits.vaultSnapshots || used + bytes.length > limits.vaultBytes || totalBytes + bytes.length > limits.totalBytes) fail(507, '云快照配额已满，请手动删除旧快照')
           const metadata = { snapshotId: envelope.snapshotId, datasetId: envelope.datasetId, revision: envelope.revision, createdAt: envelope.createdAt, uploadedAt: new Date().toISOString(), size: bytes.length, sha256 }
-          const file = path.join(dataDir, index.vaultId, `${envelope.snapshotId}.json`)
+          const file = snapshotPath(index.vaultId, envelope.snapshotId)
           // An orphan from an interrupted index update may be replaced with this verified request.
           await atomicWrite(file, bytes)
           const next = { ...index, snapshots: [...index.snapshots, metadata] }
@@ -216,7 +246,7 @@ export async function createSnapshotServer(options = {}) {
         if (activeDownloads >= limits.concurrentDownloads) fail(429, '云备份正在处理其他下载，请稍后重试')
         activeDownloads++
         downloadReserved = true
-        const bytes = await readFile(path.join(dataDir, index.vaultId, `${metadata.snapshotId}.json`))
+        const bytes = await readFile(snapshotPath(index.vaultId, metadata.snapshotId))
         res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': bytes.length, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Snapshot-SHA256': metadata.sha256 })
         return await new Promise((resolve) => { res.once('close', resolve); res.end(bytes, resolve) })
       }
@@ -224,12 +254,12 @@ export async function createSnapshotServer(options = {}) {
         return await exclusive(async () => {
           const current = index.snapshots.find((item) => item.snapshotId === metadata.snapshotId)
           if (!current) fail(404, '未找到快照')
-          const next = { ...index, snapshots: index.snapshots.filter((item) => item.snapshotId !== metadata.snapshotId) }
-          await saveIndex(next)
-          index.snapshots = next.snapshots
-          totalBytes -= current.size
-          await unlink(path.join(dataDir, index.vaultId, `${metadata.snapshotId}.json`)).catch(() => {})
-          await syncDirectory(path.join(dataDir, index.vaultId))
+          if (!index.pendingDeletions?.includes(current.snapshotId)) {
+            const pendingDeletions = [...(index.pendingDeletions ?? []), current.snapshotId]
+            await saveIndex({ ...index, pendingDeletions })
+            index.pendingDeletions = pendingDeletions
+          }
+          await finishDeletion(index, current)
           send(res, 200, { deleted: true })
         })
       }
