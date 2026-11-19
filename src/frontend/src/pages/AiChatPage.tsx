@@ -27,7 +27,7 @@ import { aiApi } from '../api'
 import { useApp } from '../store/AppContext'
 import type { AiConversation, AiMessage, Schedule } from '../types'
 import { formatWeekInfo } from '../utils/schedule'
-import { isImageDataUrl, MAX_CHAT_IMAGES } from '../utils/chatImport'
+import { hasTimetableFileMaterial, isImageDataUrl, MAX_CHAT_IMAGES } from '../utils/chatImport'
 import { subscribeAiSettings } from '../local/ai/settings'
 import { localAiApi, localAiStream } from '../local/ai'
 import { createImageSchedule, type ImageScheduleScope } from '../local/ai/imageSchedule'
@@ -217,7 +217,7 @@ export default function AiChatPage() {
     setInput(text)
     setPendingImages(images)
     setImageHandoff(null)
-    message.success('课表已创建，图片已保留')
+    message.success(images.length ? '课表已创建，图片已保留' : '课表已创建，导入资料已保留')
   }, [activeScheduleId, currentConv?.scheduleId, currentId, imageHandoff, imageSetup])
 
   const patchStream = useCallback((convId: number, patch: Partial<StreamState>) => {
@@ -655,7 +655,7 @@ export default function AiChatPage() {
     payload: Omit<Schedule, 'id'>,
   ) => {
     if (imageSetupRef.current !== setup || !isImageScopeCurrent(setup.scope) || activeScheduleRef.current !== null)
-      throw new Error('当前课表或对话已变化，请重新发送图片')
+      throw new Error('当前课表或对话已变化，请重新发送资料')
     const schedule = await createImageSchedule(payload, setup.scope)
     if (imageSetupRef.current === setup && isImageScopeCurrent(setup.scope)) {
       setImageHandoff({
@@ -682,10 +682,11 @@ export default function AiChatPage() {
     }
 
     let readImageOnly = false
-    if (LOCAL_MODE && images.length && activeScheduleId === null && !importIntentRef.current) {
+    if (LOCAL_MODE && activeScheduleId === null && !importIntentRef.current &&
+      (images.length > 0 || hasTimetableFileMaterial(content))) {
       const dataset = localDatasetRef.current
       if (!dataset) {
-        message.info('本机对话正在加载，图片已保留')
+        message.info('本机对话正在加载，草稿已保留')
         return false
       }
       const scope = {
@@ -700,7 +701,7 @@ export default function AiChatPage() {
       })
       if (!sendWithoutSchedule || !isImageScopeCurrent(scope) || activeScheduleRef.current !== null || activeAbortRef.current)
         return false
-      readImageOnly = true
+      readImageOnly = images.length > 0
     }
 
     let convId = currentId
@@ -1226,7 +1227,10 @@ export default function AiChatPage() {
             open
             onCancel={() => finishImageSetup(imageSetup)}
             onCreate={(payload) => createScheduleForImage(imageSetup, payload)}
-            imageImport={{ onSendWithoutSchedule: () => finishImageSetup(imageSetup, true) }}
+            imageImport={{
+              kind: imageSetup.images.length ? 'image' : 'document',
+              onSendWithoutSchedule: () => finishImageSetup(imageSetup, true),
+            }}
           />
         )}
       </section>

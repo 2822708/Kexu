@@ -234,6 +234,30 @@ test('course batch rejects atomically and normalizes distinct teaching weeks', a
   const row = await x.localCourseApi.create(s.id, { ...courseBody, weeks: [3, 1, 3] })
   assert.deepEqual(normal(row.weeks), [1, 3])
 })
+
+test('course batch rejects exact repeats atomically and accepts distinct overlapping periods', async () => {
+  const x = setup()
+  const schedule = await x.localScheduleApi.create(scheduleBody)
+  const course = { ...courseBody, teacher: '林老师', weeks: [1, 3] }
+  const overlap = { ...course, endPeriod: 3 }
+  await x.localCourseApi.batchCreate(schedule.id, [course])
+  await assert.rejects(
+    x.localCourseApi.batchCreate(schedule.id, [
+      overlap,
+      { ...course, name: ' 数学 ', teacher: ' 林老师 ', location: '', weeks: [3, 1, 3] },
+    ]),
+    /完全重复，本批未导入/,
+  )
+  assert.equal((await x.readLocalState()).courses.length, 1)
+  await assert.rejects(
+    x.localCourseApi.batchCreate(schedule.id, [overlap, { ...overlap, weeks: [3, 1] }]),
+    /完全重复，本批未导入/,
+  )
+  assert.equal((await x.readLocalState()).courses.length, 1)
+  await x.localCourseApi.batchCreate(schedule.id, [overlap])
+  assert.deepEqual(normal((await x.readLocalState()).courses.map((row) => row.endPeriod)), [2, 3])
+})
+
 test('exam CRUD creates, updates, completes and cascades its linked todo', async () => {
   const x = setup(),
     s = await x.localScheduleApi.create(scheduleBody),

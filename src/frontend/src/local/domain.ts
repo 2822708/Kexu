@@ -6,6 +6,7 @@ import type {
   RecurringTodoPayload,
   Schedule,
 } from '../types'
+import { courseImportIdentity } from '../utils/importDiagnostics'
 import { mutateLocalState, readLocalState } from './db'
 import type { DailyOrigin } from './daily/types'
 import {
@@ -452,7 +453,16 @@ export const localCourseApi = {
   batchCreate: (scheduleId: number, courses: CoursePayload[]) =>
     mutateLocalState((s) => {
       assertLocal(Array.isArray(courses) && courses.length <= 500, '批量课程不能超过 500 条')
-      return courses.map((c) => createCourse(s, scheduleId, c))
+      const identities = new Set(
+        s.courses.filter((course) => course.scheduleId === scheduleId).map(courseImportIdentity),
+      )
+      return courses.map((course) => {
+        const created = createCourse(s, scheduleId, course)
+        const identity = courseImportIdentity(created)
+        assertLocal(!identities.has(identity), `课程「${created.name}」完全重复，本批未导入`)
+        identities.add(identity)
+        return created
+      })
     }),
   update: (id: number, body: CoursePayload) => mutateLocalState((s) => updateCourse(s, id, body)),
   remove: (id: number) => mutateLocalState((s) => removeCourse(s, id)),

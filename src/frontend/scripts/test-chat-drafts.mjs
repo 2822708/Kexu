@@ -110,7 +110,7 @@ const conversation = (id, scheduleId = 1, publicId = `conversation-${id}`) => ({
 })
 
 async function mountChat({ local = true, conversations = [], create, recognize, honorAbort = true,
-  quickImport, withoutSchedule = false } = {}) {
+  quickImport, withoutSchedule = false, prepareFile = async (file) => ({ text: null, images: [file] }) } = {}) {
   const page = hookHost()
   const composer = hookHost()
   const schedules = withoutSchedule ? [] : [{ id: 1, name: '测试课表' }, { id: 2, name: '另一课表' }]
@@ -188,7 +188,7 @@ async function mountChat({ local = true, conversations = [], create, recognize, 
   }
   composer.init(load(code.composer, { ...shared, react: composer.hooks,
     '../utils/importFiles': { MAX_IMAGE_BYTES: 4 * 1024 * 1024,
-      prepareImportFile: async (file) => ({ text: null, images: [file] }) },
+      prepareImportFile: prepareFile },
   }).default)
   const eventTarget = { addEventListener() {}, removeEventListener() {} }
   page.init(load(code.page, { ...shared, react: page.hooks,
@@ -261,9 +261,9 @@ async function mountChat({ local = true, conversations = [], create, recognize, 
       node.props['aria-label']?.startsWith('移除图片')).length,
     attachedImage: () => find(composer, (node) => node.props['aria-label']?.startsWith('移除图片'))['aria-label'],
     edit(value) { find(composer, (node) => node.type === 'TextArea').onChange({ target: { value } }); pump() },
-    async attach() {
+    async attach(file = new File(['image'], 'synthetic.png', { type: 'image/png' })) {
       find(composer, (node) => node.type === 'input' && node.props.type === 'file').onChange({
-        target: { files: [new File(['image'], 'synthetic.png', { type: 'image/png' })], value: '' },
+        target: { files: [file], value: '' },
       })
       await settle()
     },
@@ -652,6 +652,48 @@ test('creating the first schedule for an image binds the original dialogue and r
   await h.settle()
   assert.equal(h.input(), '')
   assert.equal(h.images(), 0)
+})
+
+test('the first text-bearing PDF opens schedule setup and keeps its extracted course draft', async (t) => {
+  const course = '课程名称：线性代数；周五第9-10节；第1-18周；求真楼505。'
+  const h = await mountChat({
+    withoutSchedule: true,
+    prepareFile: async () => ({ text: course, images: [] }),
+  })
+  t.after(() => h.dispose())
+  await h.attach(new File(['synthetic PDF'], 'synthetic-timetable.pdf', { type: 'application/pdf' }))
+  const draft = material.chatMaterialText('synthetic-timetable.pdf', course)
+  assert.equal(h.input(), draft)
+  assert.equal(h.images(), 0)
+
+  await h.send()
+  const modal = h.imageSetup()
+  assert.ok(modal?.open && modal.imageImport)
+  assert.equal(h.requests.length, 0)
+  assert.equal(h.state.conversations.length, 0)
+  assert.equal(h.scheduleCreations.length, 0)
+
+  await modal.onCreate({
+    name: '测试学期',
+    periodStartDate: '2026-09-07',
+    periodEndDate: '2027-01-10',
+  })
+  modal.onCancel()
+  await h.settle()
+  assert.equal(h.imageSetup(), undefined)
+  assert.equal(h.input(), draft)
+  assert.equal(h.requests.length, 0)
+
+  await h.send()
+  assert.equal(h.requests.length, 1)
+  const [request] = h.requests
+  assert.equal(request.schedule, h.state.schedules[0].id)
+  assert.equal(h.state.conversations[0].scheduleId, request.schedule)
+  assert.equal(request.content, draft)
+  assert.deepEqual(request.images, [])
+  request.response.resolve()
+  await h.settle()
+  assert.equal(h.input(), '')
 })
 
 test('cancel preserves an unsent image, and recognition-only sends without creating a schedule', async (t) => {

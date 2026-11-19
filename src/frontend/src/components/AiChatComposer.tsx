@@ -381,7 +381,7 @@ export default function AiChatComposer({
         type="file"
         hidden
         multiple
-        accept=".txt,.md,.csv,.html,.htm,.json,.pdf,.docx,image/png,image/jpeg,image/webp"
+        accept=".txt,.md,.csv,.ics,.html,.htm,.pdf,.docx,image/png,image/jpeg,image/webp,image/gif"
         aria-label="选择聊天附件"
         onChange={(event) => {
           const files = Array.from(event.target.files ?? [])

@@ -792,7 +792,7 @@ test('images are rejected before any request when vision is not enabled', async 
 test('screenshots and scanned PDF pages reach the planner as images in one request', async () =>
   withMock({}, async (mock) => {
     const x = setup()
-    const f = await fixture(x)
+    const schedule = await x.localScheduleApi.create(scheduleBody)
     x.saveAiSettings({
       endpoint: mock.endpoint,
       model: 'mock-model',
@@ -801,9 +801,9 @@ test('screenshots and scanned PDF pages reach the planner as images in one reque
       allowContext: true,
       visionEnabled: true,
     })
-    const conv = await x.localAiApi.createConversation(f.schedule.id)
+    const conv = await x.localAiApi.createConversation(schedule.id)
     const image = 'data:image/jpeg;base64,AAAA'
-    await x.localAiStream(conv.id, '请看图片', f.schedule.id, {}, undefined, undefined, [image])
+    await x.localAiStream(conv.id, '请看图片', schedule.id, {}, undefined, undefined, [image])
     const sent = mock.requests.at(-1).messages.at(-1)
     assert.equal(Array.isArray(sent.content), true)
     assert.deepEqual(sent.content[0], { type: 'text', text: '请看图片' })
@@ -1272,3 +1272,39 @@ test('manual insertion of an identical record invalidates an older AI create pro
       assert.equal((await x.localAiApi.listMessages(conv.id))[1].actions[0].status, 'STALE')
     },
   ))
+
+test('resending an imported course after confirmation rejects duplicate proposals', async () => {
+  let courses = [courseFixture]
+  const x = setup({
+    fetcher: async () =>
+      completionReply(JSON.stringify({
+        reply: '以下课程待确认',
+        actions: [{ type: 'CREATE_COURSE', data: { courses } }],
+      })),
+  })
+  configure(x, 'https://ai.example.test')
+  const schedule = await x.localScheduleApi.create(scheduleBody)
+  const conversation = await x.localAiApi.createConversation(schedule.id)
+
+  const initial = await x.localAiStream(conversation.id, '导入课程', schedule.id, {})
+  const parallel = await x.localAiStream(conversation.id, '重复提交相同课程', schedule.id, {})
+  await x.localAiApi.execute(conversation.id, initial.actions[0].actionId)
+  await assert.rejects(x.localAiApi.execute(conversation.id, parallel.actions[0].actionId), /失效/)
+
+  const overlap = { ...courseFixture, weeks: [1, 2] }
+  courses = [overlap, { ...courseFixture, name: ' 高等数学 ', teacher: '', weeks: [3, 2, 1] }]
+  await assert.rejects(
+    x.localAiStream(conversation.id, '再次导入相同的课程和部分重叠的课程', schedule.id, {}),
+    /已有完全相同的课程/,
+  )
+  const afterDuplicate = await x.readLocalState()
+  assert.equal(afterDuplicate.courses.length, 1)
+  assert.match(afterDuplicate.messages.at(-1).text, /已有完全相同的课程/)
+  assert.equal(afterDuplicate.messages.at(-1).actions?.length ?? 0, 0)
+
+  courses = [overlap]
+  const accepted = await x.localAiStream(conversation.id, '导入不同周次的课程', schedule.id, {})
+  assert.equal(accepted.actions[0].status, 'PENDING')
+  await x.localAiApi.execute(conversation.id, accepted.actions[0].actionId)
+  assert.equal((await x.readLocalState()).courses.length, 2)
+})

@@ -1,4 +1,5 @@
-import type { AiAction, AiActionType } from '../../types'
+import type { AiAction, AiActionType, CoursePayload } from '../../types'
+import { courseImportIdentity } from '../../utils/importDiagnostics'
 import type { LocalState } from '../types'
 
 type Dict = Record<string, unknown>
@@ -267,7 +268,9 @@ export function normalizeProposals(
       }
       const proposal: DraftProposal = { type, data: { [kind.key]: [payload] } }
       const target = targetOf(proposal, state, scheduleId)
-      const signature = `${kind.collection}:${creation ? `create:${JSON.stringify(payload)}` : target?.id}`
+      const signature = creation
+        ? `${kind.collection}:create:${type === 'CREATE_COURSE' ? courseImportIdentity(payload as CoursePayload) : JSON.stringify(payload)}`
+        : `${kind.collection}:${target?.id}`
       if (seen.has(signature)) throw new Error('同一回复含重复或矛盾的目标操作，请拆开澄清')
       seen.add(signature)
       result.push(proposal)
@@ -320,7 +323,15 @@ function basis(proposal: DraftProposal, state: LocalState, scheduleId: number | 
   const schedule = kind.scoped ? state.schedules.find((row) => row.id === scheduleId) : null
   const target = targetOf(proposal, state, scheduleId)
   let targetBasis = target ? JSON.stringify(target) : null
-  if (proposal.type.startsWith('CREATE_')) {
+  if (proposal.type === 'CREATE_COURSE') {
+    const course = (proposal.data.courses as CoursePayload[])[0]
+    const identity = courseImportIdentity(course)
+    if (state.courses.some((row) => row.scheduleId === scheduleId && courseImportIdentity(row) === identity)) {
+      throw new Error(`课表中已有完全相同的课程「${course.name}」`)
+    }
+    // Keep existing PENDING guards with an empty match set valid.
+    targetBasis = '[]'
+  } else if (proposal.type.startsWith('CREATE_')) {
     const payload = (proposal.data[kind.key] as Dict[])[0]
     const matching = state[kind.collection].filter(
       (row) =>

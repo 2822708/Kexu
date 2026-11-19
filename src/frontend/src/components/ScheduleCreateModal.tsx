@@ -7,7 +7,7 @@ interface Props {
   open: boolean
   onCancel: () => void
   onCreate: (payload: Omit<Schedule, 'id'>) => Promise<void>
-  imageImport?: { onSendWithoutSchedule: () => void }
+  imageImport?: { kind: 'image' | 'document'; onSendWithoutSchedule: () => void }
 }
 
 interface FormValues {
@@ -58,7 +58,7 @@ export default function ScheduleCreateModal({ open, onCancel, onCreate, imageImp
     <Modal
       open={open}
       maskClosable={false}
-      title={imageImport ? '为这张图片新建课表' : '新建课表'}
+      title={imageImport ? '为导入内容新建课表' : '新建课表'}
       onCancel={onCancel}
       closable={!saving}
       keyboard={!saving}
@@ -66,7 +66,7 @@ export default function ScheduleCreateModal({ open, onCancel, onCreate, imageImp
       width={520}
       destroyOnHidden
     >
-      {imageImport && <p>先填写学期，图片会留在输入框。发送后可逐条确认识别出的课程。</p>}
+      {imageImport && <p>导入课程前需要目标课表。新建后会保留草稿，课程由你确认后写入。</p>}
       <Form form={form} layout="vertical" requiredMark={false} disabled={saving}>
         <Form.Item
           name="name"
@@ -102,7 +102,7 @@ export default function ScheduleCreateModal({ open, onCancel, onCreate, imageImp
           <Button onClick={onCancel}>取消</Button>
           {imageImport && (
             <Button type="link" onClick={imageImport.onSendWithoutSchedule}>
-              仅识别图片
+              {imageImport.kind === 'image' ? '仅识别图片' : '直接发送资料'}
             </Button>
           )}
         </Space>
