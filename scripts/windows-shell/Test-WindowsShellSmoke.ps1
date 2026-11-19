@@ -19,9 +19,9 @@ for ($launch = 1; $launch -le 2; $launch++) {
         $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
         if ($process.ExitCode -ne 0 -or -not $result.ok) { throw "Shell launch $launch failed: $($result | ConvertTo-Json -Depth 4 -Compress)" }
         if ($launch -eq 2 -and -not $result.persistedAcrossLaunch) { throw 'IndexedDB did not persist across shell launches.' }
-        if (-not $result.realDailyTaskSaved -or -not $result.logicalRouteReload) { throw 'Rendered daily task save or logical route reload failed.' }
+        if (-not $result.realDailyTaskSaved -or -not $result.logicalRouteReload -or -not $result.legacyTaskLink) { throw 'Rendered daily task save, logical route reload or legacy task link failed.' }
         if ($launch -eq 2 -and -not $result.realDailyTaskPersistedAcrossLaunch) { throw 'Real daily task did not persist across shell launches.' }
-        Write-Host "PASS: shell launch $launch; rendered /focus; secure origin; real daily task + reload; runtime $($result.runtime); persisted=$($result.persistedAcrossLaunch)"
+        Write-Host "PASS: shell launch $launch; rendered /tasks; real daily task + reload; legacy link; runtime $($result.runtime); persisted=$($result.persistedAcrossLaunch)"
     } finally { $process.Dispose() }
 }
 Write-Host "Smoke evidence: $(Join-Path $TestRoot 'shell-smoke-result.json')"
