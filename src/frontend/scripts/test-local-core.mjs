@@ -118,6 +118,24 @@ test('local course editor checks its original record in the write transaction', 
   }
 })
 
+test('shortening a schedule never strands previously reachable course weeks or erases completions', async () => {
+  const x = setup()
+  const schedule = await x.localScheduleApi.create({
+    name: '秋季学期', periodStartDate: '2026-09-10', periodEndDate: '2027-01-10',
+  })
+  const late = await x.localCourseApi.create(schedule.id, { ...courseBody, name: '期末课程', weeks: [18] })
+  const early = await x.localCourseApi.create(schedule.id, { ...courseBody, weeks: [2], dayOfWeek: 4 })
+  await x.localFocusApi.setCourseCompleted(early.id, { scheduleId: schedule.id, date: '2026-09-17', completed: true })
+  const baseline = normal(await x.readLocalState())
+  await assert.rejects(x.localScheduleApi.update(schedule.id, { ...schedule, periodEndDate: '2026-12-27' }), /期末课程/)
+  await assert.rejects(x.localScheduleApi.update(schedule.id, { ...schedule, periodStartDate: '2026-08-27' }), /课程完成记录/)
+  assert.deepEqual(normal(await x.readLocalState()), baseline)
+  await x.localCourseApi.remove(late.id)
+  await x.localScheduleApi.update(schedule.id, { ...schedule, periodEndDate: '2026-12-27' })
+  assert.deepEqual(normal((await x.readLocalState()).focusCompletions), baseline.focusCompletions)
+  await x.closeLocalStore()
+})
+
 test('concurrent first initialization shares one dataset and survives database reopen', async () => {
   const factory = new IDBFactory(),
     a = setup(factory),

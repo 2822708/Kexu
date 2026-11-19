@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { test } from 'node:test'
 import { JSDOM } from 'jsdom'
 import ts from 'typescript'
+import * as brandCompatibility from '../../shared/brandCompatibility.mjs'
 
 const require = createRequire(import.meta.url)
 const { act, createContext, createElement: h, useContext, useLayoutEffect } = require('react')
@@ -52,7 +53,7 @@ function fixture(generation, title) {
   }
 }
 
-async function mount(t, { route, openStore, readState, loadDailyPage }) {
+async function mount(t, { route, openStore, readState, loadDailyPage, preferredSchedule }) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://kexu.example.test/' })
   const globals = {
     window: dom.window,
@@ -65,6 +66,8 @@ async function mount(t, { route, openStore, readState, loadDailyPage }) {
   ]))
   for (const [key, value] of Object.entries(globals))
     Object.defineProperty(globalThis, key, { value, configurable: true })
+  const selectionKey = 'kexu.local.activeSchedulePublicId'
+  if (preferredSchedule) localStorage.setItem(brandCompatibility.legacyNames.activeSchedule, preferredSchedule)
   const container = document.getElementById('root')
   const root = createRoot(container)
   t.after(async () => {
@@ -82,10 +85,7 @@ async function mount(t, { route, openStore, readState, loadDailyPage }) {
   let readCount = 0
   let subscriptions = 0
   const LocalAppProvider = loadSource('store/LocalAppProvider.tsx', {
-    '../../../shared/brandCompatibility.mjs': {
-      readCompatiblePreference: (storage, key) => storage.getItem(key),
-      removeCompatiblePreference: (storage, key) => storage.removeItem(key),
-    },
+    '../../../shared/brandCompatibility.mjs': brandCompatibility,
     antd: { message: { error: (message) => assert.fail(message) } },
     './LocalStateContext': localStateContext,
     '../local/db': {
@@ -106,7 +106,9 @@ async function mount(t, { route, openStore, readState, loadDailyPage }) {
   const commits = []
   const layoutCommits = []
   let refresh
+  let selection
   function DailyProbe() {
+    selection = useContext(context)
     const { pathname, search, hash } = useLocation()
     const date = new URLSearchParams(search).get('date') ?? currentDate
     const { workspace, refresh: refreshWorkspace } = useDailyWorkspace(date)
@@ -157,8 +159,41 @@ async function mount(t, { route, openStore, readState, loadDailyPage }) {
     readCount: () => readCount,
     subscriptions: () => subscriptions,
     refresh: () => refresh(),
+    selection: () => selection.activeScheduleId,
+    select: (id) => selection.setActiveScheduleId(id),
+    preference: () => localStorage.getItem(selectionKey),
+    otherTabSelect(publicId) {
+      localStorage.setItem(selectionKey, publicId)
+      window.dispatchEvent(new window.StorageEvent('storage', { key: selectionKey, newValue: publicId }))
+    },
   }
 }
+
+test('provider keeps each tab selection and only persists an explicit choice', async (t) => {
+  const state = {
+    ...fixture('initial', 'Historical task'),
+    schedules: [{ id: 1, publicId: 'first' }, { id: 2, publicId: 'second' }],
+  }
+  const session = await mount(t, {
+    route: '/tasks',
+    openStore: async () => {},
+    readState: async () => structuredClone(state),
+    loadDailyPage: Promise.resolve(),
+    preferredSchedule: 'second',
+  })
+  assert.equal(session.selection(), 2)
+  assert.equal(session.preference(), null, 'reading the legacy preference is side-effect free')
+  await act(async () => session.select(1))
+  assert.equal(session.selection(), 1)
+  assert.equal(session.preference(), 'first')
+  const reads = session.readCount()
+  await act(async () => session.otherTabSelect('second'))
+  assert.equal(session.selection(), 1)
+  assert.equal(session.readCount(), reads)
+  await act(async () => { await session.refresh() })
+  assert.equal(session.selection(), 1)
+  assert.equal(session.preference(), 'second', 'refresh does not write the local preference back')
+})
 
 test('Android task alias stays on the splash until the first historical workspace is ready', async (t) => {
   const firstRead = Promise.withResolvers()

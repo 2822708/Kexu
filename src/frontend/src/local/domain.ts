@@ -31,7 +31,7 @@ import {
 } from './validation'
 
 /** Stored wall-clock business dates consistently use Asia/Shanghai, independent of device timezone. */
-export function nowLocalDateTime(): string {
+export function nowLocalDateTime(date = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai',
     year: 'numeric',
@@ -41,7 +41,7 @@ export function nowLocalDateTime(): string {
     minute: '2-digit',
     second: '2-digit',
     hourCycle: 'h23',
-  }).formatToParts(new Date())
+  }).formatToParts(date)
   const part = (name: string) => parts.find((p) => p.type === name)!.value
   return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}:${part('second')}`
 }
@@ -58,6 +58,12 @@ function metadata(state: LocalState) {
 }
 const scheduleOf = (s: LocalState, id: number) => find(s.schedules, id, '课表')
 
+function teachingWeek(startDate: string, date: Date): number {
+  const first = new Date(`${startDate}T00:00:00Z`)
+  first.setUTCDate(first.getUTCDate() - ((first.getUTCDay() + 6) % 7))
+  return Math.floor((date.getTime() - first.getTime()) / 604800000) + 1
+}
+
 export function createSchedule(state: LocalState, body: Omit<Schedule, 'id'>) {
   const row = { ...metadata(state), ...validateSchedule(body) }
   state.schedules.push(row)
@@ -65,12 +71,30 @@ export function createSchedule(state: LocalState, body: Omit<Schedule, 'id'>) {
 }
 function updateSchedule(state: LocalState, id: number, body: Omit<Schedule, 'id'>) {
   const row = scheduleOf(state, id)
-  Object.assign(row, validateSchedule(body), { updatedAt: stamp() })
-  state.focusCompletions = state.focusCompletions.filter(
-    (f) =>
-      f.scheduleId !== id ||
-      isCourseOccurrence(row, find(state.courses, f.courseId, '课程'), f.date),
-  )
+  const next = { ...validateSchedule(body), id }
+  if (row.periodStartDate !== next.periodStartDate || row.periodEndDate !== next.periodEndDate) {
+    const previousWeeks = teachingWeek(row.periodStartDate, new Date(`${row.periodEndDate}T00:00:00Z`))
+    const nextWeeks = teachingWeek(next.periodStartDate, new Date(`${next.periodEndDate}T00:00:00Z`))
+    const courses = state.courses.filter((course) => course.scheduleId === id)
+    const affected = courses.filter((course) =>
+      course.weeks.some((week) => week > nextWeeks && week <= previousWeeks),
+    )
+    if (affected.length) {
+      const names = affected.slice(0, 3).map((course) => course.name).join('、')
+      const label = affected.length > 3 ? `${names}等 ${affected.length} 门课程` : names
+      throw new Error(`调整后以下课程的周次会超出学期范围，请先调整课程或延长学期：${label}`)
+    }
+
+    const byId = new Map(courses.map((course) => [course.id, course]))
+    const movesCompletedCourse = state.focusCompletions.some((completion) => {
+      const course = byId.get(completion.courseId)
+      return completion.scheduleId === id && course
+        && isCourseOccurrence(row, course, completion.date)
+        && !isCourseOccurrence(next, course, completion.date)
+    })
+    assertLocal(!movesCompletedCourse, '调整后已有课程完成记录将失去对应的上课日期，请保留这些日期')
+  }
+  Object.assign(row, next, { updatedAt: stamp() })
   return row
 }
 function removeSchedule(state: LocalState, id: number) {
@@ -249,11 +273,9 @@ function removeExam(state: LocalState, id: number) {
 export function isCourseOccurrence(schedule: Schedule, course: LocalCourse, date: string): boolean {
   if (!validDate(date) || date < schedule.periodStartDate || date > schedule.periodEndDate)
     return false
-  const selected = new Date(`${date}T00:00:00Z`),
-    first = new Date(`${schedule.periodStartDate}T00:00:00Z`)
+  const selected = new Date(`${date}T00:00:00Z`)
   const weekday = selected.getUTCDay() || 7
-  first.setUTCDate(first.getUTCDate() - ((first.getUTCDay() || 7) - 1))
-  const week = Math.floor((selected.getTime() - first.getTime()) / 604800000) + 1
+  const week = teachingWeek(schedule.periodStartDate, selected)
   return weekday === course.dayOfWeek && course.weeks.includes(week)
 }
 export function setFocusCompletion(

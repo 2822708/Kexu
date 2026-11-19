@@ -175,7 +175,11 @@ export default function TimetablePage() {
 
   useEffect(() => {
     setWeek(realCurrentWeek)
-  }, [realCurrentWeek])
+  }, [activeScheduleId, activePublicId, realCurrentWeek])
+
+  useEffect(() => {
+    setWeek((selected) => Math.min(selected, total))
+  }, [total])
 
   useEffect(() => {
     aiApi

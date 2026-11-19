@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { test } from 'node:test'
 import vm from 'node:vm'
 import { IDBFactory } from 'fake-indexeddb'
+import { JSDOM } from 'jsdom'
 import ts from 'typescript'
 import {
   courseFixture,
@@ -124,7 +125,7 @@ const scheduleBody = {
 }
 const normal = (value) => JSON.parse(JSON.stringify(value))
 
-function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fetch } = {}) {
+function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fetch, DOMParser } = {}) {
   const modules = new Map(),
     nativeRequire = createRequire(import.meta.url)
   const localStorage = {
@@ -153,6 +154,7 @@ function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fe
     ReadableStream,
     Response,
     fetch: fetcher,
+    DOMParser,
   })
   function loadSource(url) {
     if (modules.has(url.href)) return modules.get(url.href).exports
@@ -191,6 +193,30 @@ function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fe
     window,
   }
 }
+test('course HTML import preserves table boundaries and merged cells in untrusted text', async (t) => {
+  const { window } = new JSDOM()
+  t.after(() => window.close())
+  let prompt
+  const x = setup({
+    DOMParser: window.DOMParser,
+    fetcher: async (_url, init) => {
+      prompt = JSON.parse(init.body).messages.find((message) => message.role === 'user').content
+      const reply = JSON.stringify({ reply: '资料已读取', actions: [] })
+      const frame = JSON.stringify({ choices: [{ delta: { content: reply }, finish_reason: 'stop' }] })
+      return new Response(`data: ${frame}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } })
+    },
+  })
+  configure(x, 'https://fixture.invalid/v1')
+  const html = '<table><tr><th>周一</th><th>周二</th></tr><tr><td rowspan="2">数学<br>1–2节</td><td>英语</td></tr><tr><td colspan="2">体育</td></tr></table><script>脚本不得进提示词</script><div hidden>隐藏内容</div>'
+  for (const source of [html, html.replace(/></g, '>\n  <')]) {
+    await x.localAiApi.parseHtml(source, null)
+    assert.match(prompt, /周一\t周二\n数学 \/ 1–2节（跨 2 行）\t英语\n体育（跨 2 列）/)
+    assert.doesNotMatch(prompt, /脚本不得进提示词|隐藏内容/)
+  }
+  assert.equal((await x.readLocalState()).courses.length, 0)
+  await x.closeLocalStore()
+})
+
 async function fixture(x) {
   const schedule = await x.localScheduleApi.create(scheduleBody)
   const other = await x.localScheduleApi.create({ ...scheduleBody, name: '另一个空间' })

@@ -393,10 +393,29 @@ export const localAiApi = {
     const settings = getAiSettings()
     if (!settings.enabled || !settings.allowContext)
       throw new Error('请先连接AI服务，或使用课程表单手动录入')
-    const doc = new DOMParser().parseFromString(html, 'text/html')
-    doc.querySelectorAll('script,style,iframe,object,embed').forEach((node) => node.remove())
-    const material = (doc.body.textContent ?? '').trim().slice(0, 30000)
-    if (!material) throw new Error('HTML中没有可识别的文字')
+    const doc = new DOMParser().parseFromString('', 'text/html')
+    // Template content is inert. Uploaded markup is never attached to the live document.
+    const source = doc.createElement('template')
+    source.innerHTML = html
+    source.content.querySelectorAll(
+      'script,style,template,noscript,svg,iframe,object,embed,video,audio,title,[hidden]',
+    ).forEach((node) => node.remove())
+    source.content.querySelectorAll('br').forEach((node) => node.replaceWith(' / '))
+    source.content.querySelectorAll('p,div,li').forEach((node) => node.after('\n'))
+    for (const table of Array.from(source.content.querySelectorAll('table')).reverse()) {
+      const rows = Array.from(table.rows, (row) => Array.from(row.cells, (cell) => {
+        const text = (cell.textContent ?? '').replace(/\s+/g, ' ').trim()
+        const rowSpan = cell.rowSpan === 0 ? '跨至行组末尾' : cell.rowSpan > 1 ? `跨 ${cell.rowSpan} 行` : ''
+        const columnSpan = cell.colSpan > 1 ? `跨 ${cell.colSpan} 列` : ''
+        const spans = [rowSpan, columnSpan].filter(Boolean)
+        return spans.length ? `${text}（${spans.join('，')}）` : text
+      }).join('\t'))
+      const caption = table.caption?.textContent?.trim()
+      if (caption) rows.unshift(caption)
+      table.replaceWith(`\n${rows.join('\n')}\n`)
+    }
+    const material = (source.content.textContent ?? '').replace(/^[\r\n ]+|[\r\n ]+$/g, '').slice(0, 30000)
+    if (!material.trim()) throw new Error('HTML中没有可识别的文字')
     const state = await readLocalState()
     const raw = await requestCompletion(
       settings,
