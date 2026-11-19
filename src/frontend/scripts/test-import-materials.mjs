@@ -4,7 +4,8 @@ import { test } from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-const compile = (path) => ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
+const compile = (path) => ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8')
+  .replace('import.meta.env.BASE_URL', "'/'"), {
   fileName: path,
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
