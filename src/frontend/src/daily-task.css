@@ -47,6 +47,7 @@
   outline-offset: 2px;
 }
 .daily-date-control .ant-btn {
+  touch-action: manipulation;
   width: 44px;
   height: 44px;
   border: 0;

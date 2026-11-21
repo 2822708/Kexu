@@ -1,5 +1,6 @@
 import { readCompatiblePreference } from '../../../shared/brandCompatibility.mjs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Button, DatePicker, Dropdown, Input, Modal, Spin, message } from 'antd'
 import {
   CalendarOutlined,
@@ -31,7 +32,13 @@ const todayInShanghai = () => nowLocalDateTime().slice(0, 10)
 type Tool = 'schedule' | 'focus' | null
 type Undo = { entry: DailyResolvedEntry; eventId?: string; version: number; generation: string }
 
-export default function LocalDailyPage({ embedded = false }: { embedded?: boolean }) {
+export default function LocalDailyPage({
+  embedded = false,
+  dateHeadingTarget,
+}: {
+  embedded?: boolean
+  dateHeadingTarget?: HTMLElement | null
+}) {
   const navigate = useNavigate()
   const [search, setSearch] = useSearchParams()
   const { activeSchedule, activeScheduleId, courses, exams, periods } = useApp()
@@ -315,37 +322,43 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
     .filter((item) => !item.missingSource && !item.examLinked)
     .map((item) => ({ key: item.publicId, title: item.title }))
 
+  const dateHeading = (
+    <div className="daily-heading">
+      <div className="daily-heading-date">
+        {embedded ? (
+          <h2 className="tasks-day-label">{isPast ? '回顾' : isFuture ? '计划' : '今天'}</h2>
+        ) : (
+          <h1>{isPast ? '回顾' : isFuture ? '计划' : '今日'}</h1>
+        )}
+        <time dateTime={date}>{dayjs(date).format('dddd')}</time>
+      </div>
+      <div className="daily-date-control">
+        <Button
+          aria-label="前一天"
+          icon={<LeftOutlined />}
+          onClick={() => changeDate(dayjs(date).subtract(1, 'day').format('YYYY-MM-DD'))}
+        />
+        <DatePicker
+          aria-label="计划日期"
+          value={dayjs(date)}
+          allowClear={false}
+          inputReadOnly
+          onChange={(value) => value && changeDate(value.format('YYYY-MM-DD'))}
+        />
+        <Button
+          aria-label="后一天"
+          icon={<RightOutlined />}
+          onClick={() => changeDate(dayjs(date).add(1, 'day').format('YYYY-MM-DD'))}
+        />
+      </div>
+    </div>
+  )
+
   return (
     <div className="daily-workspace">
-      <header className="daily-heading">
-        <div className="daily-heading-date">
-          {embedded ? (
-            <h2 className="tasks-day-label">{isPast ? '回顾' : isFuture ? '计划' : '今天'}</h2>
-          ) : (
-            <h1>{isPast ? '回顾' : isFuture ? '计划' : '今日'}</h1>
-          )}
-          <time dateTime={date}>{dayjs(date).format('dddd')}</time>
-        </div>
-        <div className="daily-date-control">
-          <Button
-            aria-label="前一天"
-            icon={<LeftOutlined />}
-            onClick={() => changeDate(dayjs(date).subtract(1, 'day').format('YYYY-MM-DD'))}
-          />
-          <DatePicker
-            aria-label="计划日期"
-            value={dayjs(date)}
-            allowClear={false}
-            inputReadOnly
-            onChange={(value) => value && changeDate(value.format('YYYY-MM-DD'))}
-          />
-          <Button
-            aria-label="后一天"
-            icon={<RightOutlined />}
-            onClick={() => changeDate(dayjs(date).add(1, 'day').format('YYYY-MM-DD'))}
-          />
-        </div>
-      </header>
+      {dateHeadingTarget === undefined
+        ? dateHeading
+        : dateHeadingTarget && createPortal(dateHeading, dateHeadingTarget)}
       {date !== today && (
         <div className="daily-date-note">
           <Button type="link" onClick={() => changeDate(today)}>

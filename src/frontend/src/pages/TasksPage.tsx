@@ -1,4 +1,5 @@
 import { Tabs } from 'antd'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import FocusPage from './FocusPage'
 import TodosPage from './TodosPage'
@@ -7,6 +8,7 @@ import '../tasks-page.css'
 
 export default function TasksPage() {
   const [search, setSearch] = useSearchParams()
+  const [dateHeadingTarget, setDateHeadingTarget] = useState<HTMLDivElement | null>(null)
   const view = search.get('view')
   const active = view === 'all' || view === 'recurring' ? view : 'today'
 
@@ -14,6 +16,7 @@ export default function TasksPage() {
     <div className="tasks-page">
       <header className="tasks-page-heading">
         <h1 className="tasks-title">任务</h1>
+        <div className="tasks-date-slot" ref={setDateHeadingTarget} />
       </header>
       <Tabs
         className="tasks-views"
@@ -28,7 +31,9 @@ export default function TasksPage() {
             key: 'today',
             label: '今日',
             forceRender: true,
-            children: <FocusPage embedded />,
+            children: (
+              <FocusPage embedded dateHeadingTarget={active === 'today' ? dateHeadingTarget : null} />
+            ),
           },
           { key: 'all', label: '全部', children: <TodosPage embedded /> },
           { key: 'recurring', label: '循环', children: <RecurringTodoPanel /> },
