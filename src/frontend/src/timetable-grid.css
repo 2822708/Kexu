@@ -16,7 +16,22 @@
   overflow: visible;
   font-size: calc(clamp(10px, 2.6vw, 12px) * var(--tt-scale, 1));
   align-items: stretch;
+  background: var(--paper-panel);
+  border-top: 1px solid var(--paper-rule);
+  border-left: 1px solid var(--paper-rule);
 }
+.timetable-grid-explicit .tt-head {
+  background: var(--paper-inset);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.timetable-grid-explicit .tt-head-today {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  box-shadow: inset 0 -2px var(--accent);
+}
+.timetable-grid-explicit .tt-period { background: var(--paper-inset); font-variant-numeric: tabular-nums; }
+.timetable-grid-explicit .tt-period-num { font-weight: 600; }
 /* 流式尺寸：宽度连续变化时按比例缩放，避免在断点处跳档。 */
 .timetable-grid-explicit {
   --tt-axis-width: clamp(22px, 5.5vw, 56px);
@@ -86,8 +101,8 @@
   min-height: min-content;
   height: auto;
   border: 1px solid var(--border-light);
-  border-left-width: 1px;
-  border-radius: 4px;
+  border-inline-start-width: 2px;
+  border-radius: 6px;
   padding: 7px 6px;
   gap: 4px;
   overflow: visible;
@@ -96,6 +111,15 @@
   text-align: start;
   white-space: normal;
   touch-action: manipulation;
+}
+.tt-page .tt-scroll .tt-grid-event:not(.exam-block) {
+  background: var(--paper-panel);
+  background: color-mix(in srgb, var(--course-paper, var(--paper-panel)) 24%, var(--paper-panel));
+  border-inline-start-color: var(--course-edge, var(--accent));
+  color: var(--text-primary);
+}
+:root[data-theme='dark'] .tt-page .tt-scroll .tt-grid-event:not(.exam-block) {
+  background: color-mix(in srgb, var(--course-paper, var(--paper-panel)) 9%, var(--paper-panel));
 }
 .tt-grid-event > span {
   max-width: 100%;
@@ -127,4 +151,20 @@
 .tt-grid-unconfigured-list {
   display: grid;
   gap: 10px;
+}
+
+@media (max-width: 767px) {
+  .tt-page .tt-scroll {
+    touch-action: pan-x pan-y;
+  }
+  .tt-page .tt-scroll .course-block {
+    padding: 6px 4px;
+  }
+  .tt-page .tt-scroll .course-block-meta {
+    font-size: 0.9em;
+  }
+}
+@media (max-width: 359px) {
+  .tt-page .tt-scroll .timetable-grid-explicit > .tt-grid-event { padding-inline: 2px; }
+  .tt-page .tt-scroll .tt-grid-event .course-block-name { font-size: calc(10px * var(--tt-scale, 1)); }
 }

@@ -83,16 +83,27 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           >
             <MenuOutlined />
           </button>
-          <Link to="/timetable" className="app-brand" aria-label="Kexu，返回课表">
-            <span className="app-brand-mark" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}pwa/icon.svg`} alt="" /></span>
+          <Link to="/timetable" className="app-brand" aria-label="Kexu，返回课表" onClick={() => setSidebarOpen(false)}>
+            <span className="app-brand-mark" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}pwa/icon.png`} alt="" /></span>
             <span className="app-brand-copy">
               <span className="app-topbar-title">Kexu</span>
             </span>
           </Link>
-          <span className="app-current-page">{isManual ? '使用帮助' : activeNav?.label}</span>
         </div>
+        <nav className="app-desktop-nav" aria-label="主导航">
+          {NAV_ITEMS.map((item) => (
+            <Link
+              key={item.key}
+              to={item.key}
+              aria-current={selectedKey === item.key ? 'page' : undefined}
+              onClick={() => setSidebarOpen(false)}
+            >
+              {item.icon}<span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
         <div className="app-topbar-actions">
-          {weekInfo && <Tag className="app-week-tag">{weekInfo}</Tag>}
+          {weekInfo && selectedKey !== '/timetable' && <Tag className="app-week-tag">{weekInfo}</Tag>}
           <PwaStatus />
           <Tooltip title={LOCAL_MODE ? '重新读取本机数据' : '立即刷新'}>
             <button
@@ -121,17 +132,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               {mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
             </button>
           </Tooltip>
-          <Tooltip title="GitHub 仓库 · 点个 Star">
-            <a
-              className="icon-btn-round github-star"
-              href="https://github.com/2822708/Kexu"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="在 GitHub 查看 Kexu 并点 Star"
-            >
-              <GithubOutlined />
-            </a>
-          </Tooltip>
         </div>
       </header>
 
@@ -155,20 +155,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <nav className="sidebar-nav" aria-label="主导航">
-            {NAV_ITEMS.map((item) => (
-              <Link
-                key={item.key}
-                to={item.key}
-                className={`sidebar-nav-item${selectedKey === item.key ? ' active' : ''}`}
-                aria-current={selectedKey === item.key ? 'page' : undefined}
-                onClick={() => setSidebarOpen(false)}
-              >
-                {item.icon}<span>{item.label}</span>
-              </Link>
-            ))}
-          </nav>
-
           {schedules.length > 0 && (
             <div className="sidebar-schedule-switch">
               <label className="sidebar-section-label" htmlFor="sidebar-schedule">当前课表</label>
@@ -189,7 +175,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <Link to="/manual" className={`sidebar-nav-item${isManual ? ' active' : ''}`} aria-current={isManual ? 'page' : undefined} onClick={() => setSidebarOpen(false)}>
               <BookOutlined /><span>使用帮助</span>
             </Link>
-            <p className="sidebar-data-hint">{LOCAL_MODE ? '课表与待办先保存在此设备，云端只保存加密快照。' : '在一个空间里，安排好每一天。'}</p>
+            <a
+              className="sidebar-nav-item"
+              href="https://github.com/2822708/Kexu"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="在 GitHub 查看 Kexu 并点 Star"
+            >
+              <GithubOutlined /><span>GitHub 仓库</span>
+            </a>
+            {LOCAL_MODE && <p className="sidebar-data-hint">课表与待办先保存在此设备，云端只保存加密快照。</p>}
           </div>
         </aside>
 

@@ -23,7 +23,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import { LOCAL_MODE } from '../local/mode'
 import { getAiSettings } from '../local/ai/settings'
 
-interface InitialImage {
+export interface AiChatImage {
   dataUrl: string
   name: string
 }
@@ -32,14 +32,14 @@ interface AiChatComposerProps {
   value: string
   onChange: (text: string) => void
   /** True only after the chat request completed; failures keep the complete draft. */
-  onSend: (content: string, images: string[]) => Promise<boolean>
+  onSend: (content: string, images: AiChatImage[]) => Promise<boolean>
   onStop: () => void
   sending: boolean
   disabled: boolean
   sendDisabled: boolean
   scopeKey: string
   /** Images handed over by the quick-import widget; they are sent with the next message. */
-  initialImages?: InitialImage[]
+  initialImages?: AiChatImage[]
   onInitialImagesApplied?: () => void
 }
 
@@ -260,7 +260,7 @@ export default function AiChatComposer({
     sendLockRef.current = true
     try {
       let content = draft
-      const dataUrls: string[] = []
+      const attachments: AiChatImage[] = []
       if (pending.length) {
         busyRef.current = 'images'
         setBusy('images')
@@ -268,12 +268,12 @@ export default function AiChatComposer({
           const dataUrl = image.dataUrl ?? (image.file ? await readChatImageCompact(image.file) : '')
           if (!dataUrl) throw new Error(`无法读取图片：${image.name}`)
           if (!isCurrent(scope, operation)) return
-          dataUrls.push(dataUrl)
+          attachments.push({ dataUrl, name: image.name })
         }
         if (!LOCAL_MODE) {
           // The REST backend has no multimodal chat endpoint, so images are transcribed first.
           for (let index = 0; index < pending.length; index++) {
-            const result = await aiApi.parseImageText(dataUrls[index])
+            const result = await aiApi.parseImageText(attachments[index].dataUrl)
             if (!isCurrent(scope, operation)) return
             if (!result.text.trim()) throw new Error(`图片中未识别到文字：${pending[index].name}`)
             content = appendChatText(
@@ -282,7 +282,7 @@ export default function AiChatComposer({
             )
           }
         }
-        if (!content) content = '请阅读随消息附上的图片内容，并整理为待确认的提案。'
+        if (!content) content = '请识别附图，并整理为待确认的提案。'
       }
       if (!isCurrent(scope, operation) || sendDisabledRef.current) return
       // Keep the original text and attachments until the parent accepts the message.
@@ -290,7 +290,7 @@ export default function AiChatComposer({
       // again on retry. The first automatic conversation creation keeps this scope.
       busyRef.current = null
       setBusy(null)
-      const sent = await onSend(content, LOCAL_MODE ? dataUrls : [])
+      const sent = await onSend(content, LOCAL_MODE ? attachments : [])
       if (sent && isCurrent(scope, operation)) {
         imagesRef.current = []
         setImages([])
@@ -381,7 +381,7 @@ export default function AiChatComposer({
         type="file"
         hidden
         multiple
-        accept=".txt,.md,.csv,.html,.htm,.json,.pdf,.docx,image/png,image/jpeg,image/webp"
+        accept=".txt,.md,.csv,.ics,.html,.htm,.pdf,.docx,image/png,image/jpeg,image/webp,image/gif"
         aria-label="选择聊天附件"
         onChange={(event) => {
           const files = Array.from(event.target.files ?? [])
@@ -456,7 +456,7 @@ export default function AiChatComposer({
           }}
           placeholder={
             mobile
-              ? '描述你的安排，可附截图'
+              ? '描述你的安排'
               : '描述你的安排，或拖入文件、截图；Enter 发送，Shift+Enter 换行'
           }
           autoSize={{ minRows: 1, maxRows: 4 }}

@@ -10,6 +10,7 @@ import com.timetable.dto.AiActionDto;
 import com.timetable.dto.AiConversationRequest;
 import com.timetable.dto.AiMessageRequest;
 import com.timetable.dto.AiMessageResponse;
+import com.timetable.dto.BatchCourseRequest;
 import com.timetable.dto.RecurringTodoRequest;
 import com.timetable.dto.TodoRequest;
 import com.timetable.dto.CourseRequest;
@@ -40,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import jakarta.validation.Validator;
@@ -100,6 +102,7 @@ public class AiServiceImpl implements AiService {
     private final PeriodConfigService periodConfigService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private final TransactionTemplate actionTransactionTemplate;
     private final Clock clock;
     private final Validator validator;
 
@@ -129,6 +132,8 @@ public class AiServiceImpl implements AiService {
         this.periodConfigService = periodConfigService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.actionTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.actionTransactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
         this.clock = clock;
         this.validator = validator;
     }
@@ -964,7 +969,7 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public AiMessageResponse executeAction(Long conversationId, Long actionId, String apiKey) {
-        ActionExecution outcome = transactionTemplate.execute(status -> {
+        ActionExecution outcome = actionTransactionTemplate.execute(status -> {
             AiConversation conversation = getConversation(conversationId, apiKey);
             AiAction action = actionMapper.selectById(actionId);
             if (action == null || !apiKey.equals(action.getApiKey())) {
@@ -989,6 +994,10 @@ public class AiServiceImpl implements AiService {
                         new BusinessException(409, "提案所属课表已变化，请重新向 AI 提问"));
             }
 
+            if (SCOPE_COURSE.equals(action.getScope())) {
+                // Match schedule changes: lock the schedule before locking its pending actions.
+                scheduleService.getByIdForUpdate(action.getScheduleId(), apiKey);
+            }
             if (actionMapper.claimPending(actionId, apiKey) != 1) {
                 throw new BusinessException(409, "该提案已被其它请求处理，请刷新后重试");
             }
@@ -1096,9 +1105,9 @@ public class AiServiceImpl implements AiService {
         switch (type) {
             case "CREATE_COURSE" -> {
                 requireSchedule(scheduleId);
-                for (JsonNode node : arrayOf(data, "courses")) {
-                    courseService.create(scheduleId, toCourseRequest(node), apiKey);
-                }
+                BatchCourseRequest batch = new BatchCourseRequest();
+                batch.setCourses(arrayOf(data, "courses").stream().map(this::toCourseRequest).toList());
+                courseService.batchCreate(scheduleId, batch, apiKey);
             }
             case "UPDATE_COURSE" -> {
                 requireSchedule(scheduleId);
@@ -1415,8 +1424,8 @@ public class AiServiceImpl implements AiService {
     private CourseRequest toCourseRequest(JsonNode node) {
         CourseRequest req = new CourseRequest();
         req.setName(textOrNull(node, "name"));
-        req.setLocation(textOrNull(node, "location"));
-        req.setTeacher(textOrNull(node, "teacher"));
+        if (node.has("location")) req.setLocation(textOrNull(node, "location"));
+        if (node.has("teacher")) req.setTeacher(textOrNull(node, "teacher"));
         req.setDayOfWeek(node.hasNonNull("dayOfWeek") ? node.get("dayOfWeek").asInt() : null);
         req.setStartPeriod(node.hasNonNull("startPeriod") ? node.get("startPeriod").asInt() : null);
         req.setEndPeriod(node.hasNonNull("endPeriod") ? node.get("endPeriod").asInt() : null);
@@ -1444,7 +1453,7 @@ public class AiServiceImpl implements AiService {
     private ExamRequest toExamRequest(JsonNode node) {
         ExamRequest req = new ExamRequest();
         req.setName(textOrNull(node, "name"));
-        req.setLocation(textOrNull(node, "location"));
+        if (node.has("location")) req.setLocation(textOrNull(node, "location"));
         String date = textOrNull(node, "examDate");
         String start = textOrNull(node, "startTime");
         String end = textOrNull(node, "endTime");

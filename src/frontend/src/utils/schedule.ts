@@ -2,17 +2,26 @@ import dayjs, { type Dayjs } from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import relativeTime from 'dayjs/plugin/relativeTime'
+import utc from 'dayjs/plugin/utc'
 import 'dayjs/locale/zh-cn'
 
 dayjs.extend(customParseFormat)
 dayjs.extend(isoWeek)
 dayjs.extend(relativeTime)
+dayjs.extend(utc)
 dayjs.locale('zh-cn')
 
 export const WEEK_DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 export function weekDayName(dayOfWeek: number): string {
   return WEEK_DAY_NAMES[dayOfWeek - 1] ?? '—'
+}
+
+export async function validateSemesterRange(range: [Dayjs, Dayjs] | undefined) {
+  if (!range) return
+  const [start, end] = range
+  if (!start?.isValid() || !end?.isValid()) throw new Error('请选择有效的学期起止日期')
+  if (end.isBefore(start, 'day')) throw new Error('学期结束日期不能早于开始日期')
 }
 
 /** 学期第 1 周为开始日期所在的那个 ISO 周 */
@@ -48,7 +57,7 @@ export function formatWeekInfo(start: string, end: string): string {
 }
 
 /** 两元素倒计时格式：1天4小时 / 4小时56分钟 / 7分钟45秒 */
-export function formatCountdown(target: string, now: Dayjs = dayjs()): string {
+export function formatCountdown(target: string | Dayjs, now: Dayjs = dayjs()): string {
   const diff = dayjs(target).diff(now, 'second')
   if (diff <= 0) return '已过期'
 

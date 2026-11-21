@@ -1,5 +1,5 @@
 import type { LocalState } from '../types'
-import type { DailyEvent, DailyResolvedEntry, DailyReview } from './types'
+import type { DailyEvent, DailyResolvedEntry, DailyReview, DailyWorkspace } from './types'
 
 /** ISO business day, intentionally independent of the device's local timezone. */
 export function dailyBusinessDate(value: string | Date = new Date()): string {
@@ -37,8 +37,11 @@ export function latestDailyCompletions(state: LocalState): Map<string, DailyEven
   return events
 }
 
-export function resolveDailyEntries(state: LocalState, date: string): DailyResolvedEntry[] {
-  const completions = latestDailyCompletions(state)
+export function resolveDailyEntries(
+  state: LocalState,
+  date: string,
+  completions: ReadonlyMap<string, DailyEvent> = latestDailyCompletions(state),
+): DailyResolvedEntry[] {
   return state.dayEntries
     .filter((entry) => entry.plannedDate === date)
     .map((entry): DailyResolvedEntry => {
@@ -76,6 +79,28 @@ export function resolveDailyEntries(state: LocalState, date: string): DailyResol
         a.position - b.position ||
         a.publicId.localeCompare(b.publicId),
     )
+}
+
+export function projectDailyWorkspace(state: LocalState, date: string): DailyWorkspace {
+  const completions = latestDailyCompletions(state)
+  return {
+    state,
+    date,
+    generation: state.dataGeneration,
+    entries: resolveDailyEntries(state, date, completions),
+    candidateTodos: state.todos.filter(
+      (todo) =>
+        !todo.completed &&
+        todo.examId == null &&
+        !state.dayEntries.some(
+          (entry) =>
+            entry.kind === 'todo' && entry.todoPublicId === todo.publicId && entry.plannedDate === date,
+        ),
+    ),
+    unfinishedEntries: [...new Set(state.dayEntries.map((entry) => entry.plannedDate))]
+      .flatMap((plannedDate) => resolveDailyEntries(state, plannedDate, completions))
+      .filter((entry) => !entry.completed && !entry.missingSource),
+  }
 }
 
 export function dailyReviewFor(state: LocalState, date: string): DailyReview | undefined {

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Button,
-  Alert,
   Card,
   Checkbox,
   DatePicker,
@@ -14,7 +13,6 @@ import {
   Popconfirm,
   Segmented,
   Space,
-  Spin,
   Tabs,
   Tag,
   Tooltip,
@@ -47,23 +45,26 @@ type DayTask = Extract<DayEntry, { kind: 'dayTask' }>
 type TaskRecord = { kind: 'todo'; value: Todo } | { kind: 'dayTask'; value: DayTask }
 type TodosPageProps = { embedded?: boolean }
 
+// Treat Shanghai wall times as one continuous calendar for local comparisons,
+// even when the device's own clock skips or repeats an hour.
+const taskDate = (value: string) => LOCAL_MODE ? dayjs.utc(value) : dayjs(value)
+
 export default function TodosPage(props: TodosPageProps) {
   return LOCAL_MODE ? <LocalTodosPage {...props} /> : <TodosPageContent {...props} />
 }
 
 function LocalTodosPage(props: TodosPageProps) {
   const [date, setDate] = useState(() => nowLocalDateTime().slice(0, 10))
-  const { workspace, error, refresh } = useDailyWorkspace(date)
+  const { workspace, refresh } = useDailyWorkspace(date)
   useEffect(() => {
     const timer = window.setInterval(() => setDate(nowLocalDateTime().slice(0, 10)), 30_000)
     return () => window.clearInterval(timer)
   }, [])
-  return <TodosPageContent {...props} dailyWorkspace={workspace} dailyError={error} refreshDaily={refresh} />
+  return <TodosPageContent {...props} dailyWorkspace={workspace} refreshDaily={refresh} />
 }
 
-function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refreshDaily }: TodosPageProps & {
-  dailyWorkspace?: DailyWorkspace | null
-  dailyError?: string
+function TodosPageContent({ embedded = false, dailyWorkspace, refreshDaily }: TodosPageProps & {
+  dailyWorkspace?: DailyWorkspace
   refreshDaily?: () => Promise<DailyWorkspace>
 }) {
   const {
@@ -100,7 +101,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
     return () => window.clearInterval(timer)
   }, [])
 
-  const now = useMemo(() => dayjs(tick), [tick])
+  const now = useMemo(() => LOCAL_MODE ? taskDate(nowLocalDateTime(new Date(tick))) : dayjs(tick), [tick])
 
   const records = useMemo<TaskRecord[]>(() => [
     ...todos.map((value) => ({ kind: 'todo' as const, value })),
@@ -111,7 +112,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
 
   const visible = useMemo(() => {
     const dateOf = (item: TaskRecord) => item.kind === 'todo' ? item.value.ddl : item.value.plannedDate
-    const list = [...records].sort((a, b) => dayjs(dateOf(a)).valueOf() - dayjs(dateOf(b)).valueOf())
+    const list = [...records].sort((a, b) => taskDate(dateOf(a)).valueOf() - taskDate(dateOf(b)).valueOf())
     if (filter === 'active') return list.filter((t) => !t.value.completed)
     if (filter === 'completed') return list.filter((t) => t.value.completed)
     return list
@@ -122,9 +123,9 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
 
   const stats = useMemo(() => {
     const active = todos.filter((t) => !t.completed)
-    const overdue = active.filter((t) => dayjs(t.ddl).isBefore(now))
+    const overdue = active.filter((t) => taskDate(t.ddl).isBefore(now))
     const soon = active.filter(
-      (t) => !dayjs(t.ddl).isBefore(now) && dayjs(t.ddl).diff(now, 'hour') < 24,
+      (t) => !taskDate(t.ddl).isBefore(now) && taskDate(t.ddl).diff(now, 'hour') < 24,
     )
     const dailyActive = (dailyWorkspace?.state.dayEntries ?? []).filter((entry) => entry.kind === 'dayTask' && !entry.completed).length
     return { active: active.length + dailyActive, overdue: overdue.length, soon: soon.length }
@@ -140,9 +141,9 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
     ]
     for (const item of visible) {
       const index = item.value.completed ? 4
-        : item.kind === 'todo' && dayjs(item.value.ddl).isBefore(now) ? 0
+        : item.kind === 'todo' && taskDate(item.value.ddl).isBefore(now) ? 0
         : item.kind === 'dayTask' && item.value.plannedDate < (dailyWorkspace?.date ?? now.format('YYYY-MM-DD')) ? 1
-        : dayjs(item.kind === 'todo' ? item.value.ddl : item.value.plannedDate).isSame(now, 'day') ? 2 : 3
+        : taskDate(item.kind === 'todo' ? item.value.ddl : item.value.plannedDate).isSame(now, 'day') ? 2 : 3
       buckets[index].items.push(item)
     }
     return buckets.filter((bucket) => bucket.items.length > 0).map((bucket) => {
@@ -216,10 +217,11 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
     }
     setModal({ open: true, todo })
     if (todo) {
-      form.setFieldsValue({ title: todo.title, ddl: dayjs(todo.ddl) })
+      form.setFieldsValue({ title: todo.title, ddl: taskDate(todo.ddl) })
     } else {
       form.resetFields()
-      form.setFieldsValue({ ddl: dayjs().add(1, 'day').hour(23).minute(59) })
+      const today = LOCAL_MODE ? now : dayjs()
+      form.setFieldsValue({ ddl: today.add(1, 'day').hour(23).minute(59) })
     }
   }
 
@@ -281,6 +283,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
   const todoTab = (
     <>
       <div className="todo-filter-toolbar">
+        <div className="todo-filter-controls">
           <Segmented
             aria-label="任务显示范围"
             value={filter}
@@ -291,6 +294,12 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
               { value: 'all', label: '全部' },
             ]}
           />
+          {embedded && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal(null)}>
+              新建任务
+            </Button>
+          )}
+        </div>
         <div className="todo-summary-line">
           <span>待完成 <strong>{stats.active}</strong></span>
           <span>24小时内 <strong>{stats.soon}</strong></span>
@@ -304,8 +313,6 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
           倒计时仅在页面内显示；当前版本不会发送系统通知，关闭页面后也不会弹窗提醒。
         </Typography.Paragraph>
       </details>
-      {dailyError && <Alert type="error" message={dailyError} action={<Button onClick={() => void refreshDaily?.().catch(() => undefined)}>重试</Button>} />}
-      {LOCAL_MODE && !dailyWorkspace && !dailyError && <Spin tip="正在读取日任务"><div style={{ minHeight: 48 }} /></Spin>}
       {groups.length === 0 && (!LOCAL_MODE || dailyWorkspace) && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filter === 'completed' ? '还没有已完成的任务' : '暂无任务'} />}
       {groups.map((group) => (
       <section key={group.key} className="todo-group" aria-label={group.title}>
@@ -368,7 +375,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
               )
             }
             const todo = record.value
-            const ddl = dayjs(todo.ddl)
+            const ddl = taskDate(todo.ddl)
             const overdue = !todo.completed && ddl.isBefore(now)
             const urgent = !todo.completed && !overdue && ddl.diff(now, 'hour') < 24
             return (
@@ -476,7 +483,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
                         <Tag color="green">已完成</Tag>
                       ) : (overdue || urgent) && (
                         <Tag color={overdue ? 'red' : 'orange'}>
-                          {overdue ? '已逾期' : formatCountdown(todo.ddl, now)}
+                          {overdue ? '已逾期' : formatCountdown(ddl, now)}
                         </Tag>
                       )}
                     </Space>
@@ -501,18 +508,14 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
 
   return (
     <div className={`daily-todos-page${embedded ? ' task-pool' : ''}`}>
-      {embedded ? (
-        <div className="task-pool-actions">
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal(null)}>新建任务</Button>
+      {!embedded && (
+        <div className="page-header daily-page-header">
+          <div className="daily-page-heading">
+            <Typography.Title level={2} style={{ margin: 0 }}>待办</Typography.Title>
+            <Typography.Text type="secondary">按截止时间整理任务，循环安排也在这里。</Typography.Text>
+          </div>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal(null)}>新建待办</Button>
         </div>
-      ) : (
-      <div className="page-header daily-page-header">
-        <div className="daily-page-heading">
-          <Typography.Title level={2} style={{ margin: 0 }}>待办</Typography.Title>
-          <Typography.Text type="secondary">按截止时间整理任务，循环安排也在这里。</Typography.Text>
-        </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal(null)}>新建待办</Button>
-      </div>
       )}
       {embedded ? todoTab : (
       <Tabs
@@ -552,7 +555,7 @@ function TodosPageContent({ embedded = false, dailyWorkspace, dailyError, refres
             label="截止时间"
             rules={[{ required: true, message: '请选择截止时间' }]}
           >
-            <DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} />
+            <DatePicker showTime showNow={!LOCAL_MODE} format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} />
           </Form.Item>
         </Form>
       </Modal>

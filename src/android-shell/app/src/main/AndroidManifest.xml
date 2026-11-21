@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Kexu"
-        android:icon="@drawable/ic_kexu"
+        android:icon="@mipmap/ic_kexu"
         android:theme="@style/KexuTheme"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"

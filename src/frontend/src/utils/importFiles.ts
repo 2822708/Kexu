@@ -96,12 +96,12 @@ function ensurePromiseWithResolvers(): void {
 
 async function loadPdfJs() {
   ensurePromiseWithResolvers()
-  const [{ GlobalWorkerOptions, getDocument }, workerModule] = await Promise.all([
+  const [{ GlobalWorkerOptions, getDocument, version }, workerModule] = await Promise.all([
     import('pdfjs-dist'),
     import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
   ])
   GlobalWorkerOptions.workerSrc = workerModule.default
-  return getDocument
+  return { getDocument, assets: `${import.meta.env.BASE_URL}assets/pdfjs-${version}/` }
 }
 
 function safeFileStem(name: string): string {
@@ -150,9 +150,16 @@ async function renderPdfPages(
 }
 
 async function extractPdfMaterial(file: File): Promise<ImportFileMaterial> {
-  const getDocument = await loadPdfJs()
+  const { getDocument, assets } = await loadPdfJs()
   const bytes = new Uint8Array(await file.arrayBuffer())
-  const pdfDocument = await getDocument({ data: bytes, isEvalSupported: false }).promise
+  const pdfDocument = await getDocument({
+    data: bytes,
+    isEvalSupported: false,
+    cMapUrl: `${assets}cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${assets}standard_fonts/`,
+    wasmUrl: `${assets}wasm/`,
+  }).promise
   try {
     if (pdfDocument.numPages > MAX_PDF_PAGES) {
       throw new Error(`PDF 超过 ${MAX_PDF_PAGES} 页，请先拆分到需要导入的页面`)

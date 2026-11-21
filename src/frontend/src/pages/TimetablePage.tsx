@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Dropdown, Empty, Space, Typography, message } from 'antd'
+import { Button, Dropdown, Space, Typography, message } from 'antd'
 import {
   ImportOutlined,
   LeftOutlined,
@@ -21,15 +21,17 @@ import type { Course, CoursePayload, Exam, ExamPayload, Schedule } from '../type
 import { currentWeekOf, totalWeeks } from '../utils/schedule'
 import { LOCAL_MODE } from '../local/mode'
 import {
+  assertCourseEditorCurrent,
   assertEditorRecord,
   assertEditorGeneration,
   assertEditorScope,
   captureEditorScope,
+  LocalCourseEditConflict,
   LocalEditorScopeError,
   recordPublicId,
   type LocalEditorScope,
 } from '../local/editorScope'
-import '../day-agenda.css'
+import type { LocalState } from '../local/types'
 import '../daily-pages.css'
 
 export default function TimetablePage() {
@@ -52,6 +54,7 @@ export default function TimetablePage() {
     course: Course | null
     defaults: { dayOfWeek?: number; startPeriod?: number } | null
     scope: LocalEditorScope | null
+    latest?: Course
   }>({ open: false, course: null, defaults: null, scope: null })
   const [saving, setSaving] = useState(false)
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
@@ -148,7 +151,7 @@ export default function TimetablePage() {
       importGeneration.current++
       setCourseModal({
         open: true,
-        course,
+        course: { ...course, weeks: [...(course.weeks ?? [])] },
         defaults: null,
         scope: LOCAL_MODE ? captureEditorScope(activeScheduleRef.current) : null,
       })
@@ -172,7 +175,11 @@ export default function TimetablePage() {
 
   useEffect(() => {
     setWeek(realCurrentWeek)
-  }, [realCurrentWeek])
+  }, [activeScheduleId, activePublicId, realCurrentWeek])
+
+  useEffect(() => {
+    setWeek((selected) => Math.min(selected, total))
+  }, [total])
 
   useEffect(() => {
     aiApi
@@ -202,20 +209,38 @@ export default function TimetablePage() {
     [activeScheduleId],
   )
 
+  const guardCourseEditor = (course: Course, generation: number) => (state: LocalState) => {
+    if (generation !== importGeneration.current)
+      throw new LocalEditorScopeError('编辑窗口已关闭或课表已切换，本次修改已取消')
+    assertCourseEditorCurrent(state, courseModal.scope, activeScheduleRef.current, course)
+  }
+  const handleCourseFailure = (error: unknown, generation: number, fallback: string) => {
+    if (error instanceof LocalCourseEditConflict) {
+      if (generation === importGeneration.current)
+        setCourseModal((modal) => ({ ...modal, latest: error.latest }))
+    } else {
+      handleScopeFailure(error, generation)
+      message.error(error instanceof Error ? error.message : fallback)
+    }
+  }
+
   const submitCourse = async (payload: CoursePayload) => {
     if (!activeScheduleId) return
     setSaving(true)
     const generation = importGeneration.current
     try {
-      const target = await validateScope(
-        courseModal.scope,
-        courseModal.course ? { collection: 'courses', value: courseModal.course } : undefined,
-      )
-      if (!target) throw new Error('请先选择课表')
-      if (courseModal.course) {
-        await courseApi.update(courseModal.course.id, payload)
+      const course = courseModal.course
+      if (course) {
+        if (LOCAL_MODE) {
+          const { localCourseApi } = await import('../local/domain')
+          await localCourseApi.update(course.id, payload, guardCourseEditor(course, generation))
+        } else {
+          await courseApi.update(course.id, payload)
+        }
         message.success('课程已更新')
       } else {
+        const target = await validateScope(courseModal.scope)
+        if (!target) throw new Error('请先选择课表')
         await courseApi.create(target, payload)
         message.success('课程已添加')
       }
@@ -223,8 +248,7 @@ export default function TimetablePage() {
         setCourseModal({ open: false, course: null, defaults: null, scope: null })
       await refreshCourses()
     } catch (e) {
-      handleScopeFailure(e, generation)
-      message.error(e instanceof Error ? e.message : '保存失败')
+      handleCourseFailure(e, generation, '保存失败')
     } finally {
       setSaving(false)
     }
@@ -233,22 +257,18 @@ export default function TimetablePage() {
   const deleteCourse = async (course: Course) => {
     const generation = importGeneration.current
     try {
-      await validateScope(
-        courseModal.open && courseModal.course?.id === course.id
-          ? courseModal.scope
-          : LOCAL_MODE
-            ? captureEditorScope(activeScheduleRef.current)
-            : null,
-        { collection: 'courses', value: course },
-      )
-      await courseApi.remove(course.id)
+      if (LOCAL_MODE) {
+        const { localCourseApi } = await import('../local/domain')
+        await localCourseApi.remove(course.id, guardCourseEditor(course, generation))
+      } else {
+        await courseApi.remove(course.id)
+      }
       message.success('课程已删除')
       if (generation === importGeneration.current)
         setCourseModal({ open: false, course: null, defaults: null, scope: null })
       await refreshCourses()
     } catch (e) {
-      handleScopeFailure(e, generation)
-      message.error(e instanceof Error ? e.message : '删除失败')
+      handleCourseFailure(e, generation, '删除失败')
     }
   }
 
@@ -333,14 +353,15 @@ export default function TimetablePage() {
 
   if (schedules.length === 0) {
     return (
-      <Card>
-        <Empty description="还没有课表，先创建一个学期课表吧">
-          <Space>
-            <Button type="primary" onClick={() => setCreateOpen(true)}>
-              新建课表
-            </Button>
-          </Space>
-        </Empty>
+      <section className="tt-paper-empty" aria-labelledby="tt-empty-heading">
+        <h1 id="tt-empty-heading" className="tt-paper-title">周课表</h1>
+        <div className="tt-paper-empty-content">
+          <h2>创建你的第一张课表</h2>
+          <p>选择学期日期，开始安排每周课程和考试。</p>
+          <Button icon={<PlusOutlined />} type="primary" onClick={() => setCreateOpen(true)}>
+            新建课表
+          </Button>
+        </div>
         <ScheduleCreateModal
           open={createOpen}
           onCancel={() => setCreateOpen(false)}
@@ -354,7 +375,7 @@ export default function TimetablePage() {
           onUpdate={updateSchedule}
           onDelete={deleteSchedule}
         />
-      </Card>
+      </section>
     )
   }
 
@@ -362,12 +383,10 @@ export default function TimetablePage() {
     <div className="tt-page daily-timetable-page">
       <div className="page-header daily-page-header timetable-page-header">
         <div className="daily-page-heading">
-          <Typography.Title level={2} style={{ margin: 0 }}>
-            {activeSchedule?.name ?? '课表'}
-          </Typography.Title>
+          <h1 className="tt-paper-title">周课表</h1>
           <Typography.Text type="secondary" className="timetable-term-note">
             {activeSchedule
-              ? `${activeSchedule.periodStartDate} — ${activeSchedule.periodEndDate} · 共 ${total} 周`
+              ? <><strong>{activeSchedule.name}</strong><span>{activeSchedule.periodStartDate} — {activeSchedule.periodEndDate}</span></>
               : '选择一个学期，查看课程与考试安排'}
           </Typography.Text>
         </div>
@@ -434,6 +453,10 @@ export default function TimetablePage() {
         totalWeeks={total}
         currentWeek={realCurrentWeek}
         saving={saving}
+        latest={courseModal.latest}
+        onLoadLatest={() => {
+          if (courseModal.latest) openEditCourse(courseModal.latest)
+        }}
         onCancel={() => {
           importGeneration.current++
           setCourseModal({ open: false, course: null, defaults: null, scope: null })

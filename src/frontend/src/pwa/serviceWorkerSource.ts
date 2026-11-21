@@ -18,6 +18,24 @@ const ACTIVATION = BASE + '__pwa_activation__';
 const READY = BASE + '__pwa_ready__';
 const PRECACHE = ${JSON.stringify(precache)};
 const ASSETS = new Set(${JSON.stringify(assets)});
+const APP_ROUTES = new Set(['', 'index.html', 'timetable', 'tasks', 'focus', 'todos', 'ai', 'settings', 'manual']);
+const TASK_ROUTES = new Set(['tasks', 'focus', 'todos']);
+
+function isTaskNavigationQuery(params) {
+  const seen = new Set();
+  for (const [key, value] of params) {
+    if (seen.has(key)) return false;
+    seen.add(key);
+    if (key === 'view' && ['today', 'all', 'recurring'].includes(value)) continue;
+    if (key === 'taskFilter' && ['active', 'completed', 'all'].includes(value)) continue;
+    if (key === 'date' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+      const date = new Date(value + 'T00:00:00Z');
+      if (Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value) continue;
+    }
+    return false;
+  }
+  return true;
+}
 
 async function previousBuildAsset(path) {
   const keys = await caches.keys();
@@ -90,12 +108,14 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin ||
-      !url.pathname.startsWith(BASE) || url.search ||
+      !url.pathname.startsWith(BASE) ||
       request.headers.has('Authorization') || request.headers.has('X-API-Key')) return;
   const relative = url.pathname.slice(BASE.length);
-  if (/^(api|auth|ai|backups?|snapshots?|vaults?|cloud)(\\/|$)/i.test(relative)) return;
 
   if (request.mode === 'navigate') {
+    const route = relative.replace(/\\/$/, '');
+    if (!APP_ROUTES.has(route) ||
+        (url.search && (!TASK_ROUTES.has(route) || !isTaskNavigationQuery(url.searchParams)))) return;
     event.respondWith((async () => {
       try {
         // Never cache live navigation responses: a proxy may return personalized HTML.
@@ -108,6 +128,7 @@ self.addEventListener('fetch', (event) => {
     })());
     return;
   }
+  if (url.search || /^(api|auth|ai|backups?|snapshots?|vaults?|cloud)(\\/|$)/i.test(relative)) return;
   // Only known build assets may be added to the cache. An old tab can also read
   // an existing cached hashed /assets/ file from the immediately previous build.
   const currentAsset = ASSETS.has(url.pathname);

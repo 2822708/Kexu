@@ -14,7 +14,7 @@ import {
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
 import type { Schedule } from '../types'
-import { dayjs, totalWeeks } from '../utils/schedule'
+import { dayjs, totalWeeks, validateSemesterRange } from '../utils/schedule'
 
 interface Props {
   open: boolean
@@ -28,13 +28,6 @@ interface Props {
 interface FormValues {
   name: string
   range: [Dayjs, Dayjs]
-}
-
-// 只能选周一(1)或周日(0)，配合校验确保开始=周一、结束=周日
-function semesterDisabledDate(current: Dayjs) {
-  if (!current) return false
-  const d = current.day()
-  return d !== 0 && d !== 1
 }
 
 export default function ScheduleManagerModal({
@@ -161,20 +154,11 @@ export default function ScheduleManagerModal({
             label="学期起止日期"
             rules={[
               { required: true, message: '请选择学期起止日期' },
-              {
-                validator: (_, value) => {
-                  if (!value) return Promise.resolve()
-                  const [start, end] = value as [Dayjs, Dayjs]
-                  if (!start || !end) return Promise.resolve()
-                  if (start.day() !== 1) return Promise.reject(new Error('开始日期必须是周一'))
-                  if (end.day() !== 0) return Promise.reject(new Error('结束日期必须是周日'))
-                  return Promise.resolve()
-                },
-              },
+              { validator: (_, value) => validateSemesterRange(value) },
             ]}
-            extra="学期开始必须是周一，结束必须是周日"
+            extra="按实际日期填写。开始日期所在周计为第 1 周，每周从周一开始。"
           >
-            <DatePicker.RangePicker style={{ width: '100%' }} disabledDate={semesterDisabledDate} />
+            <DatePicker.RangePicker style={{ width: '100%' }} />
           </Form.Item>
           <Space>
             <Button type="primary" loading={saving} onClick={submit}>

@@ -1,4 +1,4 @@
-name: Android APK verification
+name: Legacy Android Compose verification
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   android-debug:
-    name: Compile, test and package debug APK
+    name: Compile, test and package legacy Compose debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -59,7 +59,7 @@ jobs:
       - name: Upload verification APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-debug-apk-${{ github.run_number }}
+          name: legacy-compose-debug-apk-${{ github.run_number }}
           path: |
             src/android/app/build/outputs/apk/debug/app-debug.apk
             src/android/app/build/outputs/apk/debug/SHA256SUMS

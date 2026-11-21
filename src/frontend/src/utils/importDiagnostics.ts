@@ -52,12 +52,16 @@ export function diagnoseCourses(
     return row
   })
 
+  const existingByIdentity = new Map(existing.map((course) => [courseImportIdentity(course), course]))
+  const firstImportedRowByIdentity = new Map<string, number>()
   for (const row of rows) {
     if (row.errors.length) continue
-    const duplicate = existing.find((c) => isSameCourse(row, c))
-    const earlier = rows.slice(0, row.key).find((c) => c.errors.length === 0 && isSameCourse(row, c))
+    const identity = courseImportIdentity(row)
+    const duplicate = existingByIdentity.get(identity)
+    const earlier = firstImportedRowByIdentity.get(identity)
     if (duplicate) row.errors.push(`与已有课程「${duplicate.name}」完全重复`)
-    else if (earlier) row.errors.push(`与导入第 ${earlier.key + 1} 行完全重复`)
+    else if (earlier !== undefined) row.errors.push(`与导入第 ${earlier + 1} 行完全重复`)
+    else firstImportedRowByIdentity.set(identity, row.key)
   }
   for (const row of rows) {
     if (row.errors.length) continue
@@ -69,11 +73,17 @@ export function diagnoseCourses(
   return rows
 }
 
-function isSameCourse(a: ParsedCourse, b: ParsedCourse): boolean {
-  return a.name === b.name?.trim() && (a.location || '') === (b.location?.trim() || '') &&
-    (a.teacher || '') === (b.teacher?.trim() || '') && a.dayOfWeek === b.dayOfWeek &&
-    a.startPeriod === b.startPeriod && a.endPeriod === b.endPeriod &&
-    a.weeks.join(',') === [...new Set(b.weeks)].sort((x, y) => x - y).join(',')
+/** Compare exact course entries independently of whitespace and week ordering. */
+export function courseImportIdentity(course: ParsedCourse): string {
+  return JSON.stringify([
+    course.name?.trim() ?? '',
+    course.location?.trim() ?? '',
+    course.teacher?.trim() ?? '',
+    course.dayOfWeek,
+    course.startPeriod,
+    course.endPeriod,
+    [...new Set(course.weeks)].sort((a, b) => a - b),
+  ])
 }
 
 function overlaps(a: ParsedCourse, b: ParsedCourse): boolean {

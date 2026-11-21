@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Checkbox, Form, Input, Modal, Popconfirm, Select, Space, Typography } from 'antd'
+import { Alert, Button, Checkbox, Form, Input, Modal, Popconfirm, Select, Space, Typography } from 'antd'
 import type { Course, CoursePayload, PeriodConfig } from '../types'
 import { WEEK_DAY_NAMES, parseWeeksInput, rangeWeeks } from '../utils/schedule'
 
@@ -11,6 +11,8 @@ interface Props {
   totalWeeks: number
   currentWeek: number
   saving: boolean
+  latest?: Course
+  onLoadLatest?: () => void
   onCancel: () => void
   onSubmit: (payload: CoursePayload) => void
   onDelete?: (course: Course) => void
@@ -34,6 +36,8 @@ export default function CourseFormModal({
   totalWeeks,
   currentWeek,
   saving,
+  latest,
+  onLoadLatest,
   onCancel,
   onSubmit,
   onDelete,
@@ -117,16 +121,35 @@ export default function CourseFormModal({
               okText="删除"
               cancelText="取消"
             >
-              <Button danger>删除</Button>
+              <Button danger disabled={saving || Boolean(latest)}>删除</Button>
             </Popconfirm>
           )}
           <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" loading={saving} onClick={handleOk}>
+          <Button type="primary" loading={saving} disabled={Boolean(latest)} onClick={handleOk}>
             保存
           </Button>
         </Space>
       }
     >
+      {latest && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="课程已在其他窗口更新，草稿仍保留"
+          description={`最新课程：${latest.name} · ${WEEK_DAY_NAMES[latest.dayOfWeek - 1]} · 第 ${latest.startPeriod}–${latest.endPeriod} 节 · ${latest.location || '未设地点'} · ${latest.teacher || '未设教师'}`}
+          action={
+            <Popconfirm
+              title="载入最新课程并替换当前草稿？"
+              onConfirm={onLoadLatest}
+              okText="载入"
+              cancelText="保留草稿"
+            >
+              <Button size="small">载入最新</Button>
+            </Popconfirm>
+          }
+        />
+      )}
       <Form form={form} layout="vertical" requiredMark={false}>
         <Form.Item
           name="name"

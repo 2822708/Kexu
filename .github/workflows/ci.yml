@@ -42,7 +42,7 @@ jobs:
         run: node scripts/check-brand.mjs
       - name: Local data, backup, AI and PWA regression
         working-directory: src/frontend
-        run: node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs scripts/test-ai-providers.mjs scripts/test-daily-core.mjs scripts/test-daily-review.mjs scripts/test-native-export.mjs scripts/test-pwa.mjs scripts/test-day-agenda.mjs scripts/test-device-session.mjs scripts/test-timetable-layout.mjs scripts/test-chat-import.mjs scripts/test-chat-drafts.mjs scripts/test-import-materials.mjs scripts/test-task-filters.mjs scripts/test-accent.mjs scripts/test-app-mode.mjs scripts/test-api-errors.mjs scripts/test-accent-provider.mjs scripts/test-connection-diagnostics.mjs scripts/test-swipe-navigation.mjs
+        run: node --test scripts/test-local-core.mjs scripts/test-snapshots.mjs scripts/test-local-ai.mjs scripts/test-ai-providers.mjs scripts/test-daily-core.mjs scripts/test-daily-review.mjs scripts/test-native-export.mjs scripts/test-pwa.mjs scripts/test-startup-handoff.mjs scripts/test-day-agenda.mjs scripts/test-device-session.mjs scripts/test-timetable-layout.mjs scripts/test-chat-import.mjs scripts/test-chat-drafts.mjs scripts/test-image-schedule.mjs scripts/test-import-materials.mjs scripts/test-pdf-import.mjs scripts/test-task-filters.mjs scripts/test-accent.mjs scripts/test-app-mode.mjs scripts/test-api-errors.mjs scripts/test-accent-provider.mjs scripts/test-connection-diagnostics.mjs scripts/test-swipe-navigation.mjs
       - name: Build
         working-directory: src/frontend
         run: npm run build
@@ -55,6 +55,86 @@ jobs:
       - name: Build bundled native-shell application
         working-directory: src/frontend
         run: npm run build:shell
+      - name: Share bundled native assets with shell verification jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-web-assets
+          path: src/frontend/dist-shell/
+          if-no-files-found: error
+          retention-days: 7
+
+  android-shell:
+    name: Verify Android local shell
+    needs: frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-web-assets
+          path: src/android-shell/app/src/main/assets/www
+      - name: Index bundled Android assets
+        working-directory: src/android-shell/app/src/main/assets/www
+        run: find . -type f -printf '%P\n' | LC_ALL=C sort > ../shell-assets.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+          accept-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Test and compile the Android debug shell
+        working-directory: src/android-shell
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+      - name: Verify debug APK contents
+        working-directory: src/android-shell/app/build/outputs/apk/debug
+        run: |
+          unzip -tq app-debug.apk
+          unzip -p app-debug.apk assets/shell-assets.txt | grep -Fx 'index.html'
+          test "$(unzip -p app-debug.apk assets/www/index.html | wc -c)" -gt 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-local-shell-debug
+          path: src/android-shell/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-shell:
+    name: Verify Windows local shell
+    needs: frontend
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-web-assets
+          path: src/frontend/dist-shell
+      - name: Compile and validate the portable Windows shell
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path work -Force | Out-Null
+          $sdk = (Get-Content src/windows-shell/toolchain.json -Raw | ConvertFrom-Json).webView2Sdk
+          Invoke-WebRequest -Uri $sdk.url -OutFile work/webview2.nupkg
+          ./scripts/windows-shell/Build-WindowsShell.ps1 -OutputDir work/windows-shell-ci -SdkPackage work/webview2.nupkg
+          if ((Get-Item -LiteralPath work/windows-shell-ci/Kexu-Windows-x64/Kexu.exe).Length -le 0) {
+            throw 'Windows shell EXE is empty.'
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-local-shell-verification
+          path: |
+            work/windows-shell-ci/Kexu-Windows-x64.zip
+            work/windows-shell-ci/SHA256SUMS-windows.txt
+          if-no-files-found: error
+          retention-days: 7
 
   snapshots:
     runs-on: ubuntu-latest

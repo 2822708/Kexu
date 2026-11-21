@@ -53,8 +53,8 @@
     gap: 6px;
   }
   .app-brand-mark {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     font-size: 20px;
     border-radius: 9px;
   }
@@ -211,20 +211,6 @@
     gap: 0 !important;
     overflow: hidden;
   }
-  .ai-chat-main .ant-card-head {
-    min-height: 52px;
-    padding: 0 12px;
-    flex-shrink: 0;
-  }
-  .ai-chat-main .ant-card-body {
-    padding: 10px !important;
-    overflow: hidden;
-  }
-  .ai-chat-main .ant-card-head-title > .ant-space {
-    flex-wrap: wrap;
-    gap: 4px !important;
-    padding: 6px 0;
-  }
   .ai-chat-main .ant-alert {
     max-height: 120px;
     overflow-y: auto;
@@ -276,9 +262,6 @@
   }
   .exam-time-fields > .ant-space-item {
     width: 100%;
-  }
-  .ant-switch {
-    min-height: 28px;
   }
   .login-wrapper {
     min-height: 100dvh;

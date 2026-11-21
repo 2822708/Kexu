@@ -368,6 +368,113 @@ test('persisted retry jobs retain exact ciphertext/id/hash after IndexedDB re-re
   assert.ok(restored.nextAttemptAt > Date.now())
 })
 
+async function prepareQueuedBackup(x) {
+  const snapshot = x.createLogicalSnapshot(await populated(x))
+  const key = x.generateBackupKey()
+  await x.importRecoveryCredential({
+    format: 'kexu-cloud-recovery', version: 1, serverUrl: 'http://127.0.0.1:9001',
+    vaultId: webcrypto.randomUUID(), token: 'a'.repeat(43), key,
+  })
+  const body = JSON.stringify(await x.encryptSnapshot(snapshot, key))
+  const hash = await x.sha256(new TextEncoder().encode(body))
+  await x.storage.changeBackupState((state) => {
+    Object.assign(state.config, { enabled: true, credentialSaved: true })
+    state.job = {
+      scopeId: state.config.scopeId, datasetId: snapshot.source.datasetId,
+      revision: snapshot.source.revision, snapshotId: snapshot.snapshotId, body, sha256: hash,
+    }
+  })
+  return (await x.storage.readBackupState()).job
+}
+
+test('another tab can pause or disconnect a claimed retry before it sends', async (t) => {
+  for (const action of ['pause', 'disconnect']) {
+    await t.test(action, async () => {
+      let sends = 0, beginRead, resumeRead
+      const reading = new Promise((resolve) => { beginRead = resolve })
+      const resume = new Promise((resolve) => { resumeRead = resolve })
+      const x = setup({ fetch: async () => { sends++; throw new Error('unexpected request') } })
+      const other = setup({ indexedDB: x.indexedDB })
+      const job = await prepareQueuedBackup(x)
+      const db = x.load('local/db')
+      const originalRead = db.readLocalState
+      db.readLocalState = async () => {
+        beginRead()
+        await resume
+        return originalRead()
+      }
+      const backingUp = x.runBackup(true)
+      try {
+        await reading
+        if (action === 'pause') await other.setAutoBackup(false)
+        else await other.disconnectBackup()
+      } finally {
+        resumeRead()
+        await backingUp
+        await x.closeLocalStore()
+      }
+      const current = await x.storage.readBackupState()
+      assert.equal(sends, 0)
+      assert.equal(current.lease, null)
+      assert.equal(current.error, null)
+      assert.deepEqual(normal(current.job), action === 'pause' ? normal(job) : null)
+    })
+  }
+})
+
+test('an expired upload lease never sends and the still-enabled space is scheduled again', async () => {
+  let elapsed = 0, sends = 0
+  class Clock extends Date {
+    static now() { return Date.now() + elapsed }
+  }
+  const delays = []
+  const x = setup({
+    Date: Clock,
+    setTimeout: (_task, delay) => { delays.push(delay); return null },
+    fetch: async () => { sends++; throw new Error('unexpected request') },
+  })
+  const job = await prepareQueuedBackup(x)
+  delays.length = 0
+  const db = x.load('local/db')
+  const originalRead = db.readLocalState
+  db.readLocalState = () => {
+    elapsed += 61_000
+    return originalRead()
+  }
+  await x.runBackup(true)
+  const state = await x.storage.readBackupState()
+  assert.equal(sends, 0)
+  assert.equal(state.lease, null)
+  assert.deepEqual(normal(state.job), normal(job))
+  assert.deepEqual(delays, [1000])
+  await x.closeLocalStore()
+})
+
+test('pausing cancels a running request and ignores its late successful response', async () => {
+  let onFetch, respond
+  const started = new Promise((resolve) => { onFetch = resolve })
+  const response = new Promise((resolve) => { respond = resolve })
+  const x = setup({ fetch: async (_url, init) => { onFetch(init.signal); return response } })
+  const job = await prepareQueuedBackup(x)
+  const backingUp = x.runBackup(true)
+  try {
+    const signal = await started
+    await x.setAutoBackup(false)
+    assert.equal(signal.aborted, true)
+  } finally {
+    respond(Response.json({
+      snapshotId: job.snapshotId, sha256: job.sha256, size: Buffer.byteLength(job.body),
+      datasetId: job.datasetId, revision: job.revision,
+    }))
+    await backingUp
+    await x.closeLocalStore()
+  }
+  const current = await x.storage.readBackupState()
+  assert.equal(current.lastBackedUpRevision, -1)
+  assert.equal(current.failures, 0)
+  assert.deepEqual(normal(current.job), normal(job))
+})
+
 test('real HTTP automatic backup retries identical ciphertext, preserves new writes, and restores into a second device', async () => {
   const parent = path.resolve('work', 'snapshot-client-http-tests')
   await mkdir(parent, { recursive: true })

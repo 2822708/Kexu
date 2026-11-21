@@ -223,6 +223,32 @@ test('offline navigation opens only the precached shell, not a cached business r
   )
 })
 
+test('offline task deep links and assistant history fall back to the shell at root and subpath', async () => {
+  for (const base of ['/', '/Kexu/']) {
+    const f = fixture({ base, offline: true })
+    await f.lifetime('install')
+    for (const path of [
+      '', 'timetable', 'tasks?view=all&taskFilter=completed', 'tasks?view=recurring',
+      'tasks?date=2026-11-19', 'focus?date=2026-11-19', 'todos?taskFilter=active', 'ai',
+    ]) {
+      const result = await f.request(base + path, { mode: 'navigate' })
+      assert.equal(await result.response?.text(), 'cached shell', base + path)
+    }
+    for (const path of [
+      'ai', 'tasks?view=today', 'tasks?date=2026-02-30', 'tasks?view=other',
+      'tasks?view=all&view=today', 'tasks?taskFilter=token', 'tasks?date=2026-11-19&key=private',
+      'timetable?view=all', 'ai?token=private', 'ai/status', 'api/todos', 'snapshots/latest',
+      'downloads/backup.json', 'widget?key=private',
+    ]) {
+      const mode = path === 'ai' || path === 'tasks?view=today' ? 'cors' : 'navigate'
+      assert.equal((await f.request(base + path, { mode })).intercepted, false, base + path)
+    }
+    assert.equal((await f.request(base + 'ai', {
+      mode: 'navigate', headers: { Authorization: 'Bearer private' },
+    })).intercepted, false)
+  }
+})
+
 test('first offline visit to an unvisited lazy dependency succeeds after full installation', async () => {
   const f = fixture({ offline: true })
   await f.lifetime('install')
@@ -314,7 +340,7 @@ test('mobile build plugin precaches lazy routes, transitive parser workers, publ
     'assets/TodosPage-AbCd1234.js',
     'assets/parser-AbCd1234.js',
     'assets/pdf-worker-AbCd1234.mjs',
-    'pwa/icon.svg',
+    'pwa/icon.png',
     'manifest.webmanifest',
   ])
     assert.ok(paths.includes(`/timetable/${file}`), file)
@@ -331,8 +357,10 @@ test('mobile build plugin precaches lazy routes, transitive parser workers, publ
 
 test('online navigation responses are never put into cache', async () => {
   const f = fixture()
-  const result = await f.request('/todos', { mode: 'navigate' })
-  assert.equal(await result.response.text(), 'network response')
+  for (const path of ['/todos', '/tasks?view=all', '/ai']) {
+    const result = await f.request(path, { mode: 'navigate' })
+    assert.equal(await result.response.text(), 'network response', path)
+  }
   assert.equal(f.storage.size, 0)
 })
 

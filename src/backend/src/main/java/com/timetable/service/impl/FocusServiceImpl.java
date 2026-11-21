@@ -56,21 +56,19 @@ public class FocusServiceImpl implements FocusService {
         }
         validateOccurrence(schedule, course, date);
 
-        LambdaQueryWrapper<FocusCourseCompletion> query = new LambdaQueryWrapper<>();
-        query.eq(FocusCourseCompletion::getApiKey, apiKey)
-                .eq(FocusCourseCompletion::getScheduleId, scheduleId)
-                .eq(FocusCourseCompletion::getCourseId, courseId)
-                .eq(FocusCourseCompletion::getOccurrenceDate, date);
-        FocusCourseCompletion existing = completionMapper.selectOne(query);
-        if (completed && existing == null) {
+        if (completed) {
             FocusCourseCompletion record = new FocusCourseCompletion();
             record.setApiKey(apiKey);
             record.setScheduleId(scheduleId);
             record.setCourseId(courseId);
             record.setOccurrenceDate(date);
-            completionMapper.insert(record);
-        } else if (!completed && existing != null) {
-            completionMapper.deleteById(existing.getId());
+            completionMapper.ensureCompleted(record);
+        } else {
+            completionMapper.delete(new LambdaQueryWrapper<FocusCourseCompletion>()
+                    .eq(FocusCourseCompletion::getApiKey, apiKey)
+                    .eq(FocusCourseCompletion::getScheduleId, scheduleId)
+                    .eq(FocusCourseCompletion::getCourseId, courseId)
+                    .eq(FocusCourseCompletion::getOccurrenceDate, date));
         }
     }
 

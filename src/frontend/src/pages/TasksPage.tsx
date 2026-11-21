@@ -12,6 +12,9 @@ export default function TasksPage() {
 
   return (
     <div className="tasks-page">
+      <header className="tasks-page-heading">
+        <h1 className="tasks-title">任务</h1>
+      </header>
       <Tabs
         className="tasks-views"
         activeKey={active}
@@ -20,7 +23,6 @@ export default function TasksPage() {
           next.set('view', key)
           return next
         })}
-        tabBarExtraContent={{ left: <h1 className="tasks-title">任务</h1> }}
         items={[
           {
             key: 'today',

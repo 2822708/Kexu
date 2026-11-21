@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Alert,
   Button,
-  Card,
   Checkbox,
   Input,
   List,
@@ -14,6 +13,7 @@ import {
   message,
 } from 'antd'
 import {
+  CloseOutlined,
   DeleteOutlined,
   EditOutlined,
   HistoryOutlined,
@@ -21,14 +21,16 @@ import {
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AiActionCard from '../components/AiActionCard'
-import AiChatComposer from '../components/AiChatComposer'
+import AiChatComposer, { type AiChatImage } from '../components/AiChatComposer'
+import ScheduleCreateModal from '../components/ScheduleCreateModal'
 import { aiApi } from '../api'
 import { useApp } from '../store/AppContext'
-import type { AiConversation, AiMessage } from '../types'
+import type { AiConversation, AiMessage, Schedule } from '../types'
 import { formatWeekInfo } from '../utils/schedule'
-import { isImageDataUrl, MAX_CHAT_IMAGES } from '../utils/chatImport'
+import { hasTimetableFileMaterial, isImageDataUrl, MAX_CHAT_IMAGES } from '../utils/chatImport'
 import { subscribeAiSettings } from '../local/ai/settings'
 import { localAiApi, localAiStream } from '../local/ai'
+import { createImageSchedule, type ImageScheduleScope } from '../local/ai/imageSchedule'
 import { readLocalState, subscribeLocalChanges } from '../local/db'
 import { currentImportConversation, localChatView } from '../local/ai/uiState'
 import '../settings-ai.css'
@@ -45,6 +47,16 @@ interface StreamState {
   phase: 'thinking' | 'text' | 'planning'
   text: string
   userText: string
+}
+
+interface ImageDraft {
+  scope: ImageScheduleScope
+  text: string
+  images: AiChatImage[]
+}
+
+interface ImageSetup extends ImageDraft {
+  resolve: (sendWithoutSchedule: boolean) => void
 }
 
 function conversationIdentity(conversation: AiConversation | undefined): string | null {
@@ -82,7 +94,10 @@ export default function AiChatPage() {
   const [convPanelOpen, setConvPanelOpen] = useState(false)
   const [messages, setMessages] = useState<AiMessage[]>([])
   const [input, setInput] = useState('')
-  const [pendingImages, setPendingImages] = useState<Array<{ dataUrl: string; name: string }>>([])
+  const [pendingImages, setPendingImages] = useState<AiChatImage[]>([])
+  const [imageSetup, setImageSetup] = useState<ImageSetup | null>(null)
+  const [imageHandoff, setImageHandoff] = useState<(ImageDraft & { scheduleId: number }) | null>(null)
+  const imageSetupRef = useRef<ImageSetup | null>(null)
   const [composerEpoch, setComposerEpoch] = useState(0)
   const clearPendingImages = useCallback(() => setPendingImages([]), [])
   const [loadingMessages, setLoadingMessages] = useState(false)
@@ -110,11 +125,20 @@ export default function AiChatPage() {
   const stream = currentId !== null ? streams[currentId] : undefined
   const sending = stream !== undefined || creatingConversation
 
+  const finishImageSetup = useCallback((setup: ImageSetup | null, sendWithoutSchedule = false) => {
+    if (!setup || imageSetupRef.current !== setup) return
+    imageSetupRef.current = null
+    setImageSetup(null)
+    setup.resolve(sendWithoutSchedule)
+  }, [])
+
   const changeConversation = useCallback(
     (id: number | null, abort = true, publicId: string | null = null) => {
       const identityChanged = id !== null && publicId !== null &&
         selectedPublicIdRef.current !== null && publicId !== selectedPublicIdRef.current
       if (id !== currentIdRef.current || identityChanged) {
+        finishImageSetup(imageSetupRef.current)
+        setImageHandoff(null)
         if (abort) {
           setInput('')
           setComposerEpoch((value) => value + 1)
@@ -133,12 +157,14 @@ export default function AiChatPage() {
         setCurrentId(id)
       }
     },
-    [],
+    [finishImageSetup],
   )
 
   useEffect(() => {
     return () => {
       activeAbortRef.current?.abort()
+      imageSetupRef.current?.resolve(false)
+      imageSetupRef.current = null
       messageRequestRef.current++
       conversationRequestRef.current++
       currentIdRef.current = null
@@ -172,6 +198,28 @@ export default function AiChatPage() {
   const convScheduleMissing =
     currentConv?.scheduleId != null && !schedules.some((s) => s.id === currentConv?.scheduleId)
 
+  // The first schedule changes the composer's scope. Restore the draft only after
+  // both the app selection and the original conversation's binding have arrived.
+  useEffect(() => {
+    if (!imageHandoff || imageSetup) return
+    const { scope, scheduleId, text, images } = imageHandoff
+    if (
+      localDatasetRef.current !== scope.dataset ||
+      currentIdRef.current !== scope.conversationId ||
+      selectedPublicIdRef.current !== scope.conversationPublicId ||
+      (activeScheduleId !== null && activeScheduleId !== scheduleId)
+    ) {
+      setImageHandoff(null)
+      return
+    }
+    if (activeScheduleId !== scheduleId || (currentId !== null && currentConv?.scheduleId !== scheduleId))
+      return
+    setInput(text)
+    setPendingImages(images)
+    setImageHandoff(null)
+    message.success(images.length ? '课表已创建，图片已保留' : '课表已创建，导入资料已保留')
+  }, [activeScheduleId, currentConv?.scheduleId, currentId, imageHandoff, imageSetup])
+
   const patchStream = useCallback((convId: number, patch: Partial<StreamState>) => {
     setStreams((prev) => {
       const cur = prev[convId]
@@ -204,6 +252,7 @@ export default function AiChatPage() {
     }
     const changed = () => {
       activeAbortRef.current?.abort()
+      finishImageSetup(imageSetupRef.current)
       setEnabled(null)
       refresh()
     }
@@ -222,7 +271,7 @@ export default function AiChatPage() {
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', visible)
     }
-  }, [])
+  }, [finishImageSetup])
 
   const loadConversations = useCallback(async () => {
     const version = ++conversationRequestRef.current
@@ -288,6 +337,8 @@ export default function AiChatPage() {
         const replaced = localDatasetRef.current !== null && localDatasetRef.current !== dataset
         localDatasetRef.current = dataset
         if (replaced) {
+          finishImageSetup(imageSetupRef.current)
+          setImageHandoff(null)
           activeAbortRef.current?.abort()
           setStreams({})
           setInput('')
@@ -345,7 +396,7 @@ export default function AiChatPage() {
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', visible)
     }
-  }, [changeConversation, refreshMessages])
+  }, [changeConversation, finishImageSetup, refreshMessages])
 
   const loadOlderMessages = async () => {
     if (currentId === null || !messageCursor || loadingOlder || sending) return
@@ -594,9 +645,33 @@ export default function AiChatPage() {
     }
   }
 
-  const send = async (draft: string = input, images: string[] = []): Promise<boolean> => {
+  const isImageScopeCurrent = (scope: ImageScheduleScope) =>
+    localDatasetRef.current === scope.dataset &&
+    currentIdRef.current === scope.conversationId &&
+    selectedPublicIdRef.current === scope.conversationPublicId
+
+  const createScheduleForImage = async (
+    setup: ImageSetup,
+    payload: Omit<Schedule, 'id'>,
+  ) => {
+    if (imageSetupRef.current !== setup || !isImageScopeCurrent(setup.scope) || activeScheduleRef.current !== null)
+      throw new Error('当前课表或对话已变化，请重新发送资料')
+    const schedule = await createImageSchedule(payload, setup.scope)
+    if (imageSetupRef.current === setup && isImageScopeCurrent(setup.scope)) {
+      setImageHandoff({
+        scope: setup.scope,
+        text: setup.text,
+        images: setup.images,
+        scheduleId: schedule.id,
+      })
+      await Promise.allSettled([refreshSchedules(), loadConversations()])
+    }
+  }
+
+  const send = async (draft: string = input, attachments: AiChatImage[] = []): Promise<boolean> => {
     const content = draft.trim()
-    if ((!content && !images.length) || sending || activeAbortRef.current) return false
+    const images = attachments.map(({ dataUrl }) => dataUrl)
+    if ((!content && !images.length) || sending || activeAbortRef.current || imageSetupRef.current) return false
     if (workspaceMismatch) {
       message.warning(
         currentConv?.scheduleId == null
@@ -604,6 +679,29 @@ export default function AiChatPage() {
           : '该对话属于另一个课表，请切换到对应课表后再继续，或新建对话',
       )
       return false
+    }
+
+    let readImageOnly = false
+    if (LOCAL_MODE && activeScheduleId === null && !importIntentRef.current &&
+      (images.length > 0 || hasTimetableFileMaterial(content))) {
+      const dataset = localDatasetRef.current
+      if (!dataset) {
+        message.info('本机对话正在加载，草稿已保留')
+        return false
+      }
+      const scope = {
+        dataset,
+        conversationId: currentIdRef.current,
+        conversationPublicId: selectedPublicIdRef.current,
+      }
+      const sendWithoutSchedule = await new Promise<boolean>((resolve) => {
+        const setup = { scope, text: input, images: attachments, resolve }
+        imageSetupRef.current = setup
+        setImageSetup(setup)
+      })
+      if (!sendWithoutSchedule || !isImageScopeCurrent(scope) || activeScheduleRef.current !== null || activeAbortRef.current)
+        return false
+      readImageOnly = images.length > 0
     }
 
     let convId = currentId
@@ -666,8 +764,9 @@ export default function AiChatPage() {
           }),
         onPlanning: () => patchStream(cid, { phase: 'planning' }),
       }
-      const intent =
-        LOCAL_MODE && importIntentRef.current?.conversationId === cid
+      const intent = readImageOnly
+        ? 'READ_IMAGE'
+        : importIntentRef.current?.conversationId === cid
           ? importIntentRef.current.kind
           : undefined
       if (LOCAL_MODE)
@@ -781,25 +880,26 @@ export default function AiChatPage() {
   )
 
   return (
-    <div className="ai-chat-page" style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+    <div className="ai-chat-page">
       {convPanelOpen && <div className="conv-backdrop" onClick={() => setConvPanelOpen(false)} />}
-      <Card
+      <aside
         className={`conv-panel${convPanelOpen ? ' open' : ''}`}
-        size="small"
-        title="对话记录"
-        style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column' }}
-        styles={{
-          body: {
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            flex: 1,
-            minHeight: 0,
-            padding: '8px 12px',
-          },
-        }}
-        extra={
-          listMode === 'normal' ? (
-            <Space size={2}>
+        id="assistant-conversations"
+        aria-labelledby="assistant-history-title"
+      >
+        <header className="conversation-heading">
+          <h2 id="assistant-history-title">对话记录</h2>
+          <Button
+            className="conv-close-btn"
+            type="text"
+            icon={<CloseOutlined />}
+            aria-label="关闭对话记录"
+            onClick={() => setConvPanelOpen(false)}
+          />
+        </header>
+        <div className="conversation-tools">
+          {listMode === 'normal' ? (
+            <Space size={4}>
               <Button
                 size="small"
                 type="text"
@@ -816,14 +916,6 @@ export default function AiChatPage() {
                 title="批量删除"
                 aria-label="批量删除对话"
                 onClick={startBatchDelete}
-              />
-              <Button
-                size="small"
-                type="text"
-                icon={<PlusOutlined />}
-                title="新建对话"
-                aria-label="新建对话"
-                onClick={newConversation}
               />
             </Space>
           ) : listMode === 'edit' ? (
@@ -850,122 +942,89 @@ export default function AiChatPage() {
                 取消
               </Button>
             </Space>
-          )
-        }
-      >
-        <List
-          size="small"
-          dataSource={conversations}
-          locale={{ emptyText: '暂无对话' }}
-          renderItem={(conv) => {
-            const selected = deleteSelected.includes(conv.id)
-            const active = listMode === 'normal' && conv.id === currentId
-            return (
-              <List.Item
-                className={active ? 'conversation-item is-active' : 'conversation-item'}
-                role={listMode === 'edit' ? undefined : 'button'}
-                tabIndex={listMode === 'edit' ? undefined : 0}
-                aria-current={active ? 'true' : undefined}
-                aria-label={listMode === 'edit' ? undefined : `打开对话：${conv.title || '新对话'}`}
-                onKeyDown={(event) => {
-                  if (listMode === 'edit' || !['Enter', ' '].includes(event.key)) return
-                  event.preventDefault()
-                  if (listMode === 'normal') {
-                    changeConversation(conv.id, true, conversationIdentity(conv))
-                    setConvPanelOpen(false)
-                  } else toggleDeleteSelect(conv.id)
-                }}
-                style={{
-                  cursor: listMode === 'normal' ? 'pointer' : 'default',
-                  background: active || selected ? 'var(--assistant-selected-bg)' : undefined,
-                  borderRadius: 4,
-                  paddingInline: 8,
-                }}
-                onClick={() => {
-                  if (listMode === 'normal') {
-                    changeConversation(conv.id, true, conversationIdentity(conv))
-                    setConvPanelOpen(false)
-                  } else if (listMode === 'delete') toggleDeleteSelect(conv.id)
-                }}
-              >
-                <Space size={4} style={{ width: '100%' }}>
-                  {listMode === 'delete' && (
-                    <Checkbox
-                      checked={selected}
-                      onChange={() => toggleDeleteSelect(conv.id)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  )}
-                  {listMode === 'edit' ? (
-                    <Input
-                      size="small"
-                      value={edits[conv.id] ?? ''}
-                      onChange={(e) => setEdits((prev) => ({ ...prev, [conv.id]: e.target.value }))}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{ width: '100%' }}
-                    />
-                  ) : (
-                    <Typography.Text
-                      ellipsis
-                      style={
-                        listMode === 'delete'
-                          ? { maxWidth: 140, flex: 1 }
-                          : { maxWidth: 180, flex: 1 }
-                      }
-                    >
-                      {conv.title || '新对话'}
-                    </Typography.Text>
-                  )}
-                  {streams[conv.id] && <Spin size="small" />}
-                </Space>
-              </List.Item>
-            )
-          }}
-        />
-        {conversationCursor && (
-          <Button block type="text" loading={loadingConversations} onClick={loadMoreConversations}>
-            加载更多对话
-          </Button>
-        )}
-      </Card>
+          )}
+        </div>
+        <div className="conversation-scroll">
+          <List
+            size="small"
+            dataSource={conversations}
+            locale={{ emptyText: '暂无对话' }}
+            renderItem={(conv) => {
+              const selected = deleteSelected.includes(conv.id)
+              const active = listMode === 'normal' && conv.id === currentId
+              return (
+                <List.Item
+                  className={`conversation-item${active ? ' is-active' : ''}${selected ? ' is-selected' : ''}`}
+                  role={listMode === 'edit' ? undefined : 'button'}
+                  tabIndex={listMode === 'edit' ? undefined : 0}
+                  aria-current={active ? 'true' : undefined}
+                  aria-label={listMode === 'edit' ? undefined : `打开对话：${conv.title || '新对话'}`}
+                  onKeyDown={(event) => {
+                    if (listMode === 'edit' || !['Enter', ' '].includes(event.key)) return
+                    event.preventDefault()
+                    if (listMode === 'normal') {
+                      changeConversation(conv.id, true, conversationIdentity(conv))
+                      setConvPanelOpen(false)
+                    } else toggleDeleteSelect(conv.id)
+                  }}
+                  onClick={() => {
+                    if (listMode === 'normal') {
+                      changeConversation(conv.id, true, conversationIdentity(conv))
+                      setConvPanelOpen(false)
+                    } else if (listMode === 'delete') toggleDeleteSelect(conv.id)
+                  }}
+                >
+                  <div className="conversation-row-content">
+                    {listMode === 'delete' && (
+                      <Checkbox
+                        checked={selected}
+                        onChange={() => toggleDeleteSelect(conv.id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
+                    {listMode === 'edit' ? (
+                      <Input
+                        size="small"
+                        value={edits[conv.id] ?? ''}
+                        onChange={(e) => setEdits((prev) => ({ ...prev, [conv.id]: e.target.value }))}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ width: '100%' }}
+                      />
+                    ) : (
+                      <Typography.Text className="conversation-title" ellipsis>
+                        {conv.title || '新对话'}
+                      </Typography.Text>
+                    )}
+                    {streams[conv.id] && <Spin size="small" />}
+                  </div>
+                </List.Item>
+              )
+            }}
+          />
+          {conversationCursor && (
+            <Button block type="text" loading={loadingConversations} onClick={loadMoreConversations}>
+              加载更多对话
+            </Button>
+          )}
+        </div>
+      </aside>
 
-      <Card
-        className="ai-chat-main"
-        size="small"
-        style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}
-        styles={{
-          body: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: 16 },
-        }}
-        title={
-          <Space wrap className="assistant-header-title">
+      <section className="ai-chat-main" aria-labelledby="assistant-conversation-title">
+        <header className="assistant-header">
+          <div className="assistant-header-title">
             <Button
               className="conv-toggle-btn"
               size="small"
               icon={<HistoryOutlined />}
               aria-label="打开对话记录"
               aria-expanded={convPanelOpen}
+              aria-controls="assistant-conversations"
               onClick={() => setConvPanelOpen(true)}
             >
               对话
             </Button>
-            <span className="assistant-page-title">助手</span>
-            {convScheduleName ? (
-              <Tag className="assistant-schedule-tag" color={workspaceMismatch ? 'red' : 'blue'}>
-                {workspaceMismatch ? '课表不一致 · ' : ''}
-                {convScheduleName}
-              </Tag>
-            ) : activeSchedule ? (
-              <Tag className="assistant-schedule-tag" color="blue">
-                {activeSchedule.name}
-              </Tag>
-            ) : (
-              <Tag className="assistant-schedule-tag" color="orange">
-                未选择课表
-              </Tag>
-            )}
-          </Space>
-        }
-        extra={
+            <h1 id="assistant-conversation-title">{currentConv?.title || '助手'}</h1>
+          </div>
           <Button
             className="assistant-new-conversation"
             icon={<PlusOutlined />}
@@ -974,8 +1033,7 @@ export default function AiChatPage() {
           >
             新对话
           </Button>
-        }
-      >
+        </header>
         <div className="assistant-context" aria-label="当前助手上下文">
           <div>
             <Typography.Text strong>{activeSchedule?.name ?? '未选择课表'}</Typography.Text>
@@ -1010,6 +1068,7 @@ export default function AiChatPage() {
 
         {workspaceMismatch && (
           <Alert
+            className="assistant-workspace-alert"
             type="error"
             showIcon
             message="工作空间不一致"
@@ -1163,7 +1222,18 @@ export default function AiChatPage() {
             onInitialImagesApplied={clearPendingImages}
           />
         </div>
-      </Card>
+        {imageSetup && (
+          <ScheduleCreateModal
+            open
+            onCancel={() => finishImageSetup(imageSetup)}
+            onCreate={(payload) => createScheduleForImage(imageSetup, payload)}
+            imageImport={{
+              kind: imageSetup.images.length ? 'image' : 'document',
+              onSendWithoutSchedule: () => finishImageSetup(imageSetup, true),
+            }}
+          />
+        )}
+      </section>
     </div>
   )
 }

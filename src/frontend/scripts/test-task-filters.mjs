@@ -4,13 +4,23 @@ import { test } from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc.js'
+
+dayjs.extend(utc)
 
 const compiled = ts.transpileModule(
   readFileSync(new URL('../src/pages/TodosPage.tsx', import.meta.url), 'utf8'),
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } },
 ).outputText
 
-function harness({ url = '/tasks?view=all', entries = [] } = {}) {
+function harness({
+  url = '/tasks?view=all',
+  entries = [],
+  now = '2026-10-31T01:00:00Z',
+  shanghaiNow = '2026-10-31T09:00:00',
+  todos,
+  localMode = true,
+} = {}) {
   const history = [new URL(url, 'https://kexu.example.test')]
   let cursor = 0
   const marker = (name, extras = {}) => Object.assign(() => null, { stubName: name }, extras)
@@ -22,9 +32,9 @@ function harness({ url = '/tasks?view=all', entries = [] } = {}) {
   ant.Form = marker('Form', { useForm: () => [{}], Item: marker('Form.Item') })
   ant.List = marker('List', { Item: marker('List.Item', { Meta: marker('List.Item.Meta') }) })
   ant.message = { error() {}, success() {}, info() {} }
-  const workspace = { date: '2026-10-31', state: { dayEntries: entries, todos: [] } }
+  const workspace = { date: shanghaiNow.slice(0, 10), state: { dayEntries: entries, todos: [] } }
   const app = {
-    todos: [
+    todos: todos ?? [
       { id: 1, title: '普通待办', ddl: '2026-11-05T12:00:00', completed: false },
       { id: 2, title: '已完成待办', ddl: '2026-10-31T12:00:00', completed: true },
     ],
@@ -57,14 +67,14 @@ function harness({ url = '/tasks?view=all', entries = [] } = {}) {
     '../api': {},
     '../store/AppContext': { useApp: () => app },
     '../utils/schedule': { dayjs, formatCountdown: () => '稍后截止' },
-    '../local/mode': { LOCAL_MODE: true },
+    '../local/mode': { LOCAL_MODE: localMode },
     '../hooks/useDailyWorkspace': { useDailyWorkspace: () => ({ workspace, refresh: async () => workspace }) },
     '../local/daily/commands': { dailyApi: {} },
-    '../local/domain': { nowLocalDateTime: () => '2026-10-31T09:00:00' },
+    '../local/domain': { nowLocalDateTime: () => shanghaiNow },
     '../daily-pages.css': {},
   }
   const exports = {}
-  class FixedDate extends Date { static now() { return new Date('2026-10-31T09:00:00').valueOf() } }
+  class FixedDate extends Date { static now() { return Date.parse(now) } }
   vm.runInNewContext(compiled, {
     exports, URLSearchParams, Date: FixedDate,
     require: (name) => {
@@ -97,6 +107,29 @@ function harness({ url = '/tasks?view=all', entries = [] } = {}) {
     navigate,
   }
 }
+
+test('local task grouping uses Shanghai dates across midnight independently of device time', (t) => {
+  const original = process.env.TZ
+  t.after(() => {
+    if (original === undefined) delete process.env.TZ
+    else process.env.TZ = original
+  })
+  const todos = [
+    { id: 1, title: '昨夜截止', ddl: '2026-03-08T23:30:00', completed: false },
+    { id: 2, title: '今日截止', ddl: '2026-03-09T02:30:00', completed: false },
+  ]
+  for (const timeZone of ['Asia/Shanghai', 'UTC', 'America/New_York']) {
+    process.env.TZ = timeZone
+    const h = harness({ now: '2026-03-08T16:15:00Z', shanghaiNow: '2026-03-09T00:15:00', todos })
+    const group = (name) => h.all(h.render()).find((node) => node.props['aria-label'] === name)
+    assert.match(h.text(group('已逾期')), /昨夜截止/)
+    assert.match(h.text(group('今天')), /今日截止/)
+  }
+  process.env.TZ = 'UTC'
+  const server = harness({ now: '2026-03-08T16:15:00Z', todos, localMode: false })
+  const serverToday = server.all(server.render()).find((node) => node.props['aria-label'] === '今天')
+  assert.match(server.text(serverToday), /昨夜截止/)
+})
 
 const task = (id, plannedDate) => ({
   id, publicId: `day-${id}`, kind: 'dayTask', title: `日任务${id}`, plannedDate, completed: false,

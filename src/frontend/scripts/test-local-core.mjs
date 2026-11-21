@@ -85,6 +85,85 @@ const recurringBody = {
 }
 const normal = (x) => JSON.parse(JSON.stringify(x))
 
+test('local course editor checks its original record in the write transaction', async () => {
+  const factory = new IDBFactory()
+  const first = setup(factory), second = setup(factory)
+  const schedule = await first.localScheduleApi.create(scheduleBody)
+  const course = await first.localCourseApi.create(schedule.id, { ...courseBody, location: '原教室' })
+  const other = await first.localCourseApi.create(schedule.id, { ...courseBody, name: '另一门课程' })
+  const scope = first.captureEditorScope(schedule)
+  const guard = (state) => first.assertCourseEditorCurrent(state, scope, schedule, course)
+  try {
+    await second.localCourseApi.update(other.id, { ...courseBody, name: '另一门已改课程' })
+    await first.localCourseApi.update(course.id, { ...courseBody, location: '原教室' }, guard)
+    const [opened] = await first.localCourseApi.listBySchedule(schedule.id)
+    const checkOpened = (state) => first.assertCourseEditorCurrent(state, scope, schedule, opened)
+    await second.localCourseApi.update(course.id, { ...courseBody, location: '新教室' })
+    await assert.rejects(
+      first.localCourseApi.update(course.id, { ...courseBody, location: '原教室', teacher: '新老师' }, checkOpened),
+      (error) => error instanceof first.LocalCourseEditConflict && error.latest.location === '新教室',
+    )
+    await assert.rejects(first.localCourseApi.remove(course.id, checkOpened), first.LocalCourseEditConflict)
+    const [current] = await first.localCourseApi.listBySchedule(schedule.id)
+    assert.equal(current.location, '新教室')
+    assert.equal(current.teacher, null)
+    await second.localCourseApi.remove(course.id)
+    await assert.rejects(
+      first.localCourseApi.update(course.id, courseBody, checkOpened),
+      first.LocalEditorScopeError,
+    )
+  } finally {
+    await first.closeLocalStore()
+    await second.closeLocalStore()
+  }
+})
+
+test('shortening a schedule never strands previously reachable course weeks or erases completions', async () => {
+  const x = setup()
+  const schedule = await x.localScheduleApi.create({
+    name: '秋季学期', periodStartDate: '2026-09-10', periodEndDate: '2027-01-10',
+  })
+  const late = await x.localCourseApi.create(schedule.id, { ...courseBody, name: '期末课程', weeks: [18] })
+  const early = await x.localCourseApi.create(schedule.id, { ...courseBody, weeks: [2], dayOfWeek: 4 })
+  await x.localFocusApi.setCourseCompleted(early.id, { scheduleId: schedule.id, date: '2026-09-17', completed: true })
+  const baseline = normal(await x.readLocalState())
+  await assert.rejects(x.localScheduleApi.update(schedule.id, { ...schedule, periodEndDate: '2026-12-27' }), /期末课程/)
+  await assert.rejects(x.localScheduleApi.update(schedule.id, { ...schedule, periodStartDate: '2026-08-27' }), /课程完成记录/)
+  assert.deepEqual(normal(await x.readLocalState()), baseline)
+  await x.localCourseApi.remove(late.id)
+  await x.localScheduleApi.update(schedule.id, { ...schedule, periodEndDate: '2026-12-27' })
+  assert.deepEqual(normal((await x.readLocalState()).focusCompletions), baseline.focusCompletions)
+  await x.closeLocalStore()
+})
+
+test('course writes use the latest term range while keeping old stranded weeks editable', async () => {
+  const factory = new IDBFactory()
+  const editor = setup(factory), manager = setup(factory)
+  const schedule = await editor.localScheduleApi.create(scheduleBody)
+  const course = await editor.localCourseApi.create(schedule.id, { ...courseBody, weeks: [1] })
+  try {
+    // A form still using the old term cannot save courses in weeks that just became unavailable.
+    await manager.localScheduleApi.update(schedule.id, { ...scheduleBody, periodEndDate: '2026-09-06' })
+    await assert.rejects(editor.localCourseApi.update(course.id, courseBody), /超出当前学期/)
+    await assert.rejects(editor.localCourseApi.create(schedule.id, courseBody), /超出当前学期/)
+    await assert.rejects(
+      editor.localCourseApi.batchCreate(schedule.id, [{ ...courseBody, name: '本批新课', weeks: [1] }, courseBody]),
+      /超出当前学期/,
+    )
+    assert.equal((await editor.localCourseApi.listBySchedule(schedule.id)).length, 1)
+
+    // Imported or older stored courses may already include an out-of-range week.
+    await editor.mutateLocalState((state) => { state.courses[0].weeks.push(3) })
+    await editor.localCourseApi.update(course.id, { ...courseBody, weeks: [1, 3], location: '新教室' })
+    await assert.rejects(editor.localCourseApi.update(course.id, { ...courseBody, weeks: [1, 3, 4] }), /超出当前学期/)
+    assert.deepEqual(normal((await editor.localCourseApi.listBySchedule(schedule.id))[0].weeks), [1, 3])
+    await editor.localCourseApi.update(course.id, { ...courseBody, weeks: [1] })
+  } finally {
+    await editor.closeLocalStore()
+    await manager.closeLocalStore()
+  }
+})
+
 test('concurrent first initialization shares one dataset and survives database reopen', async () => {
   const factory = new IDBFactory(),
     a = setup(factory),
@@ -234,6 +313,30 @@ test('course batch rejects atomically and normalizes distinct teaching weeks', a
   const row = await x.localCourseApi.create(s.id, { ...courseBody, weeks: [3, 1, 3] })
   assert.deepEqual(normal(row.weeks), [1, 3])
 })
+
+test('course batch rejects exact repeats atomically and accepts distinct overlapping periods', async () => {
+  const x = setup()
+  const schedule = await x.localScheduleApi.create(scheduleBody)
+  const course = { ...courseBody, teacher: '林老师', weeks: [1, 3] }
+  const overlap = { ...course, endPeriod: 3 }
+  await x.localCourseApi.batchCreate(schedule.id, [course])
+  await assert.rejects(
+    x.localCourseApi.batchCreate(schedule.id, [
+      overlap,
+      { ...course, name: ' 数学 ', teacher: ' 林老师 ', location: '', weeks: [3, 1, 3] },
+    ]),
+    /完全重复，本批未导入/,
+  )
+  assert.equal((await x.readLocalState()).courses.length, 1)
+  await assert.rejects(
+    x.localCourseApi.batchCreate(schedule.id, [overlap, { ...overlap, weeks: [3, 1] }]),
+    /完全重复，本批未导入/,
+  )
+  assert.equal((await x.readLocalState()).courses.length, 1)
+  await x.localCourseApi.batchCreate(schedule.id, [overlap])
+  assert.deepEqual(normal((await x.readLocalState()).courses.map((row) => row.endPeriod)), [2, 3])
+})
+
 test('exam CRUD creates, updates, completes and cascades its linked todo', async () => {
   const x = setup(),
     s = await x.localScheduleApi.create(scheduleBody),

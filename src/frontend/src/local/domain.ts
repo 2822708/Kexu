@@ -6,6 +6,7 @@ import type {
   RecurringTodoPayload,
   Schedule,
 } from '../types'
+import { courseImportIdentity } from '../utils/importDiagnostics'
 import { mutateLocalState, readLocalState } from './db'
 import type { DailyOrigin } from './daily/types'
 import {
@@ -30,7 +31,7 @@ import {
 } from './validation'
 
 /** Stored wall-clock business dates consistently use Asia/Shanghai, independent of device timezone. */
-export function nowLocalDateTime(): string {
+export function nowLocalDateTime(date = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai',
     year: 'numeric',
@@ -40,7 +41,7 @@ export function nowLocalDateTime(): string {
     minute: '2-digit',
     second: '2-digit',
     hourCycle: 'h23',
-  }).formatToParts(new Date())
+  }).formatToParts(date)
   const part = (name: string) => parts.find((p) => p.type === name)!.value
   return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}:${part('second')}`
 }
@@ -57,19 +58,43 @@ function metadata(state: LocalState) {
 }
 const scheduleOf = (s: LocalState, id: number) => find(s.schedules, id, '课表')
 
-function createSchedule(state: LocalState, body: Omit<Schedule, 'id'>) {
+function teachingWeek(startDate: string, date: Date): number {
+  const first = new Date(`${startDate}T00:00:00Z`)
+  first.setUTCDate(first.getUTCDate() - ((first.getUTCDay() + 6) % 7))
+  return Math.floor((date.getTime() - first.getTime()) / 604800000) + 1
+}
+
+export function createSchedule(state: LocalState, body: Omit<Schedule, 'id'>) {
   const row = { ...metadata(state), ...validateSchedule(body) }
   state.schedules.push(row)
   return row
 }
 function updateSchedule(state: LocalState, id: number, body: Omit<Schedule, 'id'>) {
   const row = scheduleOf(state, id)
-  Object.assign(row, validateSchedule(body), { updatedAt: stamp() })
-  state.focusCompletions = state.focusCompletions.filter(
-    (f) =>
-      f.scheduleId !== id ||
-      isCourseOccurrence(row, find(state.courses, f.courseId, '课程'), f.date),
-  )
+  const next = { ...validateSchedule(body), id }
+  if (row.periodStartDate !== next.periodStartDate || row.periodEndDate !== next.periodEndDate) {
+    const previousWeeks = teachingWeek(row.periodStartDate, new Date(`${row.periodEndDate}T00:00:00Z`))
+    const nextWeeks = teachingWeek(next.periodStartDate, new Date(`${next.periodEndDate}T00:00:00Z`))
+    const courses = state.courses.filter((course) => course.scheduleId === id)
+    const affected = courses.filter((course) =>
+      course.weeks.some((week) => week > nextWeeks && week <= previousWeeks),
+    )
+    if (affected.length) {
+      const names = affected.slice(0, 3).map((course) => course.name).join('、')
+      const label = affected.length > 3 ? `${names}等 ${affected.length} 门课程` : names
+      throw new Error(`调整后以下课程的周次会超出学期范围，请先调整课程或延长学期：${label}`)
+    }
+
+    const byId = new Map(courses.map((course) => [course.id, course]))
+    const movesCompletedCourse = state.focusCompletions.some((completion) => {
+      const course = byId.get(completion.courseId)
+      return completion.scheduleId === id && course
+        && isCourseOccurrence(row, course, completion.date)
+        && !isCourseOccurrence(next, course, completion.date)
+    })
+    assertLocal(!movesCompletedCourse, '调整后已有课程完成记录将失去对应的上课日期，请保留这些日期')
+  }
+  Object.assign(row, next, { updatedAt: stamp() })
   return row
 }
 function removeSchedule(state: LocalState, id: number) {
@@ -90,18 +115,31 @@ function removeSchedule(state: LocalState, id: number) {
   return null
 }
 function createCourse(state: LocalState, scheduleId: number, body: CoursePayload): LocalCourse {
-  scheduleOf(state, scheduleId)
-  const row = { ...metadata(state), ...validateCourse(body), scheduleId }
+  const schedule = scheduleOf(state, scheduleId)
+  const validated = validateCourse(body)
+  assertCourseWeeks(schedule, validated.weeks)
+  const row = { ...metadata(state), ...validated, scheduleId }
   state.courses.push(row)
   return row
 }
 function updateCourse(state: LocalState, id: number, body: CoursePayload) {
   const row = find(state.courses, id, '课程')
-  Object.assign(row, validateCourse(body), { updatedAt: stamp() })
+  const schedule = scheduleOf(state, row.scheduleId)
+  const validated = validateCourse(body)
+  assertCourseWeeks(schedule, validated.weeks, row.weeks)
+  Object.assign(row, validated, { updatedAt: stamp() })
   state.focusCompletions = state.focusCompletions.filter(
-    (f) => f.courseId !== id || isCourseOccurrence(scheduleOf(state, row.scheduleId), row, f.date),
+    (f) => f.courseId !== id || isCourseOccurrence(schedule, row, f.date),
   )
   return row
+}
+function assertCourseWeeks(schedule: Schedule, weeks: number[], existing: number[] = []) {
+  const maximum = teachingWeek(schedule.periodStartDate, new Date(`${schedule.periodEndDate}T00:00:00Z`))
+  // Existing out-of-range weeks remain editable so old courses can be corrected without data loss.
+  assertLocal(
+    weeks.every((week) => week <= maximum || existing.includes(week)),
+    `课程周次超出当前学期的 ${maximum} 周，请调整上课周次后保存`,
+  )
 }
 function removeCourse(state: LocalState, id: number) {
   find(state.courses, id, '课程')
@@ -248,11 +286,9 @@ function removeExam(state: LocalState, id: number) {
 export function isCourseOccurrence(schedule: Schedule, course: LocalCourse, date: string): boolean {
   if (!validDate(date) || date < schedule.periodStartDate || date > schedule.periodEndDate)
     return false
-  const selected = new Date(`${date}T00:00:00Z`),
-    first = new Date(`${schedule.periodStartDate}T00:00:00Z`)
+  const selected = new Date(`${date}T00:00:00Z`)
   const weekday = selected.getUTCDay() || 7
-  first.setUTCDate(first.getUTCDate() - ((first.getUTCDay() || 7) - 1))
-  const week = Math.floor((selected.getTime() - first.getTime()) / 604800000) + 1
+  const week = teachingWeek(schedule.periodStartDate, selected)
   return weekday === course.dayOfWeek && course.weeks.includes(week)
 }
 export function setFocusCompletion(
@@ -452,10 +488,27 @@ export const localCourseApi = {
   batchCreate: (scheduleId: number, courses: CoursePayload[]) =>
     mutateLocalState((s) => {
       assertLocal(Array.isArray(courses) && courses.length <= 500, '批量课程不能超过 500 条')
-      return courses.map((c) => createCourse(s, scheduleId, c))
+      const identities = new Set(
+        s.courses.filter((course) => course.scheduleId === scheduleId).map(courseImportIdentity),
+      )
+      return courses.map((course) => {
+        const created = createCourse(s, scheduleId, course)
+        const identity = courseImportIdentity(created)
+        assertLocal(!identities.has(identity), `课程「${created.name}」完全重复，本批未导入`)
+        identities.add(identity)
+        return created
+      })
     }),
-  update: (id: number, body: CoursePayload) => mutateLocalState((s) => updateCourse(s, id, body)),
-  remove: (id: number) => mutateLocalState((s) => removeCourse(s, id)),
+  update: (id: number, body: CoursePayload, guard?: (state: LocalState) => void) =>
+    mutateLocalState((state) => {
+      guard?.(state)
+      return updateCourse(state, id, body)
+    }),
+  remove: (id: number, guard?: (state: LocalState) => void) =>
+    mutateLocalState((state) => {
+      guard?.(state)
+      return removeCourse(state, id)
+    }),
 }
 export const localTodoApi = {
   list: async () => {

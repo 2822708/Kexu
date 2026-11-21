@@ -124,7 +124,7 @@ namespace Kexu.Windows
                 // Virtual-host mapping resolves physical files without an SPA fallback.
                 // Always load the physical index, then restore only an allowed logical
                 // route before React starts. The same bridge handles F5/deep links.
-                await core.AddScriptToExecuteOnDocumentCreatedAsync("if(location.origin==='" + ShellPolicy.Origin + "'&&location.pathname==='/index.html'){var t=new URLSearchParams(location.search).get('__kexu_route')||'/tasks';var u=new URL(t,location.origin);if(u.origin===location.origin&&['/','/tasks','/timetable','/todos','/ai','/settings','/manual','/import'].indexOf(u.pathname)>=0)history.replaceState(null,'',u.pathname+u.search+u.hash);else history.replaceState(null,'','/tasks');}");
+                await core.AddScriptToExecuteOnDocumentCreatedAsync(ShellPolicy.RestoreRouteScript());
                 NavigateDocument("/tasks");
             } catch (Exception error) { Fail(error); }
         }
@@ -245,16 +245,34 @@ namespace Kexu.Windows
                     await Task.Delay(100);
                     if (completedNavigations > previousNavigations && await browser.ExecuteScriptAsync("location.pathname==='/tasks'&&document.body.innerText.indexOf('" + taskTitle + "')>=0") == "true") { reloaded = true; break; }
                 }
-                if (!reloaded) throw new InvalidOperationException("Logical /focus reload or real daily task persistence failed.");
+                if (!reloaded) throw new InvalidOperationException("Logical /tasks reload or real daily task persistence failed.");
+                smokeStage = "opening-legacy-task-link";
+                await VerifyLegacyTaskLink(false);
+                smokeStage = "reloading-legacy-task-link";
+                await VerifyLegacyTaskLink(true);
                 smokeStage = "writing-smoke-result";
                 File.WriteAllText(Path.Combine(data, "shell-smoke-result.json"), ShellPolicy.Json().Serialize(new {
                     ok = true, origin = ShellPolicy.Origin, route = "/tasks", runtime = runtimeVersion,
                     rendered = true, secureContext = true, indexedDb = true, persistedAcrossLaunch = persisted,
-                    realDailyTaskSaved = true, realDailyTaskPersistedAcrossLaunch = taskPersisted, logicalRouteReload = reloaded,
+                    realDailyTaskSaved = true, realDailyTaskPersistedAcrossLaunch = taskPersisted, logicalRouteReload = reloaded, legacyTaskLink = true,
                     dataDirectory = data, requiresBackend = false, requiresNode = false
                 }), new UTF8Encoding(false));
                 Close();
             } catch (Exception error) { Fail(error); }
+        }
+
+        private async Task VerifyLegacyTaskLink(bool reload)
+        {
+            int previousNavigations = completedNavigations;
+            if (reload) browser.Reload();
+            else browser.Navigate(ShellPolicy.Origin + "/focus?date=2026-11-01#review");
+
+            const string check = "location.pathname === '/tasks' && new URLSearchParams(location.search).get('date') === '2026-11-01' && new URLSearchParams(location.search).get('view') === 'today' && location.hash === '#review' && Boolean(document.querySelector('.daily-workspace'))";
+            for (int i = 0; i < 100; i++) {
+                await Task.Delay(100);
+                if (completedNavigations > previousNavigations && await browser.ExecuteScriptAsync(check) == "true") return;
+            }
+            throw new InvalidOperationException("Legacy task link did not retain its date and fragment.");
         }
 
         private void Fail(Exception error)

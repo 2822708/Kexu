@@ -110,12 +110,14 @@ const conversation = (id, scheduleId = 1, publicId = `conversation-${id}`) => ({
 })
 
 async function mountChat({ local = true, conversations = [], create, recognize, honorAbort = true,
-  quickImport } = {}) {
+  quickImport, withoutSchedule = false, prepareFile = async (file) => ({ text: null, images: [file] }) } = {}) {
   const page = hookHost()
   const composer = hookHost()
+  const schedules = withoutSchedule ? [] : [{ id: 1, name: '测试课表' }, { id: 2, name: '另一课表' }]
   const state = { datasetId: 'synthetic-dataset', dataGeneration: 1,
-    conversations: [...conversations], messages: [] }
+    schedules, conversations: [...conversations], messages: [] }
   const requests = []
+  const scheduleCreations = []
   const notices = []
   const draftChanges = []
   const listeners = new Set()
@@ -125,10 +127,16 @@ async function mountChat({ local = true, conversations = [], create, recognize, 
   let failRefresh = false
   let disposed = false
   let ocrCount = 0
-  const app = { activeScheduleId: 1, activeSchedule: { id: 1, name: '测试课表' },
-    schedules: [{ id: 1, name: '测试课表' }, { id: 2, name: '另一课表' }],
+  const app = { activeScheduleId: schedules[0]?.id ?? null, activeSchedule: schedules[0] ?? null,
+    schedules,
     courses: [], exams: [], todos: [], recurringTodos: [],
-    refreshSchedules: async () => {}, refreshCourses: async () => {}, refreshExams: async () => {},
+    refreshSchedules: async () => {
+      app.activeSchedule = schedules.find(({ id }) => id === app.activeScheduleId) ?? schedules[0] ?? null
+      app.activeScheduleId = app.activeSchedule?.id ?? null
+      page.invalidate()
+      return schedules
+    },
+    refreshCourses: async () => {}, refreshExams: async () => {},
     refreshTodos: async () => {}, refreshRecurring: async () => {} }
   const emit = () => { for (const listener of listeners) listener() }
   const ant = Object.fromEntries(['Alert', 'Button', 'Card', 'Checkbox', 'Input', 'List',
@@ -180,7 +188,7 @@ async function mountChat({ local = true, conversations = [], create, recognize, 
   }
   composer.init(load(code.composer, { ...shared, react: composer.hooks,
     '../utils/importFiles': { MAX_IMAGE_BYTES: 4 * 1024 * 1024,
-      prepareImportFile: async (file) => ({ text: null, images: [file] }) },
+      prepareImportFile: prepareFile },
   }).default)
   const eventTarget = { addEventListener() {}, removeEventListener() {} }
   page.init(load(code.page, { ...shared, react: page.hooks,
@@ -194,9 +202,22 @@ async function mountChat({ local = true, conversations = [], create, recognize, 
     },
     '../components/AiChatComposer': { __esModule: true, default: marker('AiChatComposer') },
     '../components/AiActionCard': { __esModule: true, default: marker('AiActionCard') },
+    '../components/ScheduleCreateModal': { __esModule: true, default: marker('ScheduleCreateModal') },
     '../store/AppContext': { useApp: () => app },
     '../utils/schedule': { formatWeekInfo: () => '第1周' },
     '../local/ai': { localAiStream: stream },
+    '../local/ai/imageSchedule': {
+      createImageSchedule: async (payload, scope) => {
+        scheduleCreations.push({ payload, scope: { ...scope } })
+        const schedule = { id: ++nextId, ...payload }
+        schedules.push(schedule)
+        state.conversations = state.conversations.map((row) =>
+          row.id === scope.conversationId ? { ...row, scheduleId: schedule.id } : row,
+        )
+        emit()
+        return schedule
+      },
+    },
     '../local/db': { readLocalState: async () => state,
       subscribeLocalChanges: (listener) => { listeners.add(listener); return () => listeners.delete(listener) } },
     '../local/ai/uiState': uiState,
@@ -228,16 +249,21 @@ async function mountChat({ local = true, conversations = [], create, recognize, 
     assert.ok(node, 'Expected a rendered control')
     return node.props
   }
+  const imageSetup = () => {
+    pump()
+    return flatten(page.tree()).find((node) => node.type === 'ScheduleCreateModal')?.props
+  }
   const api = {
-    state, requests, notices, draftChanges, settle, pump,
+    state, requests, notices, draftChanges, scheduleCreations, settle, pump, imageSetup,
     props: () => { pump(); return childProps },
     input: () => find(composer, (node) => node.type === 'TextArea').value,
     images: () => flatten(composer.render()).filter((node) => node.type === 'Button' &&
       node.props['aria-label']?.startsWith('移除图片')).length,
+    attachedImage: () => find(composer, (node) => node.props['aria-label']?.startsWith('移除图片'))['aria-label'],
     edit(value) { find(composer, (node) => node.type === 'TextArea').onChange({ target: { value } }); pump() },
-    async attach() {
+    async attach(file = new File(['image'], 'synthetic.png', { type: 'image/png' })) {
       find(composer, (node) => node.type === 'input' && node.props.type === 'file').onChange({
-        target: { files: [new File(['image'], 'synthetic.png', { type: 'image/png' })], value: '' },
+        target: { files: [file], value: '' },
       })
       await settle()
     },
@@ -577,4 +603,124 @@ test('rapid repeated Enter starts one automatic dialogue and one image request',
   assert.equal(h.input(), '')
   assert.equal(h.images(), 0)
   h.dispose()
+})
+
+test('creating the first schedule for an image binds the original dialogue and restores the draft', async (t) => {
+  const h = await mountChat({ withoutSchedule: true, conversations: [conversation(4, null)] })
+  t.after(() => h.dispose())
+  h.edit('把图中课程整理进本学期')
+  await h.attach()
+  const imageLabel = h.attachedImage()
+  const originalScope = h.props().scopeKey
+  await h.send()
+  const modal = h.imageSetup()
+  assert.ok(modal?.open && modal.imageImport)
+  assert.equal(h.requests.length, 0)
+  assert.equal(h.scheduleCreations.length, 0)
+
+  const semester = {
+    name: '测试学期',
+    periodStartDate: '2026-09-07',
+    periodEndDate: '2027-01-17',
+  }
+  await modal.onCreate(semester)
+  await h.settle()
+  modal.onCancel() // ScheduleCreateModal closes only after onCreate resolves.
+  await h.settle()
+  assert.equal(h.imageSetup(), undefined)
+  assert.deepEqual(h.scheduleCreations, [{
+    payload: semester,
+    scope: { dataset: 'synthetic-dataset:1', conversationId: 4, conversationPublicId: 'conversation-4' },
+  }])
+  const [{ id: scheduleId }] = h.state.schedules
+  assert.equal(h.state.conversations[0].scheduleId, scheduleId)
+  assert.notEqual(h.props().scopeKey, originalScope)
+  assert.equal(h.props().disabled, false)
+  assert.equal(h.input(), '把图中课程整理进本学期')
+  assert.equal(h.images(), 1)
+  assert.equal(h.attachedImage(), imageLabel)
+  assert.equal(h.requests.length, 0)
+
+  await h.send()
+  const [request] = h.requests
+  assert.equal(h.requests.length, 1)
+  assert.equal(request.id, 4)
+  assert.equal(request.schedule, scheduleId)
+  assert.equal(request.content, '把图中课程整理进本学期')
+  assert.deepEqual(request.images, ['data:image/png;base64,AA=='])
+  request.response.resolve()
+  await h.settle()
+  assert.equal(h.input(), '')
+  assert.equal(h.images(), 0)
+})
+
+test('the first text-bearing PDF opens schedule setup and keeps its extracted course draft', async (t) => {
+  const course = '课程名称：线性代数；周五第9-10节；第1-18周；求真楼505。'
+  const h = await mountChat({
+    withoutSchedule: true,
+    prepareFile: async () => ({ text: course, images: [] }),
+  })
+  t.after(() => h.dispose())
+  await h.attach(new File(['synthetic PDF'], 'synthetic-timetable.pdf', { type: 'application/pdf' }))
+  const draft = material.chatMaterialText('synthetic-timetable.pdf', course)
+  assert.equal(h.input(), draft)
+  assert.equal(h.images(), 0)
+
+  await h.send()
+  const modal = h.imageSetup()
+  assert.ok(modal?.open && modal.imageImport)
+  assert.equal(h.requests.length, 0)
+  assert.equal(h.state.conversations.length, 0)
+  assert.equal(h.scheduleCreations.length, 0)
+
+  await modal.onCreate({
+    name: '测试学期',
+    periodStartDate: '2026-09-07',
+    periodEndDate: '2027-01-10',
+  })
+  modal.onCancel()
+  await h.settle()
+  assert.equal(h.imageSetup(), undefined)
+  assert.equal(h.input(), draft)
+  assert.equal(h.requests.length, 0)
+
+  await h.send()
+  assert.equal(h.requests.length, 1)
+  const [request] = h.requests
+  assert.equal(request.schedule, h.state.schedules[0].id)
+  assert.equal(h.state.conversations[0].scheduleId, request.schedule)
+  assert.equal(request.content, draft)
+  assert.deepEqual(request.images, [])
+  request.response.resolve()
+  await h.settle()
+  assert.equal(h.input(), '')
+})
+
+test('cancel preserves an unsent image, and recognition-only sends without creating a schedule', async (t) => {
+  const h = await mountChat({ withoutSchedule: true })
+  t.after(() => h.dispose())
+  h.edit('请转写这张图')
+  await h.attach()
+  await h.send()
+  h.imageSetup().onCancel()
+  await h.settle()
+  assert.equal(h.imageSetup(), undefined)
+  assert.equal(h.input(), '请转写这张图')
+  assert.equal(h.images(), 1)
+  assert.equal(h.requests.length, 0)
+  assert.equal(h.state.conversations.length, 0)
+
+  await h.send()
+  h.imageSetup().imageImport.onSendWithoutSchedule()
+  await h.settle()
+  assert.equal(h.imageSetup(), undefined)
+  assert.equal(h.scheduleCreations.length, 0)
+  assert.equal(h.requests.length, 1)
+  assert.equal(h.requests[0].schedule, null)
+  assert.equal(h.requests[0].intent, 'READ_IMAGE')
+  assert.equal(h.requests[0].content, '请转写这张图')
+  assert.deepEqual(h.requests[0].images, ['data:image/png;base64,AA=='])
+  h.requests[0].response.resolve()
+  await h.settle()
+  assert.equal(h.images(), 0)
 })

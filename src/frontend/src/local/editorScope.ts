@@ -1,4 +1,4 @@
-import type { Schedule } from '../types'
+import type { Course, Schedule } from '../types'
 import type { LocalState } from './types'
 
 export interface LocalEditorScope {
@@ -6,6 +6,11 @@ export interface LocalEditorScope {
   schedulePublicId: string
 }
 export class LocalEditorScopeError extends Error {}
+export class LocalCourseEditConflict extends Error {
+  constructor(readonly latest: Course) {
+    super('这条课程已在其他窗口更新。你的草稿仍保留，可查看并载入最新版本。')
+  }
+}
 export function assertEditorGeneration(expected: number, current: number): void {
   if (expected !== current)
     throw new LocalEditorScopeError('导入窗口已关闭或目标课表已改变，过期解析结果已丢弃')
@@ -52,4 +57,28 @@ export function assertEditorRecord(
   ) {
     throw new LocalEditorScopeError('原记录已删除、恢复替换或不属于当前课表，请重新打开编辑器')
   }
+}
+
+export function assertCourseEditorCurrent(
+  state: LocalState,
+  scope: LocalEditorScope | null,
+  active: Schedule | null,
+  expected: Course,
+): void {
+  assertEditorScope(scope, active, state)
+  const current = state.courses.find((course) => course.id === expected.id)
+  if (!current || current.scheduleId !== scope.scheduleId || current.publicId !== recordPublicId(expected))
+    throw new LocalEditorScopeError('原课程已删除或恢复替换，请重新打开编辑器')
+  if (
+    current.updatedAt !== expected.updatedAt ||
+    current.name !== expected.name ||
+    current.location !== expected.location ||
+    current.teacher !== expected.teacher ||
+    current.dayOfWeek !== expected.dayOfWeek ||
+    current.startPeriod !== expected.startPeriod ||
+    current.endPeriod !== expected.endPeriod ||
+    current.weeks.length !== expected.weeks.length ||
+    current.weeks.some((week, index) => week !== expected.weeks[index])
+  )
+    throw new LocalCourseEditConflict(current)
 }

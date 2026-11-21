@@ -1,6 +1,7 @@
 package com.timetable.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.timetable.dto.ExamRequest;
 import com.timetable.entity.Exam;
 import com.timetable.entity.Schedule;
@@ -108,8 +109,15 @@ public class ExamServiceImpl implements ExamService {
             throw new BusinessException(404, "考试记录不属于当前课表");
         }
         validateTimes(request);
-        apply(exam, request);
-        examMapper.updateById(exam);
+        Exam changes = new Exam();
+        apply(changes, request);
+        examMapper.update(changes, Wrappers.<Exam>lambdaUpdate()
+                .eq(Exam::getId, id)
+                .set(request.isLocationProvided() && request.getLocation() == null, Exam::getLocation, null));
+        exam = examMapper.selectById(id);
+        if (exam == null) {
+            throw new BusinessException(404, "考试记录不存在");
+        }
         // 同步关联待办的标题与截止时间
         todoService.updateExamLinked(exam.getId(), exam.getName(),
                 LocalDateTime.of(exam.getExamDate(), exam.getStartTime()), apiKey);

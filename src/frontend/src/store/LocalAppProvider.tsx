@@ -1,4 +1,4 @@
-import { readCompatiblePreference, removeCompatiblePreference } from '../../../shared/brandCompatibility.mjs'
+import { legacyNames, removeCompatiblePreference } from '../../../shared/brandCompatibility.mjs'
 import {
   useCallback,
   useEffect,
@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { message } from 'antd'
 import type { AppState } from './AppContext'
+import { LocalStateContext } from './LocalStateContext'
 import { initializeLocalStore, readLocalState, subscribeLocalChanges } from '../local/db'
 import { runLocalMaintenance } from '../local/domain'
 import type { LocalState } from '../local/types'
@@ -40,7 +41,7 @@ const collections = [
 ] as const
 function selectedPublicId() {
   try {
-    return readCompatiblePreference(localStorage, SELECTION_KEY)
+    return localStorage.getItem(SELECTION_KEY) ?? localStorage.getItem(legacyNames.activeSchedule)
   } catch {
     return null
   }
@@ -58,7 +59,8 @@ export default function LocalAppProvider({
   const [data, setData] = useState<LocalState | null>(null)
   const [activeScheduleId, setActiveId] = useState<number | null>(null)
   const dataRef = useRef<LocalState | null>(null)
-  const selectedRef = useRef(selectedPublicId())
+  const selectedRef = useRef<string | null | undefined>(undefined)
+  if (selectedRef.current === undefined) selectedRef.current = selectedPublicId()
   const sequence = useRef(0)
 
   const setActiveScheduleId = useCallback((id: number | null) => {
@@ -85,8 +87,9 @@ export default function LocalAppProvider({
     const selected =
       incoming.schedules.find((item) => item.publicId === selectedRef.current) ??
       incoming.schedules[0]
-    setActiveScheduleId(selected?.id ?? null)
-  }, [setActiveScheduleId])
+    selectedRef.current = selected?.publicId ?? null
+    setActiveId(selected?.id ?? null)
+  }, [])
 
   const load = useCallback(async () => {
     const request = ++sequence.current
@@ -164,7 +167,10 @@ export default function LocalAppProvider({
     const timer = window.setInterval(maintain, 60_000)
     document.addEventListener('visibilitychange', maintain)
     window.addEventListener('focus', maintain)
-    window.addEventListener('storage', refresh)
+    const refreshOnStorage = (event: StorageEvent) => {
+      if (event.key !== SELECTION_KEY && event.key !== legacyNames.activeSchedule) refresh()
+    }
+    window.addEventListener('storage', refreshOnStorage)
     return () => {
       active = false
       sequence.current += 1
@@ -173,7 +179,7 @@ export default function LocalAppProvider({
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', maintain)
       window.removeEventListener('focus', maintain)
-      window.removeEventListener('storage', refresh)
+      window.removeEventListener('storage', refreshOnStorage)
     }
   }, [connectionError, load, ready])
 
@@ -181,6 +187,7 @@ export default function LocalAppProvider({
     await load()
   }, [load])
   const refreshSchedules = useCallback(async () => (await load()).schedules, [load])
+  const localState = useMemo(() => data && { state: data, refresh: load }, [data, load])
   const activeSchedule = useMemo(
     () => data?.schedules.find((item) => item.id === activeScheduleId) ?? null,
     [data?.schedules, activeScheduleId],
@@ -220,5 +227,9 @@ export default function LocalAppProvider({
     refreshAll,
   }
   const Provider = context.Provider
-  return <Provider value={value}>{children}</Provider>
+  return (
+    <Provider value={value}>
+      <LocalStateContext.Provider value={localState}>{children}</LocalStateContext.Provider>
+    </Provider>
+  )
 }

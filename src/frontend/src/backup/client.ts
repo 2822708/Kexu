@@ -66,6 +66,9 @@ async function request<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const controller = new AbortController()
+  const cancel = () => controller.abort()
+  if (init.signal?.aborted) cancel()
+  else init.signal?.addEventListener('abort', cancel, { once: true })
   const timeout = setTimeout(() => controller.abort(), 25_000)
   try {
     const response = await fetch(`${validateServerUrl(serverUrl)}${path}`, {
@@ -124,6 +127,7 @@ async function request<T>(
     throw error
   } finally {
     clearTimeout(timeout)
+    init.signal?.removeEventListener('abort', cancel)
   }
 }
 export async function registerVault(
@@ -134,8 +138,9 @@ export async function registerVault(
 export function uploadCloudSnapshot(
   credential: RecoveryCredential,
   body: string,
+  signal?: AbortSignal,
 ): Promise<CloudSnapshotMetadata> {
-  return request(credential.serverUrl, '/api/v1/snapshots', credential, { method: 'POST', body })
+  return request(credential.serverUrl, '/api/v1/snapshots', credential, { method: 'POST', body, signal })
 }
 export function listCloudSnapshots(credential: RecoveryCredential): Promise<CloudSnapshotList> {
   return request(credential.serverUrl, '/api/v1/snapshots', credential)

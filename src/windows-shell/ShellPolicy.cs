@@ -31,6 +31,21 @@ namespace Kexu.Windows
                 && Routes.Contains(uri.AbsolutePath.TrimEnd('/').Length == 0 ? "/" : uri.AbsolutePath.TrimEnd('/'));
         }
 
+        internal static string RestoreRouteScript()
+        {
+            return "if (location.origin === " + Json().Serialize(Origin) + " && location.pathname === '/index.html') {" +
+                "let route = '/tasks';" +
+                "try {" +
+                    "const target = new URL(new URLSearchParams(location.search).get('__kexu_route') || route, location.origin);" +
+                    "const path = target.pathname.replace(/\\/+$/, '') || '/';" +
+                    "const allowedRoutes = " + Json().Serialize(Routes) + ";" +
+                    "if (target.origin === location.origin && !target.username && !target.password &&" +
+                        "path !== '/index.html' && allowedRoutes.includes(path)) route = path + target.search + target.hash;" +
+                "} catch {}" +
+                "history.replaceState(null, '', route);" +
+            "}";
+        }
+
         internal static bool IsExternalHttp(string value)
         {
             Uri uri;

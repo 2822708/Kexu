@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { mobilePwa } from './src/pwa/buildPlugin.mjs'
+import { pdfJsAssets } from './src/pdf/pdfJsAssetsPlugin.mjs'
 import { assertBuildMode } from './src/app-mode'
 
 export default defineConfig(({ mode, command }) => {
@@ -22,7 +23,7 @@ export default defineConfig(({ mode, command }) => {
   }
   return {
     base,
-    plugins: [react(), ...(mode === 'mobile' ? [mobilePwa()] : [])],
+    plugins: [react(), pdfJsAssets(), ...(mode === 'mobile' ? [mobilePwa()] : [])],
     server: {
       port: 5173,
       proxy,

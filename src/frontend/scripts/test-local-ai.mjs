@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { test } from 'node:test'
 import vm from 'node:vm'
 import { IDBFactory } from 'fake-indexeddb'
+import { JSDOM } from 'jsdom'
 import ts from 'typescript'
 import {
   courseFixture,
@@ -124,7 +125,7 @@ const scheduleBody = {
 }
 const normal = (value) => JSON.parse(JSON.stringify(value))
 
-function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fetch } = {}) {
+function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fetch, DOMParser } = {}) {
   const modules = new Map(),
     nativeRequire = createRequire(import.meta.url)
   const localStorage = {
@@ -153,6 +154,7 @@ function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fe
     ReadableStream,
     Response,
     fetch: fetcher,
+    DOMParser,
   })
   function loadSource(url) {
     if (modules.has(url.href)) return modules.get(url.href).exports
@@ -191,6 +193,30 @@ function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fe
     window,
   }
 }
+test('course HTML import preserves table boundaries and merged cells in untrusted text', async (t) => {
+  const { window } = new JSDOM()
+  t.after(() => window.close())
+  let prompt
+  const x = setup({
+    DOMParser: window.DOMParser,
+    fetcher: async (_url, init) => {
+      prompt = JSON.parse(init.body).messages.find((message) => message.role === 'user').content
+      const reply = JSON.stringify({ reply: '资料已读取', actions: [] })
+      const frame = JSON.stringify({ choices: [{ delta: { content: reply }, finish_reason: 'stop' }] })
+      return new Response(`data: ${frame}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } })
+    },
+  })
+  configure(x, 'https://fixture.invalid/v1')
+  const html = '<table><tr><th>周一</th><th>周二</th></tr><tr><td rowspan="2">数学<br>1–2节</td><td>英语</td></tr><tr><td colspan="2">体育</td></tr></table><script>脚本不得进提示词</script><div hidden>隐藏内容</div>'
+  for (const source of [html, html.replace(/></g, '>\n  <')]) {
+    await x.localAiApi.parseHtml(source, null)
+    assert.match(prompt, /周一\t周二\n数学 \/ 1–2节（跨 2 行）\t英语\n体育（跨 2 列）/)
+    assert.doesNotMatch(prompt, /脚本不得进提示词|隐藏内容/)
+  }
+  assert.equal((await x.readLocalState()).courses.length, 0)
+  await x.closeLocalStore()
+})
+
 async function fixture(x) {
   const schedule = await x.localScheduleApi.create(scheduleBody)
   const other = await x.localScheduleApi.create({ ...scheduleBody, name: '另一个空间' })
@@ -211,6 +237,15 @@ function configure(x, endpoint) {
     allowContext: true,
     visionEnabled: false,
   })
+}
+function completionReply(content) {
+  const event = (choice) => `data: ${JSON.stringify({ choices: [choice] })}\n\n`
+  return new Response(
+    event({ delta: { content }, finish_reason: null }) +
+      event({ delta: {}, finish_reason: 'stop' }) +
+      'data: [DONE]\n\n',
+    { headers: { 'content-type': 'text/event-stream' } },
+  )
 }
 async function withMock(options, run) {
   const mock = await createMockOpenAiServer(options)
@@ -783,7 +818,7 @@ test('images are rejected before any request when vision is not enabled', async 
 test('screenshots and scanned PDF pages reach the planner as images in one request', async () =>
   withMock({}, async (mock) => {
     const x = setup()
-    const f = await fixture(x)
+    const schedule = await x.localScheduleApi.create(scheduleBody)
     x.saveAiSettings({
       endpoint: mock.endpoint,
       model: 'mock-model',
@@ -792,9 +827,9 @@ test('screenshots and scanned PDF pages reach the planner as images in one reque
       allowContext: true,
       visionEnabled: true,
     })
-    const conv = await x.localAiApi.createConversation(f.schedule.id)
+    const conv = await x.localAiApi.createConversation(schedule.id)
     const image = 'data:image/jpeg;base64,AAAA'
-    await x.localAiStream(conv.id, '请看图片', f.schedule.id, {}, undefined, undefined, [image])
+    await x.localAiStream(conv.id, '请看图片', schedule.id, {}, undefined, undefined, [image])
     const sent = mock.requests.at(-1).messages.at(-1)
     assert.equal(Array.isArray(sent.content), true)
     assert.deepEqual(sent.content[0], { type: 'text', text: '请看图片' })
@@ -802,6 +837,112 @@ test('screenshots and scanned PDF pages reach the planner as images in one reque
     const messages = await x.localAiApi.listMessages(conv.id)
     assert.match(messages.find((message) => message.role === 'user').text, /附图 1 张/)
   }))
+
+test('read-only screenshot requests cannot save operations proposed by the model', async () => {
+  let request
+  const x = setup({
+    fetcher: async (_, init) => {
+      request = JSON.parse(init.body)
+      return completionReply(JSON.stringify({
+        reply: '识别到一条待办。',
+        actions: [{ type: 'CREATE_TODO', data: { todos: [todoFixture] } }],
+      }))
+    },
+  })
+  x.saveAiSettings({
+    endpoint: 'https://ai.example.test',
+    model: 'mock-model',
+    apiKey: syntheticKey,
+    enabled: true,
+    allowContext: true,
+    visionEnabled: true,
+  })
+  const conversation = await x.localAiApi.createConversation(null)
+  await assert.rejects(
+    x.localAiStream(conversation.id, '只识别图片', null, {}, undefined, 'READ_IMAGE', [
+      'data:image/jpeg;base64,AAAA',
+    ]),
+    /本次只识别图片内容/,
+  )
+  const state = await x.readLocalState()
+  assert.equal(request.messages.length, 3, 'only prompts and the selected image are sent')
+  assert.equal(state.todos.length, 0)
+  assert.equal(state.messages.flatMap((item) => item.actions ?? []).length, 0)
+})
+
+test('official DeepSeek Flash photo chat requests JSON and keeps recognized courses pending', async () => {
+  const requests = []
+  let response = JSON.stringify({
+    reply: '请确认识别到的课程。',
+    actions: [{ type: 'CREATE_COURSE', data: { courses: [courseFixture] } }],
+  })
+  const x = setup({
+    fetcher: async (url, init) => {
+      requests.push({ url, body: JSON.parse(init.body) })
+      return completionReply(response)
+    },
+  })
+  const schedule = await x.localScheduleApi.create(scheduleBody)
+  const conversation = await x.localAiApi.createConversation(schedule.id)
+  x.saveAiSettings({
+    endpoint: 'https://api.deepseek.com/v1/',
+    model: 'deepseek-flash',
+    apiKey: syntheticKey,
+    enabled: true,
+    allowContext: true,
+    visionEnabled: true,
+  })
+  const image = 'data:image/jpeg;base64,AAAA'
+  const reply = await x.localAiStream(conversation.id, '导入这张课表', schedule.id, {}, undefined, undefined, [image])
+  assert.equal(requests.length, 1)
+  assert.equal(requests[0].url, 'https://api.deepseek.com/v1/chat/completions')
+  assert.deepEqual(requests[0].body.response_format, { type: 'json_object' })
+  assert.deepEqual(requests[0].body.messages.at(-1).content.at(-1), {
+    type: 'image_url', image_url: { url: image },
+  })
+  assert.equal(reply.actions[0].status, 'PENDING')
+  assert.equal((await x.readLocalState()).courses.length, 0)
+  await x.localAiApi.execute(conversation.id, reply.actions[0].actionId)
+  assert.equal((await x.readLocalState()).courses[0].name, courseFixture.name)
+
+  response = '没有按规定格式输出'
+  await assert.rejects(
+    x.localAiStream(conversation.id, '再次识别图片', schedule.id, {}, undefined, undefined, [image]),
+    /未返回完整JSON/,
+  )
+  assert.equal(requests.length, 2, 'an invalid reply must not silently retry')
+  assert.equal((await x.readLocalState()).courses.length, 1)
+})
+
+test('plain-text calls and other providers retain the compatible request payload', async () => {
+  const requests = []
+  const x = setup({
+    fetcher: async (_, init) => {
+      requests.push(JSON.parse(init.body))
+      return completionReply('图片识别文字')
+    },
+  })
+  const settings = x.saveAiSettings({
+    endpoint: 'https://api.deepseek.com',
+    model: 'deepseek-flash',
+    apiKey: syntheticKey,
+    enabled: true,
+    allowContext: true,
+    visionEnabled: true,
+  })
+  assert.equal((await x.localAiApi.parseImageText('data:image/png;base64,AAAA')).text, '图片识别文字')
+  assert.equal((await x.testAiConnection(settings)).ok, true)
+  await x.requestCompletion(
+    { ...settings, endpoint: 'https://ai.example.test' },
+    [{ role: 'user', content: '返回 JSON' }],
+    { expectJson: true },
+  )
+  assert.equal(requests.length, 3)
+  for (const request of requests) {
+    assert.equal(request.response_format, undefined)
+    assert.equal(request.max_tokens, undefined)
+  }
+})
 
 test('AI can propose a new schedule and only writes it after confirmation', async () => {
   const output = JSON.stringify({
@@ -1157,3 +1298,39 @@ test('manual insertion of an identical record invalidates an older AI create pro
       assert.equal((await x.localAiApi.listMessages(conv.id))[1].actions[0].status, 'STALE')
     },
   ))
+
+test('resending an imported course after confirmation rejects duplicate proposals', async () => {
+  let courses = [courseFixture]
+  const x = setup({
+    fetcher: async () =>
+      completionReply(JSON.stringify({
+        reply: '以下课程待确认',
+        actions: [{ type: 'CREATE_COURSE', data: { courses } }],
+      })),
+  })
+  configure(x, 'https://ai.example.test')
+  const schedule = await x.localScheduleApi.create(scheduleBody)
+  const conversation = await x.localAiApi.createConversation(schedule.id)
+
+  const initial = await x.localAiStream(conversation.id, '导入课程', schedule.id, {})
+  const parallel = await x.localAiStream(conversation.id, '重复提交相同课程', schedule.id, {})
+  await x.localAiApi.execute(conversation.id, initial.actions[0].actionId)
+  await assert.rejects(x.localAiApi.execute(conversation.id, parallel.actions[0].actionId), /失效/)
+
+  const overlap = { ...courseFixture, weeks: [1, 2] }
+  courses = [overlap, { ...courseFixture, name: ' 高等数学 ', teacher: '', weeks: [3, 2, 1] }]
+  await assert.rejects(
+    x.localAiStream(conversation.id, '再次导入相同的课程和部分重叠的课程', schedule.id, {}),
+    /已有完全相同的课程/,
+  )
+  const afterDuplicate = await x.readLocalState()
+  assert.equal(afterDuplicate.courses.length, 1)
+  assert.match(afterDuplicate.messages.at(-1).text, /已有完全相同的课程/)
+  assert.equal(afterDuplicate.messages.at(-1).actions?.length ?? 0, 0)
+
+  courses = [overlap]
+  const accepted = await x.localAiStream(conversation.id, '导入不同周次的课程', schedule.id, {})
+  assert.equal(accepted.actions[0].status, 'PENDING')
+  await x.localAiApi.execute(conversation.id, accepted.actions[0].actionId)
+  assert.equal((await x.readLocalState()).courses.length, 2)
+})

@@ -16,6 +16,7 @@ public class ExamRequest {
 
     @Size(max = 200, message = "考试地点不能超过 200 个字符")
     private String location;
+    private boolean locationProvided;
 
     @NotNull(message = "考试日期不能为空")
     private LocalDate examDate;
@@ -29,7 +30,12 @@ public class ExamRequest {
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getLocation() { return location; }
-    public void setLocation(String location) { this.location = location; }
+    public void setLocation(String location) {
+        this.location = location;
+        this.locationProvided = true;
+    }
+    @JsonIgnore
+    public boolean isLocationProvided() { return locationProvided; }
     public LocalDate getExamDate() { return examDate; }
     public void setExamDate(LocalDate examDate) { this.examDate = examDate; }
     public LocalTime getStartTime() { return startTime; }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { Empty, Tooltip } from 'antd'
 import type { Course, Exam, PeriodConfig } from '../types'
 import { courseColor } from '../utils/color'
@@ -92,10 +92,8 @@ export default function TimetableGrid({
           data-entry-key={entry.key}
           style={{
             ...(positioned ? entryGridPosition(entry) : {}),
-            ...(color
-              ? { background: color.bg, borderLeftColor: color.border, color: color.text }
-              : {}),
-          }}
+            ...(color ? { '--course-paper': color.bg, '--course-edge': color.border } : {}),
+          } as CSSProperties}
           onClick={() => (course ? onCourseClick(course) : onExamClick?.(exam!))}
         >
           {exam && <span className="course-block-exam-tag">考试</span>}

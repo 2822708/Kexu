@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createHash, randomUUID } from 'node:crypto'
+import fs from 'node:fs/promises'
 import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises'
+import { syncBuiltinESMExports } from 'node:module'
 import path from 'node:path'
 import http from 'node:http'
 import { createSnapshotServer, limitsFromEnv } from '../server.mjs'
@@ -128,6 +130,59 @@ test('private index and encrypted content survive service restart', async () => 
     assert.equal(response.status, 200)
     assert.deepEqual(await response.json(), item)
   } finally {
+    if (second) await new Promise((resolve) => second.close(resolve))
+    await f.close()
+  }
+})
+
+test('failed snapshot deletion keeps usage, and a restart resumes both recorded deletion stages', async (t) => {
+  const f = await fixture()
+  let second, injected
+  try {
+    const vault = await f.register()
+    const items = [envelope(), envelope(), envelope()]
+    const vaultDir = path.join(f.dataDir, vault.vaultId)
+    const file = (item) => path.join(vaultDir, `${item.snapshotId}.json`)
+    const [first, alreadyUnlinked, retained] = items
+    const originalUnlink = fs.unlink
+    injected = t.mock.method(fs, 'unlink', async (filename) => {
+      if (filename === file(first) || filename === file(alreadyUnlinked))
+        throw Object.assign(new Error('fixture: unlink denied'), { code: 'EPERM' })
+      return originalUnlink(filename)
+    })
+    syncBuiltinESMExports()
+    for (const item of items) assert.equal((await f.request('POST', '/api/v1/snapshots', vault, item)).status, 201)
+    for (const item of [first, alreadyUnlinked]) {
+      assert.equal((await f.request('DELETE', `/api/v1/snapshots/${item.snapshotId}`, vault)).status, 500)
+      assert.deepEqual(JSON.parse(await readFile(file(item), 'utf8')), item)
+    }
+    const before = await f.request('GET', '/api/v1/snapshots', vault)
+    assert.equal(before.body.items.length, 3)
+    assert.equal(before.body.usedBytes, items.reduce((size, item) => size + Buffer.byteLength(JSON.stringify(item)), 0))
+    assert.equal((await f.request('POST', '/api/v1/snapshots', vault, first)).status, 409)
+    await new Promise((resolve) => f.server.close(resolve))
+    // Model termination after unlink and before committing the updated index.
+    await originalUnlink(file(alreadyUnlinked))
+    injected.mock.restore()
+    injected = undefined
+    syncBuiltinESMExports()
+    second = await createSnapshotServer({ dataDir: f.dataDir })
+    await new Promise((resolve) => second.listen(0, '127.0.0.1', resolve))
+    const url = `http://127.0.0.1:${second.address().port}/api/v1/snapshots`
+    const headers = { Authorization: `Bearer ${vault.vaultId}.${vault.token}` }
+    const list = await (await fetch(url, { headers })).json()
+    assert.deepEqual(list.items.map((item) => item.snapshotId), [retained.snapshotId])
+    assert.equal(list.usedBytes, Buffer.byteLength(JSON.stringify(retained)))
+    assert.equal((await fetch(`${url}/${first.snapshotId}`, { method: 'DELETE', headers })).status, 404)
+    assert.deepEqual(JSON.parse(await readFile(file(retained), 'utf8')), retained)
+    for (const item of [first, alreadyUnlinked]) await assert.rejects(readFile(file(item)), { code: 'ENOENT' })
+    const index = JSON.parse(await readFile(path.join(vaultDir, 'index.json'), 'utf8'))
+    assert.equal(index.pendingDeletions, undefined)
+  } finally {
+    if (injected) {
+      injected.mock.restore()
+      syncBuiltinESMExports()
+    }
     if (second) await new Promise((resolve) => second.close(resolve))
     await f.close()
   }

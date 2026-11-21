@@ -103,12 +103,23 @@ function openDatabase(): Promise<IDBDatabase> {
   return database
 }
 export async function readBackupState(): Promise<BackupState> {
+  return inspectBackupState((state) => state)
+}
+
+/** Runs a synchronous decision while the state cannot be changed by another tab. */
+export async function inspectBackupState<T>(inspect: (state: BackupState) => T): Promise<T> {
   const db = await openDatabase()
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('state', 'readonly')
     const request = transaction.objectStore('state').get('backup')
-    request.onsuccess = () =>
-      resolve((request.result as BackupState | undefined) ?? initialBackupState())
+    request.onsuccess = () => {
+      try {
+        resolve(inspect((request.result as BackupState | undefined) ?? initialBackupState()))
+      } catch (error) {
+        reject(error)
+      }
+    }
+    transaction.onabort = () => reject(new Error('无法读取本机备份队列'))
     request.onerror = () => reject(new Error('无法读取本机备份队列'))
   })
 }

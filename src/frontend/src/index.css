@@ -1,68 +1,81 @@
-/* Kexu · shared visual tokens. System fonts work offline on every device. */
+/* Hallmark · app · 学期手帐 · Kexu · v2.0.0 */
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg-main: #f5f8fa;
-  --bg-sidebar: #f5f8fa;
-  --bg-topbar: #173244;
-  --bg-card: #ffffff;
-  --bg-footer: #f5f8fa;
-  --bg-code: #102d3b;
-  --accent: #167d9a;
-  --accent-hover: #106b85;
-  --accent-ink: #106b85;
-  --accent-soft: #e7f4f7;
-  --accent-green: #69c9b3;
-  --teal: #0c7c72;
-  --teal-soft: #e8f5f0;
-  --text-primary: #173244;
-  --text-secondary: #536b78;
-  --text-muted: #647b87;
+  --bg-main: #f6f4ec;
+  --bg-sidebar: #fffefa;
+  --bg-topbar: #26352c;
+  --bg-card: #fffefa;
+  --bg-footer: #f6f4ec;
+  --bg-code: #27392f;
+  --accent: #33624c;
+  --accent-hover: #28523e;
+  --accent-ink: #28523e;
+  --accent-soft: #e7eee4;
+  --accent-green: #87b9a2;
+  --teal: #356b52;
+  --teal-soft: #e8f1e7;
+  --text-primary: #26352c;
+  --text-secondary: #515e52;
+  --text-muted: #5b685d;
   --text-on-dark: #ffffff;
   --text-on-accent: #ffffff;
-  --border-dark: #c7d6df;
-  --border-light: #dde6eb;
-  --divider: #dde6eb;
+  --border-dark: #c3cbbd;
+  --border-light: #d9ded3;
+  --divider: #d9ded3;
   --danger: #b42318;
   --danger-soft: #fef3f2;
   --warning: #8a4b00;
   --warning-soft: #fff4e5;
-  --focus-ring: #167d9a;
+  --focus-ring: #33624c;
   --surface-shadow: none;
+  --paper-panel: var(--bg-card);
+  --paper-rule: var(--border-light);
+  --paper-inset: var(--bg-main);
+  --paper-radius: 12px;
+  --paper-heading: Georgia, "Noto Serif CJK SC", "Songti SC", SimSun, serif;
+  --paper-overlay: rgb(16 29 21 / 42%);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg-main: #101d27;
-  --bg-sidebar: #101d27;
-  --bg-topbar: #16323f;
-  --bg-card: #172a35;
-  --bg-footer: #101d27;
-  --bg-code: #0b1821;
-  --accent: #69c6d5;
-  --accent-hover: #8dd7e2;
-  --accent-ink: #69c6d5;
-  --accent-soft: #203f4c;
-  --accent-green: #7bd5be;
-  --teal: #65c5ad;
-  --teal-soft: #163f3a;
-  --text-primary: #e5f0f5;
-  --text-secondary: #abc1cc;
-  --text-muted: #97afbb;
-  --text-on-dark: #e5f0f5;
-  --text-on-accent: #0d232c;
-  --border-dark: #46616e;
-  --border-light: #314a57;
-  --divider: #314a57;
+  --bg-main: #171f1a;
+  --bg-sidebar: #202b24;
+  --bg-topbar: #29372e;
+  --bg-card: #202b24;
+  --bg-footer: #171f1a;
+  --bg-code: #131b16;
+  --accent: #a5cfb3;
+  --accent-hover: #bce1c5;
+  --accent-ink: #a5cfb3;
+  --accent-soft: #2a4134;
+  --accent-green: #a6d1b7;
+  --teal: #9fcbb1;
+  --teal-soft: #294135;
+  --text-primary: #ebf2e8;
+  --text-secondary: #b8c7b9;
+  --text-muted: #a8baaa;
+  --text-on-dark: #ebf2e8;
+  --text-on-accent: #15271d;
+  --border-dark: #4e6254;
+  --border-light: #37473c;
+  --divider: #37473c;
   --danger: #ff958c;
   --danger-soft: #472c30;
   --warning: #e7b86a;
   --warning-soft: #423821;
-  --focus-ring: #69c6d5;
+  --focus-ring: #a5cfb3;
   --surface-shadow: none;
+  --paper-panel: var(--bg-card);
+  --paper-rule: var(--border-light);
+  --paper-inset: var(--bg-main);
+  --paper-radius: 12px;
+  --paper-heading: Georgia, "Noto Serif CJK SC", "Songti SC", SimSun, serif;
+  --paper-overlay: rgb(16 29 21 / 42%);
 }
 
 * { box-sizing: border-box; }
+html, body { overflow-x: clip; }
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -294,73 +307,6 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-}
-.tt-list {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-/* ==================== 全部课程卡片式 ==================== */
-.course-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
-}
-.course-card {
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  background: var(--bg-card);
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-.course-card-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.course-card-bar {
-  width: 4px;
-  height: 20px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-.course-card-name {
-  font-size: 14px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.course-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  flex-wrap: wrap;
-}
-.course-card-line {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.course-card-label {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-.course-card-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 6px;
 }
 
 /* ==================== 快速导入 ==================== */
