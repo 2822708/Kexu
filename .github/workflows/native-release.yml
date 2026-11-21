@@ -8,7 +8,7 @@ on:
       tag:
         description: 'Existing published release tag to verify'
         required: true
-        default: 'v2026.11.11.3'
+        default: 'v2026.11.19.1'
 
 permissions:
   contents: read
