@@ -128,10 +128,12 @@ async function mount(t, { route, openStore, readState, loadDailyPage, preferredS
     antd: { Spin: LegacySpin },
   })
   const tasksPage = loadSource('pages/TasksPage.tsx', {
+    '../local/mode': mode,
     './FocusPage': focusPage,
     './TodosPage': { default: () => null },
     '../components/RecurringTodoPanel': { default: () => null },
     '../tasks-page.css': {},
+    '@ant-design/icons': { DownOutlined: () => null },
     antd: { Tabs: ({ activeKey, items }) => items.find(({ key }) => key === activeKey).children },
   })
   const App = loadSource('App.tsx', {
