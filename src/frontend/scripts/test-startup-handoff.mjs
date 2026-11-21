@@ -133,8 +133,11 @@ async function mount(t, { route, openStore, readState, loadDailyPage, preferredS
     './TodosPage': { default: () => null },
     '../components/RecurringTodoPanel': { default: () => null },
     '../tasks-page.css': {},
-    '@ant-design/icons': { DownOutlined: () => null },
-    antd: { Tabs: ({ activeKey, items }) => items.find(({ key }) => key === activeKey).children },
+    '@ant-design/icons': { CheckOutlined: () => null, DownOutlined: () => null },
+    antd: {
+      Dropdown: ({ children }) => children,
+      Tabs: ({ activeKey, items }) => items.find(({ key }) => key === activeKey).children,
+    },
   })
   const App = loadSource('App.tsx', {
     './local/mode': mode,

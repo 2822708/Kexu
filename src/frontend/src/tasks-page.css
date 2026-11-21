@@ -39,35 +39,57 @@
   white-space: nowrap;
 }
 .tasks-view-picker {
-  position: relative;
   display: inline-flex;
+  align-items: center;
+  gap: 8px;
   flex: 0 0 auto;
-}
-.tasks-view-picker select {
-  appearance: none;
   border: 0;
   border-radius: 4px;
   background: transparent;
   min-height: 44px;
-  padding: 0 23px 0 0;
+  padding: 0 4px 0 0;
   color: var(--text-primary);
   font-family: inherit;
   font-size: calc(19px * var(--app-font-scale, 1));
   font-weight: 650;
   cursor: pointer;
 }
-.tasks-view-picker option {
-  background: var(--paper-panel, var(--bg-card));
-  color: var(--text-primary);
+.tasks-view-picker:focus-visible {
+  outline-width: 2px;
+  outline-offset: 1px;
 }
 .tasks-view-picker > .anticon {
-  position: absolute;
-  top: 50%;
-  right: 4px;
-  transform: translateY(-50%);
   color: var(--text-secondary);
   font-size: 11px;
-  pointer-events: none;
+}
+.tasks-view-picker[aria-expanded='true'] > .anticon {
+  transform: rotate(180deg);
+}
+.tasks-view-menu .ant-dropdown-menu {
+  min-width: 156px;
+  padding: 4px;
+  border: 1px solid var(--paper-rule, var(--border-light));
+  background: var(--paper-panel, var(--bg-card));
+}
+.tasks-view-menu .ant-dropdown-menu .ant-dropdown-menu-item {
+  min-height: 44px;
+  padding-inline: 10px;
+}
+.tasks-view-menu .ant-dropdown-menu .ant-dropdown-menu-item[aria-checked='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+.tasks-view-menu .ant-dropdown-menu .ant-dropdown-menu-item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.tasks-view-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  white-space: nowrap;
 }
 .tasks-date-slot {
   flex: 0 1 150px;

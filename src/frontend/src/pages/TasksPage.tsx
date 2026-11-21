@@ -1,6 +1,6 @@
-import { DownOutlined } from '@ant-design/icons'
-import { Tabs } from 'antd'
-import { useState } from 'react'
+import { CheckOutlined, DownOutlined } from '@ant-design/icons'
+import { Dropdown, Tabs } from 'antd'
+import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import FocusPage from './FocusPage'
 import TodosPage from './TodosPage'
@@ -8,9 +8,17 @@ import RecurringTodoPanel from '../components/RecurringTodoPanel'
 import { LOCAL_MODE } from '../local/mode'
 import '../tasks-page.css'
 
+const TASK_VIEWS = {
+  today: '今日任务',
+  all: '全部任务',
+  recurring: '循环任务',
+}
+
 export default function TasksPage() {
   const [search, setSearch] = useSearchParams()
   const [dateHeadingTarget, setDateHeadingTarget] = useState<HTMLDivElement | null>(null)
+  const [viewMenuOpen, setViewMenuOpen] = useState(false)
+  const viewButton = useRef<HTMLButtonElement>(null)
   const view = search.get('view')
   const active = view === 'all' || view === 'recurring' ? view : 'today'
 
@@ -27,14 +35,45 @@ export default function TasksPage() {
       {LOCAL_MODE ? (
         <header className="tasks-page-heading tasks-page-heading--compact">
           <h1 className="tasks-sr-title">任务</h1>
-          <div className="tasks-view-picker">
-            <select aria-label="任务视图" value={active} onChange={(event) => openView(event.target.value)}>
-              <option value="today">今日任务</option>
-              <option value="all">全部任务</option>
-              <option value="recurring">循环任务</option>
-            </select>
-            <DownOutlined aria-hidden />
-          </div>
+          <Dropdown
+            trigger={['click']}
+            placement="bottomLeft"
+            rootClassName="tasks-view-menu"
+            autoFocus
+            open={viewMenuOpen}
+            onOpenChange={setViewMenuOpen}
+            menu={{
+              items: Object.entries(TASK_VIEWS).map(([key, label]) => ({
+                key,
+                role: 'menuitemradio',
+                'aria-checked': active === key,
+                label: (
+                  <span className="tasks-view-option">
+                    {label}
+                    {active === key && <CheckOutlined aria-hidden />}
+                  </span>
+                ),
+              })),
+              onClick: ({ key, domEvent }) => {
+                domEvent.preventDefault()
+                setViewMenuOpen(false)
+                viewButton.current?.focus({ preventScroll: true })
+                if (key !== active) openView(key)
+              },
+            }}
+          >
+            <button
+              ref={viewButton}
+              type="button"
+              className="tasks-view-picker"
+              aria-label={`任务视图：${TASK_VIEWS[active]}`}
+              aria-haspopup="menu"
+              aria-expanded={viewMenuOpen}
+            >
+              {TASK_VIEWS[active]}
+              <DownOutlined aria-hidden />
+            </button>
+          </Dropdown>
           <div className="tasks-date-slot" ref={setDateHeadingTarget} />
         </header>
       ) : (
