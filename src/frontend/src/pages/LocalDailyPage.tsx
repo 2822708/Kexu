@@ -737,6 +737,7 @@ export default function LocalDailyPage({
       )}
       <Modal
         title={isPast ? '补记任务' : '添加任务'}
+        centered
         open={composerOpen && canEdit && isDailyView}
         footer={null}
         width={440}
