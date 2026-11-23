@@ -224,8 +224,13 @@
     padding-bottom: 0;
   }
   .tasks-page--daily .daily-tools {
+    margin-top: 12px;
+  }
+  .tasks-page--daily .daily-add-task.ant-btn {
     margin-top: auto;
-    padding-top: 16px;
+  }
+  .tasks-page--daily .daily-tools {
+    padding-bottom: 16px;
   }
   .tasks-views > .ant-tabs-nav .ant-tabs-tab + .ant-tabs-tab {
     margin-left: 14px;
