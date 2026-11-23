@@ -1114,7 +1114,7 @@ export default function AiChatPage() {
               <div style={{ textAlign: 'center', padding: 40 }}>
                 <Spin />
               </div>
-            ) : messages.length === 0 && !stream ? (
+            ) : messages.length === 0 && !stream && enabled === true ? (
               <section className="assistant-empty" aria-label="开始对话">
                 <Typography.Title level={3}>记录或调整安排</Typography.Title>
                 <Typography.Paragraph type="secondary">
