@@ -22,7 +22,7 @@ import {
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AiActionCard from '../components/AiActionCard'
-import { getSearchKey } from '../local/ai/webSearch'
+import { getSearchKey, searchProviderFor } from '../local/ai/webSearch'
 import { publicSourceUrl } from '../utils/publicSourceUrl'
 import AiChatComposer, { type AiChatImage } from '../components/AiChatComposer'
 import ScheduleCreateModal from '../components/ScheduleCreateModal'
@@ -31,7 +31,7 @@ import { useApp } from '../store/AppContext'
 import type { AiConversation, AiMessage, Schedule } from '../types'
 import { formatWeekInfo } from '../utils/schedule'
 import { hasTimetableFileMaterial, isImageDataUrl, MAX_CHAT_IMAGES } from '../utils/chatImport'
-import { subscribeAiSettings } from '../local/ai/settings'
+import { getAiSettings, subscribeAiSettings } from '../local/ai/settings'
 import { localAiApi, localAiStream } from '../local/ai'
 import { createImageSchedule, type ImageScheduleScope } from '../local/ai/imageSchedule'
 import { readLocalState, subscribeLocalChanges } from '../local/db'
@@ -88,6 +88,7 @@ export default function AiChatPage() {
 
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [webSearch, setWebSearch] = useState(false)
+  const [searchProvider, setSearchProvider] = useState(() => searchProviderFor(''))
   const [conversations, setConversations] = useState<AiConversation[]>([])
   const [currentId, setCurrentId] = useState<number | null>(null)
   const [conversationCursor, setConversationCursor] = useState<string | null>(null)
@@ -247,6 +248,7 @@ export default function AiChatPage() {
     let active = true
     let version = 0
     const refresh = () => {
+      if (LOCAL_MODE) setSearchProvider(searchProviderFor(getAiSettings().endpoint))
       const request = ++version
       void aiApi
         .status()
@@ -261,6 +263,7 @@ export default function AiChatPage() {
       activeAbortRef.current?.abort()
       finishImageSetup(imageSetupRef.current)
       setEnabled(null)
+      setWebSearch(false)
       refresh()
     }
     const visible = () => {
@@ -688,8 +691,8 @@ export default function AiChatPage() {
       message.warning('请关闭联网搜索后发送附件或课表材料')
       return false
     }
-    if (webSearch && content.length > 400) {
-      message.warning('联网搜索请使用 400 字以内的查询')
+    if (webSearch && Array.from(content).length > searchProvider.maxQueryChars) {
+      message.warning(`联网搜索请使用 ${searchProvider.maxQueryChars} 字以内的查询`)
       return false
     }
     if (workspaceMismatch) {
@@ -1247,7 +1250,7 @@ export default function AiChatPage() {
                 aria-pressed={webSearch}
                 disabled={sending || workspaceMismatch}
                 onClick={() => {
-                  if (!webSearch && !getSearchKey()) {
+                  if (!webSearch && searchProvider.id === 'tavily' && !getSearchKey()) {
                     message.info('请先填写 Tavily 搜索 Key')
                     navigate('/settings#ai', { state: { focusSearchSettings: true } })
                     return
@@ -1257,7 +1260,7 @@ export default function AiChatPage() {
               >
                 联网搜索
               </Button>
-              {webSearch && <span>本次查询将发送给 Tavily</span>}
+              {webSearch && <span>本次查询将发送给 {searchProvider.label}</span>}
             </div>
           )}
           <AiChatComposer

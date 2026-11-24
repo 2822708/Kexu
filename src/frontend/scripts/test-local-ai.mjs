@@ -167,6 +167,88 @@ test('regular chat never invokes search even when a search key is saved', async 
   assert.deepEqual(calls, ['https://ai.example.test/v1/chat/completions'])
 })
 
+test('official DeepSeek search uses the current API key and retains links from summary and snippet results', async () => {
+  for (const apiBase of ['https://api.deepseek.com', 'https://api.deepseek.com/v1/chat/completions/']) {
+    const calls = []
+    const x = setup({ fetcher: async (url, init) => {
+      calls.push({ url, body: JSON.parse(init.body), auth: init.headers.Authorization, redirect: init.redirect })
+      if (url === 'https://api.deepseek.com/v1/tools/search') {
+        return Response.json({
+          results: [
+            { title: '日程通知', url: 'https://example.edu/schedule', summary: '本周五举行活动。', snippet: '短摘要', content: '' },
+            { title: '补充公告', url: 'https://example.edu/notice', summary: '', snippet: '活动在礼堂举行。', content: '' },
+          ],
+        })
+      }
+      return completionReply(JSON.stringify({ reply: '本周五在礼堂举行活动。[1][2]', actions: [] }))
+    } })
+    configure(x, apiBase)
+    if (apiBase.includes('/v1/')) x.saveSearchKey(searchFixtureKey)
+    const conv = await x.localAiApi.createConversation(null)
+    await x.localAiStream(conv.id, '查一下本周活动', null, {}, undefined, undefined, [], true)
+
+    assert.deepEqual(calls.map(({ url }) => url), [
+      'https://api.deepseek.com/v1/tools/search',
+      x.completionUrl(apiBase),
+    ])
+    assert.deepEqual(calls[0].body, { query: '查一下本周活动', count: 5 })
+    assert.equal(calls[0].auth, `Bearer ${syntheticKey}`)
+    assert.equal(calls[0].redirect, 'error')
+    assert.equal(calls[1].auth, `Bearer ${syntheticKey}`)
+    const searchEvidence = calls[1].body.messages.find(({ content }) => content.includes('联网搜索得到')).content
+    assert.match(searchEvidence, /本周五举行活动/)
+    assert.match(searchEvidence, /活动在礼堂举行/)
+    assert.doesNotMatch(searchEvidence, /短摘要/)
+    assert.equal(JSON.stringify(calls).includes(searchFixtureKey), false)
+    const state = await x.readLocalState()
+    assert.deepEqual(normal(state.messages.at(-1).sources), [
+      { title: '日程通知', url: 'https://example.edu/schedule' },
+      { title: '补充公告', url: 'https://example.edu/notice' },
+    ])
+    assert.equal(state.messages.at(-1).actions.length, 0)
+    assert.equal(JSON.stringify(state).includes(syntheticKey), false)
+  }
+})
+
+test('proxy endpoints cannot forward model credentials to DeepSeek Search', async () => {
+  const calls = []
+  const x = setup({ fetcher: async (url, init) => {
+    calls.push({ url, auth: init.headers.Authorization })
+    return url === 'https://api.tavily.com/search'
+      ? Response.json(searchFixture)
+      : completionReply(JSON.stringify({ reply: '活动将在周五举行。', actions: [] }))
+  } })
+  for (const endpoint of [
+    'https://api.deepseek.com.example.test/v1',
+    'https://api.deepseek.com:8443/v1',
+    'https://api.deepseek.com/custom/chat/completions',
+  ]) assert.equal(x.searchProviderFor(endpoint).id, 'tavily')
+  configure(x, 'https://api.deepseek.com.example.test/v1')
+  x.saveAiSettings({ ...x.getAiSettings(), model: 'deepseek-flash' })
+  x.saveSearchKey(searchFixtureKey)
+  const conv = await x.localAiApi.createConversation(null)
+  await x.localAiStream(conv.id, '查活动通知', null, {}, undefined, undefined, [], true)
+  assert.deepEqual(calls, [
+    { url: 'https://api.tavily.com/search', auth: `Bearer ${searchFixtureKey}` },
+    { url: 'https://api.deepseek.com.example.test/v1/chat/completions', auth: `Bearer ${syntheticKey}` },
+  ])
+})
+
+test('official DeepSeek search validates Unicode query length and never retries through Tavily', async () => {
+  const calls = []
+  const x = setup({ fetcher: async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) })
+    return new Response('', { status: 402 })
+  } })
+  configure(x, 'https://api.deepseek.com/v1')
+  x.saveSearchKey(searchFixtureKey)
+  await assert.rejects(x.searchWeb('🔍'.repeat(129)), /128/)
+  assert.equal(calls.length, 0)
+  const query = '🔍'.repeat(128)
+  await assert.rejects(x.searchWeb(query), /402|余额|额度/)
+  assert.deepEqual(calls, [{ url: 'https://api.deepseek.com/v1/tools/search', body: { query, count: 5 } }])
+})
+
 test('a search result cannot authorize a task proposal or send attached material to search', async () => {
   const calls = []
   const x = setup({ fetcher: async (url) => {

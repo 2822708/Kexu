@@ -43,6 +43,11 @@ export function completionUrl(endpoint: string): string {
   return url.href
 }
 
+export function isOfficialDeepSeekCompletionUrl(url: string): boolean {
+  return url === 'https://api.deepseek.com/chat/completions' ||
+    url === 'https://api.deepseek.com/v1/chat/completions'
+}
+
 export function validateAiSettings(value: AiConnectionSettings): AiConnectionSettings {
   const endpoint = value.endpoint.trim()
   const model = value.model.trim()

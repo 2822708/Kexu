@@ -214,7 +214,8 @@ function LocalUserManual() {
           未配置或连接失败时，课表仍可正常离线编辑。
         </Paragraph>
         <Paragraph>
-          查校历或通知时，在同页「联网搜索」中保存 Tavily API Key，然后在助手里点「联网搜索」并发送具体查询。
+          查校历或通知时，在助手里点「联网搜索」并发送具体查询。DeepSeek 官方连接可直接使用已保存的 API Key。
+          使用其他模型服务时，可在「AI 连接」的「联网搜索」中保存 Tavily API Key。
           回答下方会列出可打开的来源。需要把查询结果录入安排时，可在同一对话中提出修改，并逐项确认提案。
         </Paragraph>
         <ol>

@@ -1,10 +1,35 @@
-import { AI_SETTINGS_EVENT, SEARCH_KEY, subscribeAiSettings } from './settings'
+import {
+  AI_SETTINGS_EVENT,
+  SEARCH_KEY,
+  completionUrl,
+  getAiSettings,
+  isOfficialDeepSeekCompletionUrl,
+  subscribeAiSettings,
+} from './settings'
 import { readChunk } from './transport'
 import { publicSourceUrl } from '../../utils/publicSourceUrl'
 import type { AiSource } from '../../types'
 
 export interface SearchSource extends AiSource {
   content: string
+}
+
+const DEEPSEEK_SEARCH = {
+  id: 'deepseek', label: 'DeepSeek', maxQueryChars: 128,
+  url: 'https://api.deepseek.com/v1/tools/search',
+} as const
+const TAVILY_SEARCH = {
+  id: 'tavily', label: 'Tavily', maxQueryChars: 400,
+  url: 'https://api.tavily.com/search',
+} as const
+
+export function searchProviderFor(endpoint: string) {
+  try {
+    if (endpoint && isOfficialDeepSeekCompletionUrl(completionUrl(endpoint))) return DEEPSEEK_SEARCH
+  } catch {
+    // An invalid completion endpoint cannot supply credentials to DeepSeek.
+  }
+  return TAVILY_SEARCH
 }
 
 export function getSearchKey(): string {
@@ -23,7 +48,7 @@ export function saveSearchKey(value: string): void {
   window.dispatchEvent(new Event(AI_SETTINGS_EVENT))
 }
 
-export function searchSources(value: unknown): SearchSource[] {
+export function searchSources(value: unknown, provider: 'deepseek' | 'tavily' = 'tavily'): SearchSource[] {
   if (!value || typeof value !== 'object' || !('results' in value) || !Array.isArray(value.results))
     throw new Error('搜索服务返回的数据格式无效')
   const sources: SearchSource[] = []
@@ -31,13 +56,16 @@ export function searchSources(value: unknown): SearchSource[] {
   for (const item of value.results.slice(0, 10)) {
     if (!item || typeof item !== 'object' || typeof item.url !== 'string') continue
     const url = publicSourceUrl(item.url)
-    if (!url || seen.has(url) || typeof item.content !== 'string' || !item.content.trim()) continue
+    const summary = provider === 'deepseek'
+      ? [item.summary, item.snippet].find((text) => typeof text === 'string' && text.trim())
+      : item.content
+    if (!url || seen.has(url) || typeof summary !== 'string' || !summary.trim()) continue
     seen.add(url)
     sources.push({
       title: (typeof item.title === 'string' ? item.title.trim().replace(/\s+/g, ' ').slice(0, 200) : '') ||
         new URL(url).hostname,
       url,
-      content: item.content.slice(0, 3000),
+      content: summary.slice(0, 3000),
     })
     if (sources.length === 5) break
   }
@@ -46,10 +74,18 @@ export function searchSources(value: unknown): SearchSource[] {
 }
 
 /** Only the explicitly selected query is sent to the search service. */
-export async function searchWeb(query: string, signal?: AbortSignal): Promise<SearchSource[]> {
-  const key = getSearchKey()
-  if (!key) throw new Error('请先在 AI 设置中填写 Tavily 搜索 Key')
-  if (!query.trim() || query.length > 400) throw new Error('联网搜索请使用 1–400 字的查询，不要附带长篇资料')
+export async function searchWeb(
+  query: string,
+  signal?: AbortSignal,
+  settings = getAiSettings(),
+): Promise<SearchSource[]> {
+  const provider = searchProviderFor(settings.endpoint)
+  const deepSeek = provider.id === 'deepseek'
+  const key = deepSeek ? settings.apiKey : getSearchKey()
+  if (!key) throw new Error(`请先在 AI 设置中填写 ${provider.label} ${deepSeek ? 'API Key' : '搜索 Key'}`)
+  query = query.trim()
+  if (!query || Array.from(query).length > provider.maxQueryChars)
+    throw new Error(`联网搜索请使用 1–${provider.maxQueryChars} 字的查询`)
   if (key.length >= 8 && query.includes(key)) throw new Error('查询中包含搜索 Key，已阻止发送')
   if (signal?.aborted) throw new DOMException('请求已取消', 'AbortError')
   const controller = new AbortController()
@@ -59,19 +95,22 @@ export async function searchWeb(query: string, signal?: AbortSignal): Promise<Se
   let timedOut = false
   const timer = setTimeout(() => { timedOut = true; abort() }, 25000)
   try {
-    const response = await fetch('https://api.tavily.com/search', {
+    const response = await fetch(provider.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        query: query.trim(), search_depth: 'basic', max_results: 5,
-        include_answer: false, include_raw_content: false,
-      }),
+      body: JSON.stringify(deepSeek
+        ? { query, count: 5 }
+        : { query, search_depth: 'basic', max_results: 5, include_answer: false, include_raw_content: false }),
       signal: controller.signal,
       credentials: 'omit', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
     })
     if (!response.ok) {
       void response.body?.cancel().catch(() => undefined)
-      throw new Error(`搜索失败（HTTP ${response.status}），请检查搜索 Key、额度或稍后重试`)
+      throw new Error(
+        response.status === 402 && deepSeek
+          ? 'DeepSeek 搜索余额不足，请充值后重试'
+          : `${provider.label} 搜索失败（HTTP ${response.status}），请检查 Key、额度或稍后重试`,
+      )
     }
     if (!response.body) throw new Error('搜索服务返回了空响应')
     const reader = response.body.getReader()
@@ -95,7 +134,7 @@ export async function searchWeb(query: string, signal?: AbortSignal): Promise<Se
       } catch {
         throw new Error('搜索服务返回的数据格式无效')
       }
-      const sources = searchSources(data)
+      const sources = searchSources(data, provider.id)
       if (JSON.stringify(sources).includes(key)) throw new Error('搜索响应包含凭据，已阻止使用')
       return sources
     } finally {

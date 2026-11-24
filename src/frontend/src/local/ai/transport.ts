@@ -1,5 +1,6 @@
 import {
   completionUrl,
+  isOfficialDeepSeekCompletionUrl,
   subscribeAiSettings,
   validateAiSettings,
   type AiConnectionSettings,
@@ -33,8 +34,7 @@ class CompletionSizeError extends Error {}
 
 function supportsDeepSeekJson(url: string, model: string): boolean {
   return (
-    (url === 'https://api.deepseek.com/chat/completions' ||
-      url === 'https://api.deepseek.com/v1/chat/completions') &&
+    isOfficialDeepSeekCompletionUrl(url) &&
     (model === 'deepseek-flash' || model === 'deepseek-v4-pro')
   )
 }

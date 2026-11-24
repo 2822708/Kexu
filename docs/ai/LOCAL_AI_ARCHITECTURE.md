@@ -58,6 +58,8 @@
 
 ## 联网搜索
 
-在「我的 → AI 连接 → 联网搜索」保存独立的 Tavily API Key。在助手中打开「联网搜索」并发送查询后，客户端将本轮查询发给 Tavily，将最多五条网页摘要作为资料交给当前 AI 服务。回复附上来源链接。完成后开关归位，搜索过程可以取消。
+连接 DeepSeek 官方 Chat Completions 接口时，客户端复用同一个 API Key 调用 DeepSeek 网页搜索，查询上限为 128 个 Unicode 字符。其他模型服务可在「我的 → AI 连接 → 联网搜索」保存独立的 Tavily API Key。[DeepSeek 网页搜索](https://api-docs.deepseek.com/zh-cn/api/search/)
 
-搜索 Key 保存在设备本地，和模型 Key 分开。搜索模式用来查阅资料。需要创建或修改安排时，可在同一对话继续说明要求，并确认对应提案。[Tavily 搜索接口](https://docs.tavily.com/documentation/api-reference/endpoint/search)
+在助手中打开「联网搜索」并发送查询后，客户端将本轮查询发给对应搜索服务，将最多五条网页摘要作为资料交给当前 AI 服务。回复附上来源链接。完成后开关归位，搜索过程可以取消。
+
+Tavily Key 独立保存在设备本地。搜索模式用来查阅资料。需要创建或修改安排时，可在同一对话继续说明要求，并确认对应提案。[Tavily 搜索接口](https://docs.tavily.com/documentation/api-reference/endpoint/search)
