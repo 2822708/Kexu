@@ -260,11 +260,13 @@ namespace Kexu.Windows
                 await VerifyLegacyTaskLink(false);
                 smokeStage = "reloading-legacy-task-link";
                 await VerifyLegacyTaskLink(true);
+                await VerifyAssistantSetup();
                 smokeStage = "writing-smoke-result";
                 File.WriteAllText(Path.Combine(data, "shell-smoke-result.json"), ShellPolicy.Json().Serialize(new {
                     ok = true, origin = ShellPolicy.Origin, route = "/tasks", runtime = runtimeVersion,
                     rendered = true, secureContext = true, indexedDb = true, persistedAcrossLaunch = persisted,
                     realDailyTaskSaved = true, realDailyTaskPersistedAcrossLaunch = taskPersisted, logicalRouteReload = reloaded, legacyTaskLink = true,
+                    assistantSearchSettings = true,
                     dataDirectory = data, requiresBackend = false, requiresNode = false
                 }), new UTF8Encoding(false));
                 Close();
@@ -283,6 +285,31 @@ namespace Kexu.Windows
                 if (completedNavigations > previousNavigations && await browser.ExecuteScriptAsync(check) == "true") return;
             }
             throw new InvalidOperationException("Legacy task link did not retain its date and fragment.");
+        }
+
+        private async Task VerifyAssistantSetup()
+        {
+            smokeStage = "opening-local-assistant";
+            browser.Navigate(ShellPolicy.Origin + "/ai");
+            const string openSettings =
+                "(function(){if(location.pathname!=='/ai'||!document.querySelector('.ai-chat-composer-text'))return false;" +
+                "var guide=document.querySelector('.assistant-ai-setup button');if(!guide||!guide.getClientRects().length)return false;" +
+                "guide.click();return true;})()";
+            for (int i = 0; i < 80; i++) {
+                if (await browser.ExecuteScriptAsync(openSettings) == "true") {
+                    smokeStage = "opening-search-settings";
+                    const string searchReady =
+                        "location.pathname==='/settings'&&location.hash==='#ai'&&" +
+                        "Boolean(document.querySelector('#web-search-key')?.getClientRects().length)";
+                    for (int attempt = 0; attempt < 80; attempt++) {
+                        if (await browser.ExecuteScriptAsync(searchReady) == "true") return;
+                        await Task.Delay(100);
+                    }
+                    throw new InvalidOperationException("Assistant did not open its search settings.");
+                }
+                await Task.Delay(100);
+            }
+            throw new InvalidOperationException("Assistant setup did not render in the isolated profile.");
         }
 
         private void Fail(Exception error)
