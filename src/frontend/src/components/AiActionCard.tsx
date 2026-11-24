@@ -30,6 +30,7 @@ interface Props {
   onReject: () => void
   disabled?: boolean
   scheduleName?: string | null
+  bindsFirstSchedule?: boolean
 }
 
 type Dict = Record<string, unknown>
@@ -49,6 +50,7 @@ export default function AiActionCard({
   onReject,
   disabled,
   scheduleName,
+  bindsFirstSchedule,
 }: Props) {
   const data = (action.data ?? {}) as Dict
   const pending = action.status === 'PENDING'
@@ -105,7 +107,9 @@ export default function AiActionCard({
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
         {action.type === 'CREATE_SCHEDULE'
-          ? '作用范围：本机课表列表；创建后不会自动切换，可到课表页选择'
+          ? bindsFirstSchedule && pending
+            ? '确认后创建首张课表，并将当前对话绑定到这张课表'
+            : '作用范围：本机课表列表'
           : action.scope === 'COURSE'
             ? `目标课表：${scheduleName ?? (action.scheduleId ? `课表 #${action.scheduleId}（已删除或不可用）` : '未绑定')}`
             : LOCAL_MODE

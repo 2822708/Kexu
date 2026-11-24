@@ -22,6 +22,15 @@ export const DEFAULT_COMPLETION_LIMITS: CompletionLimits = {
   idleMs: 20000,
 }
 
+// Vision providers may send thousands of SSE envelopes and reasoning deltas before a short reply.
+const VISION_COMPLETION_LIMITS: CompletionLimits = {
+  ...DEFAULT_COMPLETION_LIMITS,
+  maxBytes: 8 * 1024 * 1024,
+}
+const MAX_EVENT_CHARS = 1024 * 1024
+
+class CompletionSizeError extends Error {}
+
 function supportsDeepSeekJson(url: string, model: string): boolean {
   return (
     (url === 'https://api.deepseek.com/chat/completions' ||
@@ -49,7 +58,7 @@ async function cancelBounded(cancel: () => Promise<unknown>): Promise<void> {
   }
 }
 
-function readChunk(
+export function readChunk(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   signal: AbortSignal,
   idleMs: number,
@@ -139,7 +148,7 @@ export async function consumeCompletionSse(
       if (typeof data.content === 'string') {
         if (finished && data.content) throw new Error('AI在完成后继续输出正文')
         content += data.content
-        if (content.length > limits.maxChars) throw new Error('AI回复超过长度上限')
+        if (content.length > limits.maxChars) throw new CompletionSizeError('AI回复超过长度上限')
         onDelta?.(data.content)
       }
       if (choice.finish_reason != null) {
@@ -161,13 +170,17 @@ export async function consumeCompletionSse(
         break
       }
       bytes += value.byteLength
-      if (bytes > limits.maxBytes) throw new Error('AI数据流超过大小上限')
+      if (bytes > limits.maxBytes) throw new CompletionSizeError('AI数据流超过大小上限')
       buffer += decoder.decode(value, { stream: true })
       let boundary: RegExpExecArray | null
       while ((boundary = /\r\n\r\n|\n\n|\r\r/.exec(buffer)) !== null) {
+        if (boundary.index > MAX_EVENT_CHARS)
+          throw new CompletionSizeError('AI单个流事件超过大小上限')
         process(buffer.slice(0, boundary.index))
         buffer = buffer.slice(boundary.index + boundary[0].length)
       }
+      if (buffer.length > MAX_EVENT_CHARS)
+        throw new CompletionSizeError('AI单个流事件超过大小上限')
       // Do not wait for a provider to close a keepalive connection after its terminal event.
       if (terminal) break
     }
@@ -216,7 +229,10 @@ export async function requestCompletion(
     ...(jsonOutput ? { response_format: { type: 'json_object' }, max_tokens: 16384 } : {}),
   }
   const controller = new AbortController()
-  const limits = options.limits ?? DEFAULT_COMPLETION_LIMITS
+  const withImages = messages.some(
+    ({ content }) => Array.isArray(content) && content.some((part) => part.type === 'image_url'),
+  )
+  const limits = options.limits ?? (withImages ? VISION_COMPLETION_LIMITS : DEFAULT_COMPLETION_LIMITS)
   let timedOut = false
   const onAbort = () => controller.abort()
   if (options.signal?.aborted) throw aborted()
@@ -274,6 +290,8 @@ export async function requestCompletion(
     // eslint-disable-next-line preserve-caught-error -- Never attach a credential-bearing provider cause to a public timeout.
     if (timedOut) throw new Error('AI请求超过90秒上限，已取消且未生成提案')
     if (options.signal?.aborted) throw aborted()
+    if (withImages && error instanceof CompletionSizeError)
+      error.message = '图片识别回复超过接收上限。请裁切所需区域或分批发送后重试。'
     throw error
   } finally {
     clearTimeout(timer)

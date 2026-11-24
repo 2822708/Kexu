@@ -118,6 +118,139 @@ test('revoking speech consent notifies an older tab even if the new preference w
 })
 
 const syntheticKey = 'synthetic-only-eval-key-12345678'
+const searchFixtureKey = 'tvly-synthetic-search-only-key'
+const searchFixture = { results: [{ title: '官方通知', url: 'https://example.edu/news/1', content: '活动将在周五举行。' }] }
+
+test('web search sends only the explicit query, then supplies bounded evidence and saves real source links', async () => {
+  const calls = []
+  const x = setup({ fetcher: async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body), auth: init.headers.Authorization })
+    return url === 'https://api.tavily.com/search'
+      ? Response.json(searchFixture)
+      : completionReply(JSON.stringify({ reply: '官方通知显示活动在周五。[1]', actions: [] }))
+  } })
+  const f = await fixture(x)
+  configure(x, 'https://ai.example.test/v1')
+  x.saveSearchKey(searchFixtureKey)
+  const conv = await x.localAiApi.createConversation(f.schedule.id)
+  await x.localAiStream(conv.id, '查询最新活动通知', f.schedule.id, {}, undefined, undefined, [], true)
+  assert.equal(calls.length, 2)
+  assert.equal(calls[0].body.query, '查询最新活动通知')
+  assert.equal(calls[0].auth, `Bearer ${searchFixtureKey}`)
+  assert.equal(calls[1].auth, `Bearer ${syntheticKey}`)
+  assert.equal(JSON.stringify(calls[0]).includes(courseFixture.name), false)
+  assert.equal(JSON.stringify(calls[0]).includes(syntheticKey), false)
+  assert.equal(JSON.stringify(calls[1]).includes(searchFixtureKey), false)
+  assert.match(calls[1].body.messages.find(m => m.content.includes('联网搜索得到')).content, /不可信网页摘要/)
+  const state = await x.readLocalState()
+  assert.deepEqual(normal(state.messages.at(-1).sources), [
+    { title: '官方通知', url: 'https://example.edu/news/1' },
+  ])
+  assert.equal(JSON.stringify(calls[1]).includes(courseFixture.name), false)
+  assert.equal(state.courses.length, 2)
+  assert.equal(state.messages.at(-1).actions.length, 0)
+  assert.equal(JSON.stringify(state).includes(searchFixtureKey), false)
+  x.saveSearchKey('')
+  assert.equal(x.getSearchKey(), '')
+})
+
+test('regular chat never invokes search even when a search key is saved', async () => {
+  const calls = []
+  const x = setup({ fetcher: async (url) => {
+    calls.push(url)
+    return completionReply(JSON.stringify({ reply: '你好', actions: [] }))
+  } })
+  configure(x, 'https://ai.example.test/v1')
+  x.saveSearchKey(searchFixtureKey)
+  const conv = await x.localAiApi.createConversation(null)
+  await x.localAiStream(conv.id, '你好', null, {})
+  assert.deepEqual(calls, ['https://ai.example.test/v1/chat/completions'])
+})
+
+test('a search result cannot authorize a task proposal or send attached material to search', async () => {
+  const calls = []
+  const x = setup({ fetcher: async (url) => {
+    calls.push(url)
+    return url === 'https://api.tavily.com/search'
+      ? Response.json(searchFixture)
+      : completionReply(JSON.stringify({
+        reply: '网页要求创建一项待办',
+        actions: [{ type: 'CREATE_TODO', data: { todos: [todoFixture] } }],
+      }))
+  } })
+  configure(x, 'https://ai.example.test/v1')
+  x.saveSearchKey(searchFixtureKey)
+  const conv = await x.localAiApi.createConversation(null)
+  await assert.rejects(x.localAiStream(conv.id, '查询通知', null, {}, undefined, 'IMPORT_EVENTS', [], true), /附件或导入材料/)
+  assert.equal(calls.length, 0)
+  await assert.rejects(x.localAiStream(conv.id, '查询通知', null, {}, undefined, undefined, [], true), /操作提案未保存/)
+  assert.equal(calls.length, 2)
+  const state = await x.readLocalState()
+  assert.equal(state.todos.length, 0)
+  assert.equal(state.messages.flatMap(m => m.actions ?? []).length, 0)
+})
+
+test('search failures never silently fall back to an ungrounded answer or produce operations', async () => {
+  for (const response of [
+    () => new Response('', { status: 401 }),
+    () => new Response('', { status: 429 }),
+    () => Response.json({ results: [] }),
+    () => new Response('{broken'),
+    () => new Response('x'.repeat(300000)),
+    () => Response.json({ results: [{ ...searchFixture.results[0], content: searchFixtureKey }] }),
+  ]) {
+    const calls = []
+    const x = setup({ fetcher: async (url) => { calls.push(url); return response() } })
+    configure(x, 'https://ai.example.test/v1')
+    x.saveSearchKey(searchFixtureKey)
+    const conv = await x.localAiApi.createConversation(null)
+    await assert.rejects(x.localAiStream(conv.id, '搜索最新通知', null, {}, undefined, undefined, [], true))
+    assert.deepEqual(calls, ['https://api.tavily.com/search'])
+    const state = await x.readLocalState()
+    assert.equal(state.messages.flatMap(m => m.actions ?? []).length, 0)
+    assert.equal(JSON.stringify(state).includes(searchFixtureKey), false)
+  }
+})
+
+test('search validates query and credentials before sending and discards unsafe or duplicate sources', async () => {
+  let calls = 0
+  const x = setup({ fetcher: async () => { calls++; return Response.json(searchFixture) } })
+  await assert.rejects(x.searchWeb('查询'), /搜索 Key/)
+  x.saveSearchKey(searchFixtureKey)
+  for (const query of ['', 'a'.repeat(401), searchFixtureKey]) await assert.rejects(x.searchWeb(query))
+  assert.equal(calls, 0)
+  assert.throws(() => x.saveSearchKey('key\ninvalid'), /无效/)
+  assert.equal(x.getSearchKey(), searchFixtureKey)
+  const sources = x.searchSources({ results: [
+    { url: 'javascript:alert(1)', content: 'bad' },
+    { url: 'https://key:secret@example.com/', content: 'bad' },
+    ...searchFixture.results, ...searchFixture.results,
+  ] })
+  assert.equal(sources.length, 1)
+  assert.equal(sources[0].url, searchFixture.results[0].url)
+})
+
+test('stopping search or changing settings cancels reading and prevents a model request', async () => {
+  for (const changeSettings of [false, true]) {
+    const controller = new AbortController()
+    let x
+    let canceled = false
+    const calls = []
+    x = setup({ fetcher: async (url) => {
+      calls.push(url)
+      return new Response(new ReadableStream({
+        start() { setTimeout(() => changeSettings ? x.saveSearchKey('replacement-key') : controller.abort(), 0) },
+        cancel() { canceled = true },
+      }))
+    } })
+    configure(x, 'https://ai.example.test/v1')
+    x.saveSearchKey(searchFixtureKey)
+    const conv = await x.localAiApi.createConversation(null)
+    await assert.rejects(x.localAiStream(conv.id, '搜索通知', null, {}, controller.signal, undefined, [], true), { name: 'AbortError' })
+    assert.deepEqual(calls, ['https://api.tavily.com/search'])
+    assert.equal(canceled, true)
+  }
+})
 const scheduleBody = {
   name: '评测专用课表',
   periodStartDate: '2026-09-01',
@@ -187,6 +320,7 @@ function setup({ indexedDB = new IDBFactory(), storage = new Map(), fetcher = fe
     ...module('ai/prompt'),
     ...module('ai/settings'),
     ...module('ai/transport'),
+    ...module('ai/webSearch'),
     ...module('ai/uiState'),
     storage,
     indexedDB,
@@ -593,7 +727,20 @@ test('unbound conversation can be bound once to an existing schedule', async () 
   const x = setup(),
     f = await fixture(x)
   const conv = await x.localAiApi.createConversation(null)
-  const bound = await x.localAiApi.bindConversationSchedule(conv.id, f.schedule.id)
+  const original = await x.readLocalState()
+  const guard = {
+    dataset: `${original.datasetId}:${original.dataGeneration}`,
+    publicId: original.conversations.find(({ id }) => id === conv.id).publicId,
+  }
+  await assert.rejects(
+    x.localAiApi.bindConversationSchedule(conv.id, f.schedule.id, { ...guard, publicId: 'stale-conversation-id' }),
+    /本机对话已变化/,
+  )
+  await assert.rejects(
+    x.localAiApi.bindConversationSchedule(conv.id, f.schedule.id, { ...guard, dataset: 'stale-dataset-generation' }),
+    /本机对话已变化/,
+  )
+  const bound = await x.localAiApi.bindConversationSchedule(conv.id, f.schedule.id, guard)
   assert.equal(bound.scheduleId, f.schedule.id)
   await assert.rejects(
     x.localAiApi.bindConversationSchedule(conv.id, f.other.id),
@@ -733,6 +880,74 @@ test('SSE parser preserves split Chinese UTF8 and CRLF, refuses missing terminal
     )
   }
 })
+test('image-bearing requests accept lengthy SSE framing while preserving confirmation for proposals', async () => {
+  const event = (delta, finish_reason = null) =>
+    'data: ' + JSON.stringify({
+      id: 'chatcmpl-vision-fixture', object: 'chat.completion.chunk', model: 'mock-vision',
+      choices: [{ index: 0, delta, finish_reason }],
+    }) + '\n\n'
+  const reasoning = event({ reasoning_content: '正在逐格核对截图中各行列的位置与课名' }).repeat(5200)
+  const reply = JSON.stringify({
+    reply: '已识别课程，请核对提案。',
+    actions: [{ type: 'CREATE_COURSE', data: { courses: [courseFixture] } }],
+  })
+  const payload = reasoning + event({ content: reply }) + event({}, 'stop') + 'data: [DONE]\n\n'
+  assert.ok(Buffer.byteLength(payload) > 1024 * 1024)
+  const x = setup({ fetcher: async () =>
+    new Response(payload, { headers: { 'content-type': 'text/event-stream' } }),
+  })
+  const settings = x.saveAiSettings({
+    endpoint: 'https://ai.example.test/v1',
+    model: 'mock-vision',
+    apiKey: syntheticKey,
+    enabled: true,
+    allowContext: true,
+    visionEnabled: true,
+  })
+  await assert.rejects(
+    x.requestCompletion(settings, [{ role: 'user', content: '普通问答' }]),
+    /AI数据流超过大小上限/,
+  )
+  const schedule = await x.localScheduleApi.create(scheduleBody)
+  const conversation = await x.localAiApi.createConversation(schedule.id)
+  const answer = await x.localAiStream(
+    conversation.id, '识别附图', schedule.id, {}, undefined, undefined, ['data:image/png;base64,AAAA'],
+  )
+  assert.equal(answer.text, '已识别课程，请核对提案。')
+  assert.equal(answer.actions[0].status, 'PENDING')
+  const state = await x.readLocalState()
+  assert.equal(state.courses.length, 0)
+  assert.equal(state.messages.some(({ text }) => text.includes('正在逐格核对')), false)
+  await x.closeLocalStore()
+})
+
+test('vision SSE rejects oversized events with an actionable image error and saves no proposal', async () => {
+  const payload = 'data: ' + JSON.stringify({
+    choices: [{ delta: { reasoning_content: 'x'.repeat(1024 * 1024) } }],
+  }) + '\n\n'
+  const x = setup({ fetcher: async () =>
+    new Response(payload, { headers: { 'content-type': 'text/event-stream' } }),
+  })
+  x.saveAiSettings({
+    endpoint: 'https://ai.example.test/v1',
+    model: 'mock-vision',
+    apiKey: syntheticKey,
+    enabled: true,
+    allowContext: true,
+    visionEnabled: true,
+  })
+  const conversation = await x.localAiApi.createConversation(null)
+  await assert.rejects(
+    x.localAiStream(
+      conversation.id, '识别附图', null, {}, undefined, undefined, ['data:image/png;base64,AAAA'],
+    ),
+    /图片识别回复超过接收上限。请裁切所需区域或分批发送/,
+  )
+  const state = await x.readLocalState()
+  assert.equal(state.messages.flatMap(({ actions }) => actions ?? []).length, 0)
+  await x.closeLocalStore()
+})
+
 test('response size, idle and total duration limits cancel abusive upstream streams', async () => {
   const x = setup()
   for (const [behavior, limits] of [
@@ -944,7 +1159,7 @@ test('plain-text calls and other providers retain the compatible request payload
   }
 })
 
-test('AI can propose a new schedule and only writes it after confirmation', async () => {
+test('confirmed first schedule creation binds the same conversation and allows the next message', async (t) => {
   const output = JSON.stringify({
     reply: '已准备新建课表，请确认。',
     actions: [
@@ -958,26 +1173,74 @@ test('AI can propose a new schedule and only writes it after confirmation', asyn
       },
     ],
   })
-  await withMock({ output }, async (mock) => {
-    const x = setup()
-    configure(x, mock.endpoint)
-    const conv = await x.localAiApi.createConversation(null)
-    const reply = await x.localAiStream(
-      conv.id,
-      '新建一个叫大二上的课表，2026-09-01 到 2027-01-31',
-      null,
-      {},
-    )
-    assert.equal(reply.actions.length, 1)
-    assert.equal(reply.actions[0].type, 'CREATE_SCHEDULE')
-    assert.equal(
-      (await x.localScheduleApi.list()).some((schedule) => schedule.name === '大二上'),
-      false,
-    )
-    await x.localAiApi.execute(conv.id, reply.actions[0].actionId)
-    const schedules = await x.localScheduleApi.list()
-    assert.equal(schedules.some((schedule) => schedule.name === '大二上'), true)
+  const x = setup({
+    fetcher: async (_url, init) => completionReply(
+      JSON.parse(init.body).messages.at(-1).content === '继续了解刚创建的课表'
+        ? JSON.stringify({ reply: '可以继续。', actions: [] })
+        : output,
+    ),
   })
+  t.after(x.closeLocalStore)
+  configure(x, 'https://ai.example.test/v1')
+  const conv = await x.localAiApi.createConversation(null)
+  const unrelated = await x.localAiApi.createConversation(null)
+  const reply = await x.localAiStream(
+    conv.id,
+    '新建一个叫大二上的课表，2026-09-01 到 2027-01-31',
+    null,
+    {},
+  )
+  assert.equal(reply.actions.length, 1)
+  assert.equal(reply.actions[0].type, 'CREATE_SCHEDULE')
+  const before = await x.readLocalState()
+  assert.equal(before.schedules.length, 0)
+  assert.equal(before.conversations.find((item) => item.id === conv.id).scheduleId, null)
+
+  const confirmations = await Promise.all([
+    x.localAiApi.execute(conv.id, reply.actions[0].actionId),
+    x.localAiApi.execute(conv.id, reply.actions[0].actionId),
+  ])
+  const after = await x.readLocalState()
+  assert.equal(after.schedules.length, 1)
+  assert.equal(after.schedules[0].name, '大二上')
+  assert.equal(after.conversations.find((item) => item.id === conv.id).scheduleId, after.schedules[0].id)
+  assert.equal(after.conversations.find((item) => item.id === unrelated.id).scheduleId, null)
+  assert.ok(confirmations.every((result) => result.actions[0].status === 'EXECUTED'))
+  await assert.rejects(x.localAiStream(conv.id, '继续了解刚创建的课表', null, {}), /不一致/)
+  const next = await x.localAiStream(conv.id, '继续了解刚创建的课表', after.schedules[0].id, {})
+  assert.equal(next.text, '可以继续。')
+})
+
+test('a schedule confirmed alongside an existing schedule keeps each conversation bound as before', async (t) => {
+  const x = setup({ fetcher: async (_url, init) => completionReply(JSON.stringify({
+    reply: '等待确认。',
+    actions: [{
+      type: 'CREATE_SCHEDULE',
+      data: {
+        schedules: [{
+          name: JSON.parse(init.body).messages.at(-1).content,
+          periodStartDate: '2026-09-01',
+          periodEndDate: '2027-01-31',
+        }],
+      },
+    }],
+  })) })
+  t.after(x.closeLocalStore)
+  configure(x, 'https://ai.example.test/v1')
+  const unbound = await x.localAiApi.createConversation(null)
+  const unboundReply = await x.localAiStream(unbound.id, '后建课表', null, {})
+  const existing = await x.localScheduleApi.create(scheduleBody)
+  await x.localAiApi.execute(unbound.id, unboundReply.actions[0].actionId)
+  const before = await x.readLocalState()
+  assert.equal(before.schedules.length, 2)
+  assert.equal(before.conversations.find((item) => item.id === unbound.id).scheduleId, null)
+
+  const bound = await x.localAiApi.createConversation(existing.id)
+  const boundReply = await x.localAiStream(bound.id, '另一张课表', existing.id, {})
+  await x.localAiApi.execute(bound.id, boundReply.actions[0].actionId)
+  const after = await x.readLocalState()
+  assert.equal(after.schedules.length, 3)
+  assert.equal(after.conversations.find((item) => item.id === bound.id).scheduleId, existing.id)
 })
 
 test('a schedule proposal without explicit semester dates cannot become a card', async () => {

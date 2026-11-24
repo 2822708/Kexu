@@ -45,7 +45,7 @@
 
 ## 协议完整性与故障
 
-传输要求 `text/event-stream`，解析Chat Completions的`choices[0].delta.content`。兼容UTF-8字节切分及LF/CRLF事件边界。自然`finish_reason: stop`与`[DONE]`结束标记必须齐全；length、错误事件、损坏JSON、截断、取消、未知工具调用和多候选均不生成可执行卡片。限制总计90秒、空闲20秒、1 MiB数据和100000字符；所有路径都关闭读取。出错只保存通用失败/取消历史，不保存上游原始错误正文或不完整模型JSON。
+传输要求 `text/event-stream`，解析 Chat Completions 的 `choices[0].delta.content`，兼容 UTF-8 字节切分及 LF/CRLF 事件边界。完整回复必须同时包含 `finish_reason: stop` 和 `[DONE]` 结束标记。应用拒绝根据长度不足、错误事件、损坏 JSON、截断、取消、未知工具调用或多候选的回复生成可执行卡片。总时长为 90 秒，空闲时限为 20 秒，正文最多 100000 字符。含图片的请求允许最多 8 MiB 流式数据，其他请求允许最多 1 MiB，每个流事件最多 1048576 字符。所有路径都关闭读取。失败或取消历史只保存应用提供的错误说明。
 
 当前实现使用兼容Chat Completions子集，而不是保证所有名称含“OpenAI兼容”的供应商都适配。真实模型若不遵循JSON、SSE、CORS或上述结束协议，会给出明确错误，不静默降低校验。模型能力、中文理解和提示注入抵抗仍需真实供应商评测，契约测试不能代替这些结论。
 
@@ -55,3 +55,9 @@
 - [OpenAI官方函数调用指南](https://developers.openai.com/api/docs/guides/function-calling)：应用负责验证参数并决定是否执行。本应用目前采用严格本地JSON验证，不将模型输出直接交给工具。
 
 本文件是接口和安全边界说明；实际测试结果及未验证项见同目录评测报告。
+
+## 联网搜索
+
+在「我的 → AI 连接 → 联网搜索」保存独立的 Tavily API Key。在助手中打开「联网搜索」并发送查询后，客户端将本轮查询发给 Tavily，将最多五条网页摘要作为资料交给当前 AI 服务。回复附上来源链接。完成后开关归位，搜索过程可以取消。
+
+搜索 Key 保存在设备本地，和模型 Key 分开。搜索模式用来查阅资料。需要创建或修改安排时，可在同一对话继续说明要求，并确认对应提案。[Tavily 搜索接口](https://docs.tavily.com/documentation/api-reference/endpoint/search)

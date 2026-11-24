@@ -37,6 +37,7 @@ interface AiChatComposerProps {
   sending: boolean
   disabled: boolean
   sendDisabled: boolean
+  searchMode?: boolean
   scopeKey: string
   /** Images handed over by the quick-import widget; they are sent with the next message. */
   initialImages?: AiChatImage[]
@@ -60,6 +61,7 @@ export default function AiChatComposer({
   sending,
   disabled,
   sendDisabled,
+  searchMode = false,
   scopeKey,
   initialImages,
   onInitialImagesApplied,
@@ -455,7 +457,9 @@ export default function AiChatComposer({
             updateDraft(event.target.value)
           }}
           placeholder={
-            mobile
+            searchMode
+              ? '输入要搜索的内容'
+              : mobile
               ? '描述你的安排'
               : '描述你的安排，或拖入文件、截图；Enter 发送，Shift+Enter 换行'
           }

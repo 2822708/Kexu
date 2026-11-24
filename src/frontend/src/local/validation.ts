@@ -5,6 +5,7 @@ import type {
   RecurringTodoPayload,
   Schedule,
 } from '../types'
+import { publicSourceUrl } from '../utils/publicSourceUrl'
 import { newPublicId, type LocalState } from './types'
 
 export function assertLocal(condition: unknown, message: string): asserts condition {
@@ -304,6 +305,16 @@ export function validateLocalState(value: unknown): asserts value is LocalState 
         m.text.length <= 200000,
       '会话消息不合法',
     )
+    if (m.sources !== undefined) {
+      assertLocal(
+        m.role === 'assistant' && Array.isArray(m.sources) && m.sources.length <= 5 &&
+          m.sources.every((source) =>
+            source && typeof source.title === 'string' && source.title.trim() &&
+            source.title.length <= 200 && publicSourceUrl(source.url),
+          ),
+        '搜索来源不合法',
+      )
+    }
     assertLocal(
       m.actions == null || (Array.isArray(m.actions) && m.actions.length <= 1000),
       'AI提案集合不合法',

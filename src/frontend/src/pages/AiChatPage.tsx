@@ -17,10 +17,13 @@ import {
   DeleteOutlined,
   EditOutlined,
   HistoryOutlined,
+  GlobalOutlined,
   PlusOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AiActionCard from '../components/AiActionCard'
+import { getSearchKey } from '../local/ai/webSearch'
+import { publicSourceUrl } from '../utils/publicSourceUrl'
 import AiChatComposer, { type AiChatImage } from '../components/AiChatComposer'
 import ScheduleCreateModal from '../components/ScheduleCreateModal'
 import { aiApi } from '../api'
@@ -84,6 +87,7 @@ export default function AiChatPage() {
   } = useApp()
 
   const [enabled, setEnabled] = useState<boolean | null>(null)
+  const [webSearch, setWebSearch] = useState(false)
   const [conversations, setConversations] = useState<AiConversation[]>([])
   const [currentId, setCurrentId] = useState<number | null>(null)
   const [conversationCursor, setConversationCursor] = useState<string | null>(null)
@@ -185,6 +189,7 @@ export default function AiChatPage() {
   // 工作空间保护：每个对话绑定一个课表。当前课表与对话所属课表不一致时，
   // 禁止发送消息 / 执行或取消提案，避免串到其它课表的数据。
   const currentConv = conversations.find((c) => c.id === currentId) ?? null
+  const conversationDataset = localDatasetRef.current
   const workspaceMismatch =
     currentConv !== null &&
     (LOCAL_MODE
@@ -197,6 +202,8 @@ export default function AiChatPage() {
       : null
   const convScheduleMissing =
     currentConv?.scheduleId != null && !schedules.some((s) => s.id === currentConv?.scheduleId)
+  const canBindConversation =
+    LOCAL_MODE && currentConv != null && currentConv.scheduleId === null && activeScheduleId != null
 
   // The first schedule changes the composer's scope. Restore the draft only after
   // both the app selection and the original conversation's binding have arrived.
@@ -630,12 +637,17 @@ export default function AiChatPage() {
     setDeleteSelected([])
   }
 
-  const bindConversation = async (conversationId: number, scheduleId: number) => {
+  const bindConversation = async (conversation: AiConversation, scheduleId: number) => {
     try {
-      await localAiApi.bindConversationSchedule(conversationId, scheduleId)
+      const publicId = conversationIdentity(conversation)
+      if (!conversationDataset || !publicId) throw new Error('请等待本机对话读取完成后再绑定')
+      await localAiApi.bindConversationSchedule(conversation.id, scheduleId, {
+        dataset: conversationDataset,
+        publicId,
+      })
       await loadConversations()
       try {
-        await refreshMessages(conversationId, true)
+        await refreshMessages(conversation.id, true)
       } catch {
         // 绑定已提交，消息刷新失败不影响继续使用。
       }
@@ -672,6 +684,14 @@ export default function AiChatPage() {
     const content = draft.trim()
     const images = attachments.map(({ dataUrl }) => dataUrl)
     if ((!content && !images.length) || sending || activeAbortRef.current || imageSetupRef.current) return false
+    if (webSearch && (images.length || importIntentRef.current || hasTimetableFileMaterial(content))) {
+      message.warning('请关闭联网搜索后发送附件或课表材料')
+      return false
+    }
+    if (webSearch && content.length > 400) {
+      message.warning('联网搜索请使用 400 字以内的查询')
+      return false
+    }
     if (workspaceMismatch) {
       message.warning(
         currentConv?.scheduleId == null
@@ -778,6 +798,7 @@ export default function AiChatPage() {
           controller.signal,
           intent,
           images,
+          webSearch,
         )
       else await aiApi.sendMessageStream(cid, content, activeScheduleId, handlers, controller.signal)
       if (controller.signal.aborted) {
@@ -785,6 +806,7 @@ export default function AiChatPage() {
         return false
       }
       if (importIntentRef.current?.conversationId === cid) importIntentRef.current = null
+      if (webSearch) setWebSearch(false)
       clearStream(cid)
       try {
         await refreshMessages(cid)
@@ -826,7 +848,7 @@ export default function AiChatPage() {
         .flatMap((item) => item.actions ?? [])
         .find((item) => item.actionId === actionId)?.type
       await aiApi.execute(currentId, actionId)
-      if (actionType === 'CREATE_SCHEDULE') message.success('课表已创建，可到课表页切换')
+      if (actionType === 'CREATE_SCHEDULE') message.success('课表已创建')
       await refreshMessages(currentId, true)
       try {
         await Promise.all([
@@ -1071,26 +1093,18 @@ export default function AiChatPage() {
             className="assistant-workspace-alert"
             type="error"
             showIcon
-            message="工作空间不一致"
+            message={canBindConversation ? '对话尚未关联课表' : '工作空间不一致'}
             description={
-              currentConv?.scheduleId == null
-                ? `该对话尚未绑定课表，当前课表为「${activeSchedule?.name ?? '未选择'}」。绑定后才能继续发送或执行提案，也可以新建对话。`
-                : convScheduleMissing
-                  ? `该对话原本绑定的课表已不存在，当前课表为「${activeSchedule?.name ?? '未选择'}」。请新建对话；若课表被误删，可先在课表页恢复。`
-                  : `该对话属于「${convScheduleName ?? '未知课表'}」，与当前课表「${activeSchedule?.name ?? '未选择'}」不一致，已锁定发送与操作。请切换到对应课表，或新建对话。`
-            }
-            action={
-              LOCAL_MODE && currentConv?.scheduleId == null && activeScheduleId != null ? (
-                <Button
-                  size="small"
-                  onClick={() => {
-                    if (currentId !== null && activeScheduleId != null)
-                      void bindConversation(currentId, activeScheduleId)
-                  }}
-                >
-                  绑定到当前课表
-                </Button>
-              ) : undefined
+              canBindConversation && currentConv && activeScheduleId != null ? (
+                <div className="assistant-workspace-recovery">
+                  <span>关联「{activeSchedule?.name ?? '当前课表'}」后，可在此对话继续。</span>
+                  <Button onClick={() => void bindConversation(currentConv, activeScheduleId)}>
+                    绑定到当前课表
+                  </Button>
+                </div>
+              ) : convScheduleMissing
+                ? '此对话关联的课表已删除。请恢复课表，或新建对话。'
+                : `请切换到此对话关联的「${convScheduleName ?? '未知课表'}」，或新建对话。`
             }
             style={{ marginBottom: 12, flexShrink: 0 }}
           />
@@ -1149,11 +1163,27 @@ export default function AiChatPage() {
                       }`}
                     >
                       {msg.text}
+                      {msg.role === 'assistant' && !!msg.sources?.length && (
+                        <div className="assistant-sources">
+                          <span>搜索来源</span>
+                          <ol>
+                            {msg.sources.map((source) => {
+                              const href = publicSourceUrl(source.url)
+                              return href && (
+                                <li key={href}>
+                                  <a href={href} target="_blank" rel="noopener noreferrer">{source.title}</a>
+                                </li>
+                              )
+                            })}
+                          </ol>
+                        </div>
+                      )}
                     </div>
                     {(msg.actions ?? []).map((action) => (
                       <AiActionCard
                         key={action.actionId}
                         action={action}
+                        bindsFirstSchedule={LOCAL_MODE && schedules.length === 0 && currentConv?.scheduleId === null}
                         executing={executingId === action.actionId}
                         scheduleName={
                           schedules.find(
@@ -1209,6 +1239,27 @@ export default function AiChatPage() {
             <div ref={bottomRef} />
           </div>
 
+          {LOCAL_MODE && enabled === true && (
+            <div className="assistant-search-row">
+              <Button
+                type="text"
+                icon={<GlobalOutlined />}
+                aria-pressed={webSearch}
+                disabled={sending || workspaceMismatch}
+                onClick={() => {
+                  if (!webSearch && !getSearchKey()) {
+                    message.info('请先填写 Tavily 搜索 Key')
+                    navigate('/settings#ai', { state: { focusSearchSettings: true } })
+                    return
+                  }
+                  setWebSearch((value) => !value)
+                }}
+              >
+                联网搜索
+              </Button>
+              {webSearch && <span>本次查询将发送给 Tavily</span>}
+            </div>
+          )}
           <AiChatComposer
             value={input}
             onChange={setInput}
@@ -1217,6 +1268,7 @@ export default function AiChatPage() {
             sending={sending}
             disabled={workspaceMismatch}
             sendDisabled={enabled !== true}
+            searchMode={webSearch}
             scopeKey={`${composerEpoch}:${activeScheduleId ?? 'none'}`}
             initialImages={pendingImages}
             onInitialImagesApplied={clearPendingImages}

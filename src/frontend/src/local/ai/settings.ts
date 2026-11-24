@@ -2,6 +2,7 @@ import { readCompatiblePreference, removeCompatiblePreference } from '../../../.
 /** Private AI connection settings. This key is deliberately outside the local snapshot database. */
 export const AI_SETTINGS_KEY = 'kexu_private_ai_connection_v1'
 export const AI_SETTINGS_EVENT = 'kexu-ai-settings-changed'
+export const SEARCH_KEY = 'kexu_private_web_search_v1'
 
 export interface AiConnectionSettings {
   endpoint: string
@@ -100,7 +101,7 @@ export function clearAiSettings(): void {
 export function subscribeAiSettings(listener: () => void): () => void {
   const changed = () => listener()
   const storage = (event: StorageEvent) => {
-    if (event.key === AI_SETTINGS_KEY || event.key === null) listener()
+    if (event.key === AI_SETTINGS_KEY || event.key === SEARCH_KEY || event.key === null) listener()
   }
   window.addEventListener(AI_SETTINGS_EVENT, changed)
   window.addEventListener('storage', storage)
