@@ -60,7 +60,7 @@
       "nativeScreenshotAttached": true,
       "nativeInvalidPdfDraftPreserved": true,
       "nativeQuickImportDialogOpened": true,
-      "nativeQuickImport": false
+      "nativeQuickImport": true
     },
     "liveAiProvider": false,
     "productionCloud": false,
