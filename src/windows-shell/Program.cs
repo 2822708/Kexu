@@ -193,33 +193,43 @@ namespace Kexu.Windows
         private async void RunSmoke()
         {
             try {
+                const string addButton = "document.querySelector('.daily-workspace button.daily-add-task:not(:disabled)')";
+                const string taskInput = "document.querySelector('[role=\"dialog\"] input[aria-label=\"快速记录任务\"]:not(:disabled)')";
+                const string saveButton = "document.querySelector('[role=\"dialog\"] button[aria-label=\"保存日任务\"]:not(:disabled)')";
                 smokeStage = "waiting-for-react";
                 await Task.Delay(200);
                 bool ready = false;
                 for (int i = 0; i < 80; i++) {
                     var smokeCore = browser;
                     if (smokeCore == null) throw new InvalidOperationException("WebView2 control lost its CoreWebView2 after navigation.");
-                    var readiness = smokeCore.ExecuteScriptAsync("Boolean(document.querySelector('.daily-workspace') && document.querySelector('input[aria-label=\"快速记录任务\"]:not(:disabled)') && document.querySelector('button[aria-label=\"保存日任务\"]') && location.pathname === '/tasks' && isSecureContext && typeof indexedDB === 'object')");
+                    var readiness = smokeCore.ExecuteScriptAsync("(function(){var add=" + addButton + ";return Boolean(location.pathname==='/tasks' && isSecureContext && typeof indexedDB==='object' && add && add.getClientRects().length);})()");
                     if (readiness == null) throw new InvalidOperationException("ExecuteScriptAsync returned no readiness task.");
                     if (await readiness == "true") { ready = true; break; }
                     await Task.Delay(250);
                 }
-                if (!ready) throw new InvalidOperationException("Rendered focus page / secure origin / IndexedDB did not become ready.");
-                smokeStage = "creating-real-daily-task";
+                if (!ready) throw new InvalidOperationException("Rendered daily task page / secure origin / IndexedDB did not become ready.");
                 const string taskTitle = "Windows封装隔离验证任务";
-                bool taskPersisted = await browser.ExecuteScriptAsync("document.body.innerText.indexOf('" + taskTitle + "')>=0") == "true";
+                string taskInList = "Array.from(document.querySelectorAll('.daily-workspace .daily-entry-title')).some(function(entry){return entry.textContent.trim()==='" + taskTitle + "';})";
+                bool taskPersisted = await browser.ExecuteScriptAsync(taskInList) == "true";
                 if (!taskPersisted) {
-                    if (await browser.ExecuteScriptAsync("(function(){var i=document.querySelector('input[aria-label=\"快速记录任务\"]');if(!i||i.disabled)return false;Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(i,'" + taskTitle + "');i.dispatchEvent(new Event('input',{bubbles:true}));return true;})()") != "true") throw new InvalidOperationException("Rendered daily input was unavailable.");
-                    bool saveReady = false;
+                    smokeStage = "opening-daily-task-form";
+                    if (await browser.ExecuteScriptAsync("(function(){var add=" + addButton + ";if(!add||!add.getClientRects().length)return false;add.click();return true;})()") != "true") throw new InvalidOperationException("Rendered add task button was unavailable.");
+                    bool inputReady = false;
                     for (int i = 0; i < 60; i++) {
-                        if (await browser.ExecuteScriptAsync("Boolean(document.querySelector('button[aria-label=\"保存日任务\"]:not(:disabled)'))") == "true") { saveReady = true; break; }
+                        if (await browser.ExecuteScriptAsync("(function(){var input=" + taskInput + ";if(!input||!input.getClientRects().length)return false;Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'" + taskTitle + "');input.dispatchEvent(new Event('input',{bubbles:true}));return true;})()") == "true") { inputReady = true; break; }
                         await Task.Delay(100);
                     }
-                    if (!saveReady) throw new InvalidOperationException("Daily form did not enable its save button after input.");
-                    await browser.ExecuteScriptAsync("document.querySelector('button[aria-label=\"保存日任务\"]:not(:disabled)').click()");
+                    if (!inputReady) throw new InvalidOperationException("Rendered daily input was unavailable inside the add task dialog.");
+                    smokeStage = "creating-real-daily-task";
+                    bool submitted = false;
+                    for (int i = 0; i < 60; i++) {
+                        if (await browser.ExecuteScriptAsync("(function(){var save=" + saveButton + ";if(!save||!save.getClientRects().length)return false;save.click();return true;})()") == "true") { submitted = true; break; }
+                        await Task.Delay(100);
+                    }
+                    if (!submitted) throw new InvalidOperationException("Daily form did not enable its save button after input.");
                     bool added = false;
                     for (int i = 0; i < 60; i++) {
-                        if (await browser.ExecuteScriptAsync("document.body.innerText.indexOf('" + taskTitle + "')>=0") == "true") { added = true; break; }
+                        if (await browser.ExecuteScriptAsync(taskInList) == "true") { added = true; break; }
                         await Task.Delay(100);
                     }
                     if (!added) throw new InvalidOperationException("Real daily task could not be saved through the rendered form.");
@@ -243,18 +253,20 @@ namespace Kexu.Windows
                 bool reloaded = false;
                 for (int i = 0; i < 100; i++) {
                     await Task.Delay(100);
-                    if (completedNavigations > previousNavigations && await browser.ExecuteScriptAsync("location.pathname==='/tasks'&&document.body.innerText.indexOf('" + taskTitle + "')>=0") == "true") { reloaded = true; break; }
+                    if (completedNavigations > previousNavigations && await browser.ExecuteScriptAsync("location.pathname==='/tasks'&&" + taskInList) == "true") { reloaded = true; break; }
                 }
                 if (!reloaded) throw new InvalidOperationException("Logical /tasks reload or real daily task persistence failed.");
                 smokeStage = "opening-legacy-task-link";
                 await VerifyLegacyTaskLink(false);
                 smokeStage = "reloading-legacy-task-link";
                 await VerifyLegacyTaskLink(true);
+                await VerifyAssistantSetup();
                 smokeStage = "writing-smoke-result";
                 File.WriteAllText(Path.Combine(data, "shell-smoke-result.json"), ShellPolicy.Json().Serialize(new {
                     ok = true, origin = ShellPolicy.Origin, route = "/tasks", runtime = runtimeVersion,
                     rendered = true, secureContext = true, indexedDb = true, persistedAcrossLaunch = persisted,
                     realDailyTaskSaved = true, realDailyTaskPersistedAcrossLaunch = taskPersisted, logicalRouteReload = reloaded, legacyTaskLink = true,
+                    assistantSearchSettings = true,
                     dataDirectory = data, requiresBackend = false, requiresNode = false
                 }), new UTF8Encoding(false));
                 Close();
@@ -273,6 +285,31 @@ namespace Kexu.Windows
                 if (completedNavigations > previousNavigations && await browser.ExecuteScriptAsync(check) == "true") return;
             }
             throw new InvalidOperationException("Legacy task link did not retain its date and fragment.");
+        }
+
+        private async Task VerifyAssistantSetup()
+        {
+            smokeStage = "opening-local-assistant";
+            browser.Navigate(ShellPolicy.Origin + "/ai");
+            const string openSettings =
+                "(function(){if(location.pathname!=='/ai'||!document.querySelector('.ai-chat-composer-text'))return false;" +
+                "var guide=document.querySelector('.assistant-ai-setup button');if(!guide||!guide.getClientRects().length)return false;" +
+                "guide.click();return true;})()";
+            for (int i = 0; i < 80; i++) {
+                if (await browser.ExecuteScriptAsync(openSettings) == "true") {
+                    smokeStage = "opening-search-settings";
+                    const string searchReady =
+                        "location.pathname==='/settings'&&location.hash==='#ai'&&" +
+                        "Boolean(document.querySelector('#web-search-key')?.getClientRects().length)";
+                    for (int attempt = 0; attempt < 80; attempt++) {
+                        if (await browser.ExecuteScriptAsync(searchReady) == "true") return;
+                        await Task.Delay(100);
+                    }
+                    throw new InvalidOperationException("Assistant did not open its search settings.");
+                }
+                await Task.Delay(100);
+            }
+            throw new InvalidOperationException("Assistant setup did not render in the isolated profile.");
         }
 
         private void Fail(Exception error)

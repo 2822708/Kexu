@@ -11,13 +11,13 @@ import {
 } from '@ant-design/icons'
 import { aiApi } from '../api'
 import { useSpeechConsent, useSpeechInput } from '../hooks/useSpeechInput'
-import { MAX_IMAGE_BYTES, prepareImportFile } from '../utils/importFiles'
+import { MAX_IMAGE_BYTES, prepareImportFile, replaceImportImageText } from '../utils/importFiles'
 import {
   appendChatText,
   chatMaterialText,
   MAX_CHAT_CHARS,
   MAX_CHAT_IMAGES,
-  readChatImageCompact,
+  readChatImageParts,
 } from '../utils/chatImport'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { LOCAL_MODE } from '../local/mode'
@@ -37,6 +37,7 @@ interface AiChatComposerProps {
   sending: boolean
   disabled: boolean
   sendDisabled: boolean
+  searchMode?: boolean
   scopeKey: string
   /** Images handed over by the quick-import widget; they are sent with the next message. */
   initialImages?: AiChatImage[]
@@ -60,6 +61,7 @@ export default function AiChatComposer({
   sending,
   disabled,
   sendDisabled,
+  searchMode = false,
   scopeKey,
   initialImages,
   onInitialImagesApplied,
@@ -82,7 +84,7 @@ export default function AiChatComposer({
   const operationRef = useRef(0)
   const imagesRef = useRef<PendingImage[]>([])
   const nextImageRef = useRef(0)
-  const appliedInitialRef = useRef<Set<string>>(new Set())
+  const appliedInitialRef = useRef(new WeakSet<AiChatImage>())
   const dragDepthRef = useRef(0)
   const composingRef = useRef(false)
   const voiceRef = useRef<{ scope: string; base: string } | null>(null)
@@ -148,7 +150,7 @@ export default function AiChatComposer({
     dragDepthRef.current = 0
     voiceRef.current = null
     abortSpeechRef.current()
-    appliedInitialRef.current.clear()
+    appliedInitialRef.current = new WeakSet<AiChatImage>()
     setImages([])
     setBusy(null)
     setDragging(false)
@@ -160,10 +162,10 @@ export default function AiChatComposer({
     // Quick import hands images over after the conversation switch resets the composer.
     if (!initialImages?.length || disabledRef.current) return
     const additions = initialImages.filter(
-      (item) => !appliedInitialRef.current.has(item.dataUrl),
+      (item) => !appliedInitialRef.current.has(item),
     )
     if (!additions.length) return
-    for (const item of additions) appliedInitialRef.current.add(item.dataUrl)
+    for (const item of additions) appliedInitialRef.current.add(item)
     const room = MAX_CHAT_IMAGES - imagesRef.current.length
     if (room <= 0) {
       message.warning(`一次最多附带 ${MAX_CHAT_IMAGES} 张图片，已忽略其余导入图片`)
@@ -264,22 +266,31 @@ export default function AiChatComposer({
       if (pending.length) {
         busyRef.current = 'images'
         setBusy('images')
-        for (const image of pending) {
-          const dataUrl = image.dataUrl ?? (image.file ? await readChatImageCompact(image.file) : '')
-          if (!dataUrl) throw new Error(`无法读取图片：${image.name}`)
+        for (const [index, image] of pending.entries()) {
+          // Reserve one slot for every original attachment still to be processed.
+          const remainingOriginals = pending.length - index - 1
+          const slots = MAX_CHAT_IMAGES - attachments.length - remainingOriginals
+          const parts = image.dataUrl ? [image.dataUrl]
+            : image.file ? await readChatImageParts(image.file, LOCAL_MODE ? slots : 1)
+            : []
           if (!isCurrent(scope, operation)) return
-          attachments.push({ dataUrl, name: image.name })
+          if (!parts.length) throw new Error(`无法读取图片：${image.name}`)
+          attachments.push(...parts.map((dataUrl, partIndex) => ({
+            dataUrl,
+            name: parts.length > 1 ? `${image.name}（第 ${partIndex + 1}/${parts.length} 段）` : image.name,
+          })))
         }
         if (!LOCAL_MODE) {
           // The REST backend has no multimodal chat endpoint, so images are transcribed first.
-          for (let index = 0; index < pending.length; index++) {
-            const result = await aiApi.parseImageText(attachments[index].dataUrl)
+          for (const { dataUrl, name } of attachments) {
+            const result = await aiApi.parseImageText(dataUrl)
             if (!isCurrent(scope, operation)) return
-            if (!result.text.trim()) throw new Error(`图片中未识别到文字：${pending[index].name}`)
-            content = appendChatText(
-              content,
-              chatMaterialText(pending[index].name, result.text, true),
-            )
+            const text = result.text.trim()
+            if (!text) throw new Error(`图片中未识别到文字：${name}`)
+            const replaced = replaceImportImageText(content, name, text)
+            content = replaced === null
+              ? appendChatText(content, chatMaterialText(name, text, true))
+              : appendChatText('', replaced)
           }
         }
         if (!content) content = '请识别附图，并整理为待确认的提案。'
@@ -455,7 +466,9 @@ export default function AiChatComposer({
             updateDraft(event.target.value)
           }}
           placeholder={
-            mobile
+            searchMode
+              ? '输入要搜索的内容'
+              : mobile
               ? '描述你的安排'
               : '描述你的安排，或拖入文件、截图；Enter 发送，Shift+Enter 换行'
           }

@@ -1,10 +1,23 @@
-import type { PDFDocumentProxy } from 'pdfjs-dist'
+import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
+import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 
 export const MAX_IMPORT_FILE_BYTES = 12 * 1024 * 1024
 export const MAX_IMPORT_TEXT_CHARS = 18000
 export const MAX_PDF_PAGES = 12
 export const MAX_PDF_IMAGE_PAGES = 3
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024
+
+function importImageMarker(name: string): string {
+  return `【扫描页待识别：${name}】`
+}
+
+export function replaceImportImageText(text: string, imageName: string, recognized: string): string | null {
+  const lines = text.split('\n')
+  const index = lines.indexOf(importImageMarker(imageName))
+  if (index === -1) return null
+  lines[index] = recognized
+  return lines.join('\n')
+}
 
 /** Append a complete OCR result atomically; callers keep the source images on failure. */
 export function mergeImportText(existingText: string, recognizedText: string): string {
@@ -41,28 +54,35 @@ function boundedText(text: string): string {
   return cleaned
 }
 
-async function readUtf8OrGb18030(file: File): Promise<string> {
-  const bytes = await file.arrayBuffer()
+async function readImportText(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes)
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes)
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '')
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   } catch {
-    return new TextDecoder('gb18030').decode(bytes).replace(/^\uFEFF/, '')
+    return new TextDecoder('gb18030').decode(bytes)
   }
 }
 
 function htmlText(source: string): string {
+  const entities: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
   return source
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<(script|style|template|noscript|svg|iframe|object|embed|video|audio)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/\s+/g, ' ')
+    .replace(/<\/t[dh]\s*>\s*<t[dh]\b[^>]*>/gi, '\t')
+    .replace(/<br\b[^>]*>|<\/(?:p|div|li|tr|h[1-6])\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(nbsp|amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);/gi, (_, value: string) => {
+      const entity = value.toLowerCase()
+      if (entity[0] !== '#') return entities[entity]
+      const hex = entity[1] === 'x'
+      const code = parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10)
+      return code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff) ? String.fromCodePoint(code) : '\ufffd'
+    })
+    .replace(/ *([\n\t]) */g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
 }
 
 let resolversReady = false
@@ -96,34 +116,102 @@ function ensurePromiseWithResolvers(): void {
 
 async function loadPdfJs() {
   ensurePromiseWithResolvers()
-  const [{ GlobalWorkerOptions, getDocument, version }, workerModule] = await Promise.all([
+  const [{ GlobalWorkerOptions, getDocument, OPS, version }, workerModule] = await Promise.all([
     import('pdfjs-dist'),
     import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
   ])
   GlobalWorkerOptions.workerSrc = workerModule.default
-  return { getDocument, assets: `${import.meta.env.BASE_URL}assets/pdfjs-${version}/` }
+  return { getDocument, OPS, assets: `${import.meta.env.BASE_URL}assets/pdfjs-${version}/` }
 }
 
 function safeFileStem(name: string): string {
   return (name.replace(/\.[^.]+$/, '') || 'PDF')
-    .replace(/[\\/:*?"<>|]+/g, '_')
+    .replace(/[\\/:*?"<>|\r\n]+/g, '_')
     .slice(0, 80)
+}
+
+function pdfPageImageName(stem: string, page: number): string {
+  return `${stem}-第${page}页.jpg`
+}
+
+function pdfTextLines(items: TextItem[]): string {
+  const lines: string[] = []
+  let line = ''
+  let previous: TextItem | undefined
+  for (const item of items) {
+    const horizontal = item.dir === 'ltr' && Math.abs(item.transform[0]) > Math.abs(item.transform[1])
+    if (line && previous && horizontal && previous.dir === 'ltr') {
+      const height = Math.max(item.height, previous.height, 1)
+      const sameLine = Math.abs(item.transform[5] - previous.transform[5]) < height * 0.65
+      if (!sameLine) {
+        lines.push(line.trim())
+        line = ''
+      } else {
+        const gap = item.transform[4] - previous.transform[4] - previous.width
+        // A substantial blank span usually separates cells in a course timetable.
+        const wideSpace = !item.str.trim() && item.width > height * 1.5
+        if (gap > height * 1.5 || wideSpace) line = `${line.trimEnd()}\t`
+        else if (gap > height * 0.12 && !/\s$/.test(line)) line += ' '
+      }
+    }
+    line += item.str
+    if (item.hasEOL) {
+      if (line.trim()) lines.push(line.trim())
+      line = ''
+    }
+    previous = item
+  }
+  if (line.trim()) lines.push(line.trim())
+  return lines.join('\n').replace(/ *\t */g, '\t')
+}
+
+async function hasScannedContent(page: PDFPageProxy, ops: typeof import('pdfjs-dist')['OPS']): Promise<boolean> {
+  const viewport = page.getViewport({ scale: 1 })
+  const minimumImageArea = viewport.width * viewport.height * 0.15
+  const savedAreas: number[] = []
+  let imageArea = 1
+  const { fnArray, argsArray } = await page.getOperatorList()
+  return fnArray.some((operation, index) => {
+    if (operation === ops.save || operation === ops.paintFormXObjectBegin || operation === ops.beginGroup) {
+      savedAreas.push(imageArea)
+    }
+    if (operation === ops.restore || operation === ops.paintFormXObjectEnd || operation === ops.endGroup) {
+      imageArea = savedAreas.pop() ?? 1
+    }
+    const matrix = operation === ops.transform ? argsArray[index]
+      : operation === ops.paintFormXObjectBegin ? argsArray[index][0] : null
+    if (matrix) {
+      const [a, b, c, d] = matrix
+      // PDF draws raster images over a unit square. The transform scales its area
+      // independently of the raster resolution (for example a small school logo).
+      imageArea *= Math.abs(a * d - b * c)
+    }
+    if (imageArea < minimumImageArea) return false
+    if (operation === ops.paintImageXObject) {
+      const [, width, height] = argsArray[index]
+      return width >= 320 && height >= 320
+    }
+    if (operation === ops.paintInlineImageXObject) {
+      const [image] = argsArray[index]
+      return image?.width >= 320 && image?.height >= 320
+    }
+    return false
+  })
 }
 
 async function renderPdfPages(
   pdfDocument: PDFDocumentProxy,
-  sourceName: string,
+  stem: string,
   pageNumbers: number[],
 ): Promise<File[]> {
   const images: File[] = []
-  const stem = safeFileStem(sourceName)
   for (const pageNumber of pageNumbers) {
+    const canvas = document.createElement('canvas')
     const page = await pdfDocument.getPage(pageNumber)
     try {
       const base = page.getViewport({ scale: 1 })
-      const scale = Math.min(2, 1800 / Math.max(base.width, base.height))
+      const scale = Math.min(3, 2200 / Math.max(base.width, base.height))
       const viewport = page.getViewport({ scale })
-      const canvas = document.createElement('canvas')
       canvas.width = Math.max(1, Math.ceil(viewport.width))
       canvas.height = Math.max(1, Math.ceil(viewport.height))
       const context = canvas.getContext('2d', { alpha: false })
@@ -138,11 +226,12 @@ async function renderPdfPages(
           0.9,
         )
       })
-      images.push(new File([blob], `${stem}-第${pageNumber}页.jpg`, {
+      images.push(new File([blob], pdfPageImageName(stem, pageNumber), {
         type: 'image/jpeg',
         lastModified: Date.now(),
       }))
     } finally {
+      canvas.width = canvas.height = 0
       page.cleanup()
     }
   }
@@ -150,7 +239,7 @@ async function renderPdfPages(
 }
 
 async function extractPdfMaterial(file: File): Promise<ImportFileMaterial> {
-  const { getDocument, assets } = await loadPdfJs()
+  const { getDocument, OPS, assets } = await loadPdfJs()
   const bytes = new Uint8Array(await file.arrayBuffer())
   const pdfDocument = await getDocument({
     data: bytes,
@@ -164,34 +253,33 @@ async function extractPdfMaterial(file: File): Promise<ImportFileMaterial> {
     if (pdfDocument.numPages > MAX_PDF_PAGES) {
       throw new Error(`PDF 超过 ${MAX_PDF_PAGES} 页，请先拆分到需要导入的页面`)
     }
-    const textPages: string[] = []
+    const stem = safeFileStem(file.name)
+    const pages: string[] = []
     const imagePages: number[] = []
     for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber++) {
       const page = await pdfDocument.getPage(pageNumber)
       try {
         const content = await page.getTextContent()
-        const line = content.items
-          .map((item) => ('str' in item ? item.str : ''))
-          .filter(Boolean)
-          .join(' ')
-          .trim()
-        if (line) textPages.push(`第 ${pageNumber} 页：${line}`)
-        else imagePages.push(pageNumber)
+        const text = pdfTextLines(content.items.filter((item) => 'str' in item))
+        // A short title or page number can sit above a scanned timetable image.
+        const sparseText = text.replace(/[^\p{L}\p{N}]/gu, '').length < 32
+        if (!text || (sparseText && await hasScannedContent(page, OPS))) {
+          imagePages.push(pageNumber)
+          pages.push(`第 ${pageNumber} 页：\n${importImageMarker(pdfPageImageName(stem, pageNumber))}`)
+        } else {
+          pages.push(`第 ${pageNumber} 页：${text}`)
+        }
       } finally {
         page.cleanup()
       }
     }
-    const textParts = textPages.length ? [textPages.join('\n')] : []
-    const selectedImagePages = imagePages.slice(0, MAX_PDF_IMAGE_PAGES)
-    if (imagePages.length > selectedImagePages.length) {
-      textParts.push(
-        `PDF 中另有 ${imagePages.length - selectedImagePages.length} 页扫描内容未附上，请拆分后导入。`,
-      )
+    if (imagePages.length > MAX_PDF_IMAGE_PAGES) {
+      throw new Error(`PDF 的第 ${imagePages.join('、')} 页需要识别图片。每次最多导入 ${MAX_PDF_IMAGE_PAGES} 张扫描页，请拆分 PDF 后重试。`)
     }
     return {
-      text: textParts.length ? boundedText(textParts.join('\n\n')) : null,
-      images: selectedImagePages.length
-        ? await renderPdfPages(pdfDocument, file.name, selectedImagePages)
+      text: pages.length > imagePages.length ? boundedText(pages.join('\n\n')) : null,
+      images: imagePages.length
+        ? await renderPdfPages(pdfDocument, stem, imagePages)
         : [],
     }
   } finally {
@@ -220,7 +308,7 @@ export async function prepareImportFile(file: File): Promise<ImportFileMaterial>
   if (!['txt', 'md', 'csv', 'ics', 'html', 'htm'].includes(extension)) {
     throw new Error('支持 TXT、Markdown、CSV、ICS、HTML、PDF、DOCX 和常见截图格式')
   }
-  const source = await readUtf8OrGb18030(file)
+  const source = await readImportText(file)
   return {
     text: extension === 'html' || extension === 'htm'
       ? boundedText(htmlText(source))

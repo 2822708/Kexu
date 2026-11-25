@@ -142,10 +142,16 @@ export interface AiAction {
   data: Record<string, unknown> | null
 }
 
+export interface AiSource {
+  title: string
+  url: string
+}
+
 export interface AiMessage {
   messageId: number
   role: 'user' | 'assistant'
   text: string
+  sources?: AiSource[]
   actions?: AiAction[]
   createdAt?: string
 }

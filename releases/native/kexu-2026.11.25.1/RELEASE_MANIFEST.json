@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "product": "Kexu",
+  "version": "2026.11.25.1",
+  "sourceCommit": "6e17a9875984ab72f859acda01370ffcd80df812",
+  "sourceTree": "a95963c7d21c2e1a5ddce55b90511c92a3ebab7e",
+  "sourceDirty": false,
+  "artifacts": [
+    {
+      "path": "Kexu-Android-2026.11.25.1.apk",
+      "bytes": 5146731,
+      "sha256": "74bbbaaa7143a15664108f7d028188862d91259c7bc977e4998d744376009d92"
+    },
+    {
+      "path": "Kexu-Windows-x64-2026.11.25.1.zip",
+      "bytes": 3544022,
+      "sha256": "584ab1993c8c5e2549b403e7be8ef62d33caebf4e955750a7e8ab2c47f12177a"
+    },
+    {
+      "path": "Kexu-Windows-x64/Kexu.exe",
+      "bytes": 109056,
+      "sha256": "3697d8166301c2939c553fca8d5d69e7a654d0e1a4ecf600af6652c1cb6deb4f"
+    }
+  ],
+  "frontendFiles": 229,
+  "frontendIndexSha256": "2d52aafe137c7c7a7935fc00bad1fcc79952f86705facad67a8a2ce36b7c8cfe",
+  "frontendBootSha256": "79aec8ed7790969bef4a3218b972810ef7502d921760bcda00d62df75da8e63d",
+  "windowsPackageFiles": 238,
+  "android": {
+    "applicationId": "com.kexu.local",
+    "versionName": "2026.11.25.1",
+    "versionCode": 2026112501,
+    "minSdk": 26,
+    "targetSdk": 36,
+    "signatureScheme": "v2",
+    "certificateSha256": "74e5fa65a263abcfa3018b43813bb8eb13d6c9eb70498ea5cc5c1c9d37ccd332",
+    "deviceTested": false,
+    "emulatorApi": 36,
+    "samePreviousSigningCertificate": true
+  },
+  "windowsRuntime": "158.0.4370.33",
+  "requiresJava": false,
+  "requiresNode": false,
+  "validation": {
+    "frontendTypecheck": true,
+    "frontendTests": 302,
+    "browserAttachmentFlowWithMockAi": true,
+    "browserParsedFixtures": [
+      "PDF",
+      "CSV",
+      "HTML",
+      "DOCX"
+    ],
+    "androidUnitTests": 5,
+    "androidEmulator": {
+      "currentVersionLaunchedOffline": true,
+      "signedUpgrade": true,
+      "taskPreservedAfterUpgrade": true,
+      "nativeMixedPdfImport": true,
+      "nativeScreenshotAttached": true,
+      "nativeInvalidPdfDraftPreserved": true,
+      "nativeQuickImportDialogOpened": true,
+      "nativeQuickImport": true
+    },
+    "liveAiProvider": false,
+    "productionCloud": false,
+    "windowsPolicyAssertions": 31,
+    "windowsTwoLaunchSmoke": true,
+    "windowsRealDailyTaskPersistedAcrossLaunch": true,
+    "windowsLegacyTaskLink": true,
+    "windowsAssistantSearchSettings": true,
+    "windowsUpgradeFrom": "v2026.11.19.1",
+    "windowsAttachmentFlowWithMockAi": true,
+    "windowsQuickImport": true,
+    "embeddedFrontendByteEquality": true,
+    "zipCRC": true,
+    "privateDataIncluded": false
+  }
+}

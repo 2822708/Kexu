@@ -43,7 +43,7 @@ function deferred() {
 
 // Drive the real component's rendered callbacks with a deterministic hook host.
 // File extraction and OCR are external boundaries; no browser storage or network is used.
-function mountWidget({ material, recognize, local = true } = {}) {
+function mountWidget({ material, recognize, local = true, createConversation, validateImage = async () => {} } = {}) {
   const slots = []
   const effects = []
   const navigations = []
@@ -100,7 +100,10 @@ function mountWidget({ material, recognize, local = true } = {}) {
     '@ant-design/icons': new Proxy({}, { get: (_, name) => String(name) }),
     'react-router-dom': { useNavigate: () => (...args) => navigations.push(args) },
     '../api': {
-      aiApi: { parseImageText, createConversation: async () => ({ id: 7, publicId: 'synthetic-conversation' }) },
+      aiApi: {
+        parseImageText,
+        createConversation: createConversation ?? (async () => ({ id: 7, publicId: 'synthetic-conversation' })),
+      },
     },
     '../store/AppContext': {
       useApp: () => ({ activeScheduleId: scope, activeSchedule: { id: scope, name: `测试课表${scope}` } }),
@@ -108,10 +111,13 @@ function mountWidget({ material, recognize, local = true } = {}) {
     '../hooks/useSpeechInput': {
       useSpeechConsent: () => [false, () => {}], useSpeechInput: () => speech,
     },
-    '../utils/importFiles': { ...importFiles, prepareImportFile: async () => material },
+    '../utils/importFiles': {
+      ...importFiles,
+      prepareImportFile: async (file) => typeof material === 'function' ? material(file) : material,
+    },
     '../utils/chatImport': {
-      readChatImage: async () => 'data:image/png;base64,AA==',
       readChatImageCompact: async () => 'data:image/png;base64,AA==',
+      validateChatImage: validateImage,
     },
     '../local/mode': { LOCAL_MODE: local },
     '../local/ai': { localAiApi: { parseImageText } },
@@ -177,15 +183,39 @@ function mountWidget({ material, recognize, local = true } = {}) {
 const image = (name = '扫描页.jpg') => new File(['synthetic-image'], name, { type: 'image/jpeg' })
 const pdf = () => new File(['synthetic-pdf'], '混合材料.pdf', { type: 'application/pdf' })
 
-test('mixed PDF OCR appends to its text pages and the user edits before releasing images', async () => {
-  const widget = mountWidget({ material: { text: '文字页：周一数学', images: [image()] }, recognize: async () => '扫描页：周二英语' })
+test('mixed PDF OCR fills the original page position and preserves edits', async () => {
+  const original = '第 1 页：周一数学\n\n第 2 页：\n【扫描页待识别：扫描页.jpg】\n\n第 3 页：周三物理'
+  const widget = mountWidget({ material: { text: original, images: [image()] }, recognize: async () => '周二英语' })
   await widget.upload(pdf())
-  widget.edit('文字页：周一数学\n用户补充：带课本')
+  widget.edit(`${original}\n用户补充：带课本`)
   assert.equal(widget.hasImages(), true)
   await widget.transcribe()
-  assert.equal(widget.text(), '文字页：周一数学\n用户补充：带课本\n\n扫描页：周二英语')
+  assert.equal(widget.text(), '第 1 页：周一数学\n\n第 2 页：\n周二英语\n\n第 3 页：周三物理\n用户补充：带课本')
   assert.equal(widget.hasImages(), false)
   assert.equal(widget.navigations.length, 0)
+  widget.dispose()
+})
+
+test('a damaged replacement file leaves the previous draft and pages available', async () => {
+  const widget = mountWidget({
+    material(file) {
+      if (file.name === '损坏.pdf') throw new Error('无法读取该 PDF')
+      return { text: '原 PDF 的文字页', images: [image()] }
+    },
+    validateImage: async () => { throw new Error('无法解码图片：损坏.png') },
+    recognize: async () => '原 PDF 扫描页识别结果',
+  })
+  await widget.upload(pdf())
+  await widget.upload(new File(['broken'], '损坏.pdf', { type: 'application/pdf' }))
+  assert.equal(widget.text(), '原 PDF 的文字页')
+  assert.equal(widget.hasImages(), true)
+  assert.match(widget.error(), /无法读取该 PDF/)
+  await widget.upload(new File(['broken'], '损坏.png', { type: 'image/png' }))
+  assert.equal(widget.text(), '原 PDF 的文字页')
+  assert.equal(widget.hasImages(), true)
+  assert.match(widget.error(), /无法解码图片/)
+  await widget.transcribe()
+  assert.equal(widget.text(), '原 PDF 的文字页\n\n原 PDF 扫描页识别结果')
   widget.dispose()
 })
 
@@ -272,15 +302,43 @@ test('unmounting during OCR does not write any late state', async () => {
 })
 
 test('server OCR handoff includes both text sources and retains the import intent', async () => {
-  const widget = mountWidget({ local: false, material: { text: '本地文字页', images: [image()] }, recognize: async () => '扫描文字页' })
+  const source = '第 1 页：\n【扫描页待识别：扫描页.jpg】\n\n第 2 页：本地文字页'
+  const widget = mountWidget({ local: false, material: { text: source, images: [image()] }, recognize: async () => '扫描文字页' })
   await widget.upload(pdf())
   await widget.forward()
   assert.equal(widget.navigations.length, 1)
   const [path, options] = widget.navigations[0]
   assert.equal(path, '/ai')
   assert.equal(options.state.quickImport.intent, 'IMPORT_EVENTS')
-  assert.ok(options.state.quickImport.prompt.includes('本地文字页\n\n扫描文字页'))
+  assert.ok(options.state.quickImport.prompt.includes('第 1 页：\n扫描文字页\n\n第 2 页：本地文字页'))
   assert.equal(options.state.quickImport.images.length, 0)
+  widget.dispose()
+})
+
+test('local handoff preserves the scan marker and attaches the original page by name', async () => {
+  const marker = '【扫描页待识别：扫描页.jpg】'
+  const widget = mountWidget({ material: { text: `${marker}\n\n第 2 页：周二英语`, images: [image()] } })
+  await widget.upload(pdf())
+  await widget.forward()
+  const { quickImport } = widget.navigations[0][1].state
+  assert.ok(quickImport.prompt.includes(marker))
+  assert.equal(quickImport.images[0].name, '扫描页.jpg')
+  widget.dispose()
+})
+
+test('a failed conversation handoff retains the original server OCR draft and image', async () => {
+  const widget = mountWidget({
+    local: false,
+    material: { text: '本地文字页', images: [image()] },
+    recognize: async () => '扫描文字页',
+    createConversation: async () => { throw new Error('会话创建失败') },
+  })
+  await widget.upload(pdf())
+  await widget.forward()
+  assert.equal(widget.text(), '本地文字页')
+  assert.equal(widget.hasImages(), true)
+  assert.equal(widget.navigations.length, 0)
+  assert.match(widget.error(), /会话创建失败/)
   widget.dispose()
 })
 

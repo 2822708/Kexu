@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { message, Select, Tag, Tooltip } from 'antd'
 import {
@@ -16,11 +16,12 @@ import {
 import { useApp } from '../store/AppContext'
 import { useTheme } from '../theme'
 import { formatWeekInfo } from '../utils/schedule'
-import QuickImportWidget from './QuickImportWidget'
 import PwaStatus from './PwaStatus'
 import { useVisualViewport } from '../hooks/useVisualViewport'
 import { LOCAL_MODE } from '../local/mode'
 import '../app-shell.css'
+
+const QuickImportWidget = lazy(() => import('./QuickImportWidget'))
 
 const NAV_ITEMS = [
   { key: '/timetable', icon: <CalendarOutlined />, label: '课表' },
@@ -204,7 +205,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Link>
         ))}
       </nav>
-      {!location.pathname.startsWith('/ai') && !location.pathname.startsWith('/tasks') && !location.pathname.startsWith('/settings') && <QuickImportWidget />}
+      {!location.pathname.startsWith('/ai') && !location.pathname.startsWith('/tasks') && !location.pathname.startsWith('/settings') && (
+        <Suspense fallback={null}>
+          <QuickImportWidget />
+        </Suspense>
+      )}
     </div>
   )
 }

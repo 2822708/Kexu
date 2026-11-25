@@ -1,6 +1,7 @@
 import { LOCAL_MODE } from '../local/mode'
 import LocalBackupSettings from '../components/LocalBackupSettings'
 import AiConnectionSettings from '../components/AiConnectionSettings'
+import WebSearchSettings from '../components/WebSearchSettings'
 import { useEffect, useState } from 'react'
 import {
   Alert,
@@ -289,7 +290,10 @@ export default function SettingsPage() {
   )
 
   const aiSection = LOCAL_MODE ? (
-    <AiConnectionSettings />
+    <>
+      <AiConnectionSettings />
+      <WebSearchSettings />
+    </>
   ) : (
     <Card title="AI 助手（DeepSeek）">
       <Space direction="vertical" size={12} style={{ width: '100%' }}>

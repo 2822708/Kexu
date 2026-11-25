@@ -2,6 +2,7 @@ import { readCompatiblePreference, removeCompatiblePreference } from '../../../.
 /** Private AI connection settings. This key is deliberately outside the local snapshot database. */
 export const AI_SETTINGS_KEY = 'kexu_private_ai_connection_v1'
 export const AI_SETTINGS_EVENT = 'kexu-ai-settings-changed'
+export const SEARCH_KEY = 'kexu_private_web_search_v1'
 
 export interface AiConnectionSettings {
   endpoint: string
@@ -40,6 +41,11 @@ export function completionUrl(endpoint: string): string {
   const path = url.pathname.replace(/\/+$/, '')
   url.pathname = path.endsWith('/chat/completions') ? path : `${path}/chat/completions`
   return url.href
+}
+
+export function isOfficialDeepSeekCompletionUrl(url: string): boolean {
+  return url === 'https://api.deepseek.com/chat/completions' ||
+    url === 'https://api.deepseek.com/v1/chat/completions'
 }
 
 export function validateAiSettings(value: AiConnectionSettings): AiConnectionSettings {
@@ -100,7 +106,7 @@ export function clearAiSettings(): void {
 export function subscribeAiSettings(listener: () => void): () => void {
   const changed = () => listener()
   const storage = (event: StorageEvent) => {
-    if (event.key === AI_SETTINGS_KEY || event.key === null) listener()
+    if (event.key === AI_SETTINGS_KEY || event.key === SEARCH_KEY || event.key === null) listener()
   }
   window.addEventListener(AI_SETTINGS_EVENT, changed)
   window.addEventListener('storage', storage)

@@ -1,9 +1,11 @@
 import { readCompatiblePreference } from '../../../shared/brandCompatibility.mjs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Button, DatePicker, Dropdown, Input, Modal, Spin, message } from 'antd'
 import {
   CalendarOutlined,
   CheckOutlined,
+  DownOutlined,
   FieldTimeOutlined,
   LeftOutlined,
   MoreOutlined,
@@ -31,7 +33,13 @@ const todayInShanghai = () => nowLocalDateTime().slice(0, 10)
 type Tool = 'schedule' | 'focus' | null
 type Undo = { entry: DailyResolvedEntry; eventId?: string; version: number; generation: string }
 
-export default function LocalDailyPage({ embedded = false }: { embedded?: boolean }) {
+export default function LocalDailyPage({
+  embedded = false,
+  dateHeadingTarget,
+}: {
+  embedded?: boolean
+  dateHeadingTarget?: HTMLElement | null
+}) {
   const navigate = useNavigate()
   const [search, setSearch] = useSearchParams()
   const { activeSchedule, activeScheduleId, courses, exams, periods } = useApp()
@@ -39,12 +47,14 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
     validDate(search.get('date')) ? search.get('date')! : todayInShanghai(),
   )
   const [today, setToday] = useState(todayInShanghai)
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
   const { workspace, refresh } = useDailyWorkspace(date)
-  const [filter, setFilter] = useState<'active' | 'completed'>('active')
+  const [status, setStatus] = useState<'active' | 'completed'>('active')
   const [tool, setTool] = useState<Tool>(null)
   const [title, setTitle] = useState('')
   const [backfill, setBackfill] = useState(false)
   const [editingPast, setEditingPast] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(false)
   const [poolOpen, setPoolOpen] = useState(false)
   const [prioritiesOpen, setPrioritiesOpen] = useState(false)
   const [reviewDate, setReviewDate] = useState<string | null>(null)
@@ -66,9 +76,10 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   const [convert, setConvert] = useState<DailyResolvedEntry | null>(null)
   const [ddl, setDdl] = useState<ReturnType<typeof dayjs> | null>(null)
   const inputRef = useRef<import('antd').InputRef>(null)
-  const toolRefs = useRef<
-    Partial<Record<'schedule' | 'focus' | 'review', HTMLButtonElement | null>>
-  >({})
+  const addButton = useRef<HTMLButtonElement>(null)
+  const completedStatusButton = useRef<HTMLButtonElement>(null)
+  const reviewButton = useRef<HTMLButtonElement>(null)
+  const toolButtons = useRef<Partial<Record<Exclude<Tool, null>, HTMLButtonElement | null>>>({})
   const drafts = useRef(new Map<string, string>())
   const asked = useRef(new Set<string>())
   const generation = workspace.generation
@@ -88,6 +99,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
       setUndo(null)
       setEffectId(null)
       reviewSession.current = null
+      setComposerOpen(false)
       setPoolOpen(false)
       setPrioritiesOpen(false)
       setNotice('本机数据已恢复，旧操作已关闭。未保存的任务输入已保留，请确认后再保存。')
@@ -110,7 +122,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
         document.activeElement === completionFocus.current ||
         document.activeElement === document.body
       )
-        inputRef.current?.focus({ preventScroll: true })
+        addButton.current?.focus({ preventScroll: true })
     }, 460)
     return () => window.clearTimeout(timeout)
   }, [effectId])
@@ -118,12 +130,12 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   const isPast = date < today
   const isFuture = date > today
   const canEdit = !isPast || editingPast
+  const isDailyView = !embedded || !['all', 'recurring'].includes(search.get('view') ?? '')
   const entries = workspace.entries
   const active = entries.filter((item) => !item.completed)
   const done = entries.filter((item) => item.completed)
-  const visible = entries.filter((item) =>
-    filter === 'active' ? !item.completed || effectId === item.publicId : item.completed,
-  )
+  const pending = effectId ? entries.filter((item) => !item.completed || item.publicId === effectId) : active
+  const visibleEntries = status === 'active' ? pending : done
   const reviewState = workspace.state
   const reviewFacts = reviewDate ? projectDailyReview(reviewState, reviewDate) : null
   const yesterday = dayjs(today).subtract(1, 'day').format('YYYY-MM-DD')
@@ -160,6 +172,8 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   const changeDate = useCallback((next: string, updateUrl = true) => {
     drafts.current.set(date, title)
     setDate(next)
+    setStatus('active')
+    setDatePickerOpen(false)
     setBackfill(false)
     setTitle(drafts.current.get(next) ?? '')
     setEditingPast(false)
@@ -167,7 +181,13 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
     setTool(null)
     setUndo(null)
     setNotice('')
+    setComposerOpen(false)
+    setPoolOpen(false)
+    setPrioritiesOpen(false)
+    setConvert(null)
+    setQuestionOpen(false)
     setReviewDate(null)
+    reviewSession.current = null
     if (updateUrl) {
       setSearch((previous) => {
         const params = new URLSearchParams(previous)
@@ -181,6 +201,17 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   useEffect(() => {
     if (requestedDate !== date) changeDate(requestedDate, false)
   }, [requestedDate, date, changeDate])
+  useEffect(() => {
+    if (isDailyView) return
+    setDatePickerOpen(false)
+    setComposerOpen(false)
+    setPoolOpen(false)
+    setPrioritiesOpen(false)
+    setConvert(null)
+    setQuestionOpen(false)
+    setReviewDate(null)
+    reviewSession.current = null
+  }, [isDailyView])
   const completed = async (entry: DailyResolvedEntry) => {
     const originalFocus = document.activeElement
     const expectedDate = date
@@ -212,16 +243,14 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
             }
           : null,
       )
-      if (date === today) {
-        completionFocus.current = originalFocus
-        setEffectId(entry.publicId)
-      }
+      completionFocus.current = originalFocus
+      setEffectId(entry.publicId)
     } else {
       setNotice(`已恢复待做：${entry.title}`)
       setUndo(null)
       requestAnimationFrame(() => {
         if (document.activeElement === originalFocus || document.activeElement === document.body)
-          inputRef.current?.focus({ preventScroll: true })
+          completedStatusButton.current?.focus({ preventScroll: true })
       })
     }
   }
@@ -246,9 +275,18 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
       setTitle('')
       drafts.current.delete(selected)
       setNotice(backfill ? `这件事也记下了：${value}` : `已加入：${value}`)
-      if (backfill && selected === today && result.changed) setEffectId('composer')
-      inputRef.current?.focus({ preventScroll: true })
+      setComposerOpen(false)
+      setBackfill(false)
+      setStatus(backfill ? 'completed' : 'active')
+      if (backfill && result.changed) {
+        completionFocus.current = null
+        setEffectId('composer')
+      }
     })
+  const openTaskPool = () => {
+    setComposerOpen(false)
+    setPoolOpen(true)
+  }
   const openReview = () => {
     setTool(null)
     setReviewError('')
@@ -309,43 +347,174 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
   const closeReview = () => {
     setReviewDate(null)
     reviewSession.current = null
-    requestAnimationFrame(() => toolRefs.current.review?.focus())
+    requestAnimationFrame(() => reviewButton.current?.focus())
   }
   const focusTargets = active
     .filter((item) => !item.missingSource && !item.examLinked)
     .map((item) => ({ key: item.publicId, title: item.title }))
 
-  return (
-    <div className="daily-workspace">
-      <header className="daily-heading">
-        <div className="daily-heading-date">
-          {embedded ? (
-            <h2 className="tasks-day-label">{isPast ? '回顾' : isFuture ? '计划' : '今天'}</h2>
-          ) : (
-            <h1>{isPast ? '回顾' : isFuture ? '计划' : '今日'}</h1>
+  const renderEntry = (entry: DailyResolvedEntry) => (
+    <article
+      key={entry.publicId}
+      className={`daily-entry${entry.isPriority ? ' is-priority' : ''}${entry.completed ? ' is-completed' : ''}${effectId === entry.publicId ? ' is-celebrating' : ''}`}
+    >
+      <div className="daily-check-wrap">
+        <button
+          className="daily-check"
+          aria-label={`${entry.completed ? '恢复待做' : '完成'} ${entry.title}`}
+          aria-pressed={entry.completed}
+          aria-busy={busy.has(entry.publicId)}
+          disabled={
+            !canEdit ||
+            isFuture ||
+            entry.missingSource ||
+            entry.examLinked ||
+            busy.has(entry.publicId)
+          }
+          onClick={() => void run(entry.publicId, () => completed(entry))}
+        >
+          <span className="daily-check-indicator" aria-hidden="true">
+            {busy.has(entry.publicId) ? (
+              <Spin size="small" />
+            ) : entry.completed ? (
+              <CheckOutlined />
+            ) : null}
+          </span>
+        </button>
+        {effectId === entry.publicId && (
+          <span className="daily-completion-effect" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        )}
+      </div>
+      <div className="daily-entry-copy">
+        <div className="daily-entry-title">
+          {entry.isPriority && (
+            <StarFilled className="daily-priority-star" aria-label="重点" />
           )}
-          <time dateTime={date}>{dayjs(date).format('dddd')}</time>
+          {entry.title}
         </div>
-        <div className="daily-date-control">
+        <div className="daily-entry-meta">
+          {entry.origin === 'backfill' ? (
+            <span>补记</span>
+          ) : entry.kind === 'dayTask' && entry.origin === 'adHoc' ? (
+            <span>临时</span>
+          ) : null}
+          {entry.ddl && <span>截止 {dayjs(entry.ddl).format('M月D日 HH:mm')}</span>}
+          {entry.missingSource && <span>原待办已删除 · 保留记录</span>}
+          {entry.examLinked && <span>考试状态随安排更新</span>}
+          {entry.completed && !entry.completedDate && <span>历史完成，日期未记录</span>}
+        </div>
+      </div>
+      <Dropdown
+        trigger={['click']}
+        menu={{
+          items: [
+            {
+              key: 'priority',
+              label: entry.isPriority ? '取消重点' : '设为重点',
+              disabled: !canEdit,
+            },
+            {
+              key: 'tomorrow',
+              label: '安排到下一天',
+              disabled: !canEdit || entry.completed,
+            },
+            {
+              key: 'convert',
+              label: '转为长期待办',
+              disabled: !canEdit || entry.kind !== 'dayTask' || entry.completed,
+            },
+          ],
+          onClick: ({ key }) => {
+            if (key === 'convert') {
+              setConvert(entry)
+              setDdl(null)
+              return
+            }
+            void run(entry.publicId, async () => {
+              if (key === 'priority')
+                await dailyApi.setPriority({
+                  ...context(),
+                  entryPublicId: entry.publicId,
+                  expectedVersion: entry.version,
+                  isPriority: !entry.isPriority,
+                })
+              if (key === 'tomorrow') {
+                await dailyApi.moveEntry({
+                  ...context(),
+                  entryPublicId: entry.publicId,
+                  expectedVersion: entry.version,
+                  date: dayjs(date).add(1, 'day').format('YYYY-MM-DD'),
+                })
+                setNotice('已安排到下一天，原截止时间保持不变。')
+              }
+              await refresh()
+            })
+          },
+        }}
+      >
+        <Button
+          type="text"
+          className="daily-more"
+          aria-label={`更多操作 ${entry.title}`}
+          icon={<MoreOutlined />}
+        />
+      </Dropdown>
+    </article>
+  )
+
+  const dateHeading = (
+    <DatePicker
+      className="tasks-compact-date"
+      classNames={{ popup: { root: 'daily-date-popup' } }}
+      aria-label="计划日期"
+      value={dayjs(date)}
+      open={datePickerOpen}
+      onOpenChange={setDatePickerOpen}
+      format="M月D日 · ddd"
+      suffixIcon={<DownOutlined />}
+      allowClear={false}
+      inputReadOnly
+      showToday={false}
+      placement="bottomRight"
+      onChange={(value) => {
+        // Closing after a shortcut can cause the picker to submit its previous selection.
+        if (datePickerOpen && value) changeDate(value.format('YYYY-MM-DD'))
+      }}
+      renderExtraFooter={() => (
+        <div
+          className="daily-date-picker-footer"
+          onMouseDown={(event) => event.preventDefault()}
+        >
           <Button
             aria-label="前一天"
+            type="text"
             icon={<LeftOutlined />}
             onClick={() => changeDate(dayjs(date).subtract(1, 'day').format('YYYY-MM-DD'))}
           />
-          <DatePicker
-            aria-label="计划日期"
-            value={dayjs(date)}
-            allowClear={false}
-            inputReadOnly
-            onChange={(value) => value && changeDate(value.format('YYYY-MM-DD'))}
-          />
+          <Button type="link" disabled={date === today} onClick={() => changeDate(today)}>
+            回到今天
+          </Button>
           <Button
             aria-label="后一天"
+            type="text"
             icon={<RightOutlined />}
             onClick={() => changeDate(dayjs(date).add(1, 'day').format('YYYY-MM-DD'))}
           />
         </div>
-      </header>
+      )}
+    />
+  )
+
+  return (
+    <div className="daily-workspace">
+      {dateHeadingTarget === undefined
+        ? dateHeading
+        : dateHeadingTarget && createPortal(dateHeading, dateHeadingTarget)}
       {date !== today && (
         <div className="daily-date-note">
           <Button type="link" onClick={() => changeDate(today)}>
@@ -362,205 +531,35 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
         <p className="daily-muted">新的一天已开始，未完成事项仍保留在原日期。</p>
       )}
       <section className="daily-main" aria-label="日任务">
-        {canEdit && (
-          <div
-            className={`daily-quick-composer${effectId === 'composer' ? ' is-celebrating' : ''}`}
-          >
-            <form
-              className="daily-quick-form"
-              onSubmit={(event) => {
-                event.preventDefault()
-                submitQuick()
-              }}
-            >
-              <Input
-                ref={inputRef}
-                aria-label="快速记录任务"
-                placeholder={backfill ? '记下一件已经做完的事' : '记下一件要做的事…'}
-                value={title}
-                disabled={busy.has('create')}
-                maxLength={500}
-                onChange={(event) => setTitle(event.target.value)}
-                onKeyDown={(event) => {
-                  if (
-                    event.key === 'Enter' &&
-                    (event.nativeEvent.isComposing || event.keyCode === 229)
-                  )
-                    event.preventDefault()
-                }}
-              />
-              <Button
-                htmlType="submit"
-                type="primary"
-                aria-label="保存日任务"
-                icon={<PlusOutlined />}
-                disabled={!title.trim()}
-                loading={busy.has('create')}
-              >
-                添加
-              </Button>
-            </form>
-            <div className="daily-composer-modes">
-              <button aria-pressed={!backfill} onClick={() => setBackfill(false)}>
-                待会要做
-              </button>
-              <button disabled={isFuture} aria-pressed={backfill} onClick={() => setBackfill(true)}>
-                刚刚做完
-              </button>
-              <button onClick={() => setPoolOpen(true)}>选择已有任务</button>
-            </div>
-            {entries.some((entry) => entry.title === title.trim()) && title.trim() && (
-              <p className="daily-muted">清单里已有同名事项，仍可继续创建。</p>
-            )}
-          </div>
-        )}
         <div className="daily-list-toolbar">
-          <div className="daily-list-tabs" role="tablist" aria-label="日任务状态">
-            <button
-              role="tab"
-              aria-selected={filter === 'active'}
-              onClick={() => setFilter('active')}
-            >
+          <div className="daily-status-switch" role="group" aria-label="日任务状态">
+            <button type="button" aria-pressed={status === 'active'} onClick={() => setStatus('active')}>
               待做 <span>{active.length}</span>
             </button>
             <button
-              role="tab"
-              aria-selected={filter === 'completed'}
-              onClick={() => setFilter('completed')}
+              ref={completedStatusButton}
+              type="button"
+              aria-pressed={status === 'completed'}
+              onClick={() => setStatus('completed')}
             >
               已完成 <span>{done.length}</span>
             </button>
           </div>
-          <div className="daily-list-tools">
-            <Button type="text" onClick={() => setPrioritiesOpen(true)} disabled={!canEdit}>
-              重点
-            </Button>
-          </div>
+          <Button type="text" disabled={!canEdit} onClick={() => setPrioritiesOpen(true)}>
+            重点
+          </Button>
         </div>
         <div
           className="daily-entry-list"
-          role="tabpanel"
-          aria-label={filter === 'active' ? '待做任务' : '已完成任务'}
+          aria-label={status === 'active' ? '待做任务' : '已完成任务'}
+          role="group"
         >
-          {visible.length === 0 && (
+          {visibleEntries.length ? visibleEntries.map(renderEntry) : (
             <div className="daily-empty">
-              {filter === 'completed' ? '还没有已完成的日任务' : '还没有待做的日任务'}
-              {filter === 'active' && canEdit && <p>可以快速记录一件事，或从待办中选入。</p>}
+              {status === 'active' ? '还没有待做的日任务' : '还没有已完成的日任务'}
+              {status === 'active' && canEdit && <p>可以快速记录一件事，或从待办中选入。</p>}
             </div>
           )}
-          {visible.map((entry) => (
-            <article
-              key={entry.publicId}
-              className={`daily-entry${entry.isPriority ? ' is-priority' : ''}${entry.completed ? ' is-completed' : ''}${effectId === entry.publicId ? ' is-celebrating' : ''}`}
-            >
-              <div className="daily-check-wrap">
-                <button
-                  className="daily-check"
-                  aria-label={`${entry.completed ? '恢复待做' : '完成'} ${entry.title}`}
-                  aria-pressed={entry.completed}
-                  aria-busy={busy.has(entry.publicId)}
-                  disabled={
-                    !canEdit ||
-                    isFuture ||
-                    entry.missingSource ||
-                    entry.examLinked ||
-                    busy.has(entry.publicId)
-                  }
-                  onClick={() => void run(entry.publicId, () => completed(entry))}
-                >
-                  <span className="daily-check-indicator" aria-hidden="true">
-                    {busy.has(entry.publicId) ? (
-                      <Spin size="small" />
-                    ) : entry.completed ? (
-                      <CheckOutlined />
-                    ) : null}
-                  </span>
-                </button>
-                {effectId === entry.publicId && (
-                  <span className="daily-completion-effect" aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                )}
-              </div>
-              <div className="daily-entry-copy">
-                <div className="daily-entry-title">
-                  {entry.isPriority && (
-                    <StarFilled className="daily-priority-star" aria-label="重点" />
-                  )}
-                  {entry.title}
-                </div>
-                <div className="daily-entry-meta">
-                  {entry.origin === 'backfill' ? (
-                    <span>补记</span>
-                  ) : entry.kind === 'dayTask' && entry.origin === 'adHoc' ? (
-                    <span>临时</span>
-                  ) : null}
-                  {entry.ddl && <span>截止 {dayjs(entry.ddl).format('M月D日 HH:mm')}</span>}
-                  {entry.missingSource && <span>原待办已删除 · 保留记录</span>}
-                  {entry.examLinked && <span>考试状态随安排更新</span>}
-                  {entry.completed && !entry.completedDate && <span>历史完成，日期未记录</span>}
-                </div>
-              </div>
-              <Dropdown
-                trigger={['click']}
-                menu={{
-                  items: [
-                    {
-                      key: 'priority',
-                      label: entry.isPriority ? '取消重点' : '设为重点',
-                      disabled: !canEdit,
-                    },
-                    {
-                      key: 'tomorrow',
-                      label: '安排到下一天',
-                      disabled: !canEdit || entry.completed,
-                    },
-                    {
-                      key: 'convert',
-                      label: '转为长期待办',
-                      disabled: !canEdit || entry.kind !== 'dayTask' || entry.completed,
-                    },
-                  ],
-                  onClick: ({ key }) => {
-                    if (key === 'convert') {
-                      setConvert(entry)
-                      setDdl(null)
-                      return
-                    }
-                    void run(entry.publicId, async () => {
-                      if (key === 'priority')
-                        await dailyApi.setPriority({
-                          ...context(),
-                          entryPublicId: entry.publicId,
-                          expectedVersion: entry.version,
-                          isPriority: !entry.isPriority,
-                        })
-                      if (key === 'tomorrow') {
-                        await dailyApi.moveEntry({
-                          ...context(),
-                          entryPublicId: entry.publicId,
-                          expectedVersion: entry.version,
-                          date: dayjs(date).add(1, 'day').format('YYYY-MM-DD'),
-                        })
-                        setNotice('已安排到下一天，原截止时间保持不变。')
-                      }
-                      await refresh()
-                    })
-                  },
-                }}
-              >
-                <Button
-                  type="text"
-                  className="daily-more"
-                  aria-label={`更多操作 ${entry.title}`}
-                  icon={<MoreOutlined />}
-                />
-              </Dropdown>
-            </article>
-          ))}
         </div>
       </section>
       <div
@@ -584,6 +583,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
                 })
                 await refresh()
                 setUndo(null)
+                setStatus('active')
                 setNotice('已撤销，任务恢复待做。')
               })
             }
@@ -598,17 +598,15 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
         onKeyDown={(event) => {
           if (event.key === 'Escape' && tool) {
             event.preventDefault()
-            const previous = tool
             setTool(null)
-            toolRefs.current[previous]?.focus()
+            toolButtons.current[tool]?.focus()
           }
         }}
       >
         <div className="daily-tool-row">
           <button
-            ref={(node) => {
-              toolRefs.current.schedule = node
-            }}
+            ref={(node) => { toolButtons.current.schedule = node }}
+            type="button"
             aria-expanded={tool === 'schedule'}
             aria-controls="daily-schedule-panel"
             onClick={() => setTool(tool === 'schedule' ? null : 'schedule')}
@@ -617,9 +615,8 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
             日程
           </button>
           <button
-            ref={(node) => {
-              toolRefs.current.focus = node
-            }}
+            ref={(node) => { toolButtons.current.focus = node }}
+            type="button"
             aria-expanded={tool === 'focus'}
             aria-controls="daily-focus-panel"
             onClick={() => setTool(tool === 'focus' ? null : 'focus')}
@@ -628,9 +625,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
             专注
           </button>
           <button
-            ref={(node) => {
-              toolRefs.current.review = node
-            }}
+            ref={reviewButton}
             aria-haspopup="dialog"
             aria-describedby={reviewStatus ? 'daily-review-status' : undefined}
             title={reviewStatus || undefined}
@@ -728,9 +723,84 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
           />
         </div>
       </section>
+      {canEdit && (
+        <Button
+          ref={addButton}
+          className={`daily-add-task${effectId === 'composer' ? ' is-celebrating' : ''}`}
+          type="primary"
+          icon={<PlusOutlined />}
+          aria-haspopup="dialog"
+          onClick={() => setComposerOpen(true)}
+        >
+          {isPast ? '补记任务' : '添加任务'}
+        </Button>
+      )}
+      <Modal
+        title={isPast ? '补记任务' : '添加任务'}
+        centered
+        open={composerOpen && canEdit && isDailyView}
+        footer={null}
+        width={440}
+        onCancel={() => setComposerOpen(false)}
+        afterOpenChange={(open) => {
+          if (open) inputRef.current?.focus({ preventScroll: true })
+        }}
+      >
+        <div className="daily-quick-composer">
+          <form
+            className="daily-quick-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              submitQuick()
+            }}
+          >
+            <Input
+              ref={inputRef}
+              aria-label="快速记录任务"
+              placeholder={backfill ? '记下一件已经做完的事' : '记下一件要做的事…'}
+              value={title}
+              disabled={busy.has('create')}
+              maxLength={500}
+              onChange={(event) => setTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key === 'Enter' &&
+                  (event.nativeEvent.isComposing || event.keyCode === 229)
+                )
+                  event.preventDefault()
+              }}
+            />
+            <Button
+              htmlType="submit"
+              type="primary"
+              aria-label="保存日任务"
+              icon={<PlusOutlined />}
+              disabled={!title.trim()}
+              loading={busy.has('create')}
+            >
+              添加
+            </Button>
+          </form>
+          <div className="daily-composer-modes">
+            <button aria-pressed={!backfill} onClick={() => setBackfill(false)}>
+              待会要做
+            </button>
+            <button disabled={isFuture} aria-pressed={backfill} onClick={() => setBackfill(true)}>
+              刚刚做完
+            </button>
+            <button onClick={openTaskPool}>选择已有任务</button>
+          </div>
+          {entries.some((entry) => entry.title === title.trim()) && title.trim() && (
+            <p className="daily-muted">清单里已有同名事项，仍可继续创建。</p>
+          )}
+        </div>
+      </Modal>
       <Modal
         title="选入日计划"
-        open={poolOpen}
+        open={poolOpen && canEdit && isDailyView}
+        afterOpenChange={(open) => {
+          if (!open && isDailyView) addButton.current?.focus({ preventScroll: true })
+        }}
         footer={<Button onClick={() => setPoolOpen(false)}>完成</Button>}
         onCancel={() => setPoolOpen(false)}
       >
@@ -795,7 +865,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
       </Modal>
       <Modal
         title="选择重点 · 最多3项"
-        open={prioritiesOpen}
+        open={prioritiesOpen && canEdit && isDailyView}
         footer={<Button onClick={() => setPrioritiesOpen(false)}>完成</Button>}
         onCancel={() => setPrioritiesOpen(false)}
       >
@@ -827,7 +897,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
       </Modal>
       <Modal
         title="转为长期待办"
-        open={Boolean(convert)}
+        open={Boolean(convert) && canEdit && isDailyView}
         onCancel={() => setConvert(null)}
         okText="转换"
         cancelText="取消"
@@ -862,17 +932,17 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
       </Modal>
       <Modal
         title="要先看看昨日回顾吗？"
-        open={questionOpen}
+        open={questionOpen && isDailyView}
         onCancel={() => {
           setQuestionOpen(false)
-          toolRefs.current.review?.focus()
+          reviewButton.current?.focus()
         }}
         footer={[
           <Button
             key="cancel"
             onClick={() => {
               setQuestionOpen(false)
-              toolRefs.current.review?.focus()
+              reviewButton.current?.focus()
             }}
           >
             暂不
@@ -900,7 +970,7 @@ export default function LocalDailyPage({ embedded = false }: { embedded?: boolea
       >
         <p>今天还没有新的记录。昨日为 {yesterday}，仅查看，不会改动今日任务。</p>
       </Modal>
-      {reviewFacts && reviewDate && (
+      {isDailyView && reviewFacts && reviewDate && (
         <DailyReviewSheet
           open
           date={reviewDate}
