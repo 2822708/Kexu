@@ -4,7 +4,7 @@
 
 仓库：[2822708/Kexu](https://github.com/2822708/Kexu)。项目空间示例：`E:\codex work\projects\Kexu`。使用 [Kexu.code-workspace](Kexu.code-workspace) 打开源码与文档。
 
-**[在线试用 Kexu](https://2822708.github.io/Kexu/)**（数据保存在本机浏览器） · **[下载安装 Kexu](docs/install/README.md)** · [Windows / Android 下载页](https://github.com/2822708/Kexu/releases/tag/v2026.11.19.1)
+**[在线试用 Kexu](https://2822708.github.io/Kexu/)**（数据保存在本机浏览器） · **[下载安装 Kexu](docs/install/README.md)** · [Windows / Android 下载页](https://github.com/2822708/Kexu/releases/tag/v2026.11.25.1)
 
 ## 使用与下载
 
