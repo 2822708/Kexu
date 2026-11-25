@@ -23,8 +23,9 @@ import {
   MAX_IMPORT_TEXT_CHARS,
   mergeImportText,
   prepareImportFile,
+  replaceImportImageText,
 } from '../utils/importFiles'
-import { readChatImage, readChatImageCompact } from '../utils/chatImport'
+import { readChatImageCompact, validateChatImage } from '../utils/chatImport'
 import { LOCAL_MODE } from '../local/mode'
 import { localAiApi } from '../local/ai'
 
@@ -122,26 +123,23 @@ export default function QuickImportWidget() {
     const scope = scopeRef.current
     const operation = ++operationRef.current
     setError('')
-    if (isSupportedImage(file)) {
-      if (file.size > MAX_IMAGE_BYTES) {
-        setError('截图不能超过 4 MiB')
-      } else {
-        setImageFiles([file])
-        setSourceName(file.name)
-        setText('')
-      }
+    const screenshot = isSupportedImage(file)
+    if (screenshot && file.size > MAX_IMAGE_BYTES) {
+      setError('截图不能超过 4 MiB')
       return Upload.LIST_IGNORE
     }
-    setImageFiles([])
     busyRef.current = true
     setBusy(true)
-    void prepareImportFile(file)
+    const prepared = screenshot
+      ? validateChatImage(file).then(() => ({ text: null, images: [file] }))
+      : prepareImportFile(file)
+    void prepared
       .then((material) => {
         if (!current(scope, operation)) return
         setText(material.text ?? '')
         setImageFiles(material.images)
         setSourceName(
-          material.images.length
+          !screenshot && material.images.length
             ? `${file.name}（${material.images.length} 页待识别${material.text ? '，其余页面已读取' : ''}）`
             : file.name,
         )
@@ -167,13 +165,14 @@ export default function QuickImportWidget() {
 
   const recognizeAttachments = async (
     files: File[],
+    existingText: string,
     scope: number | null,
     operation: number,
     controller: AbortController,
   ): Promise<string> => {
-    const parts: string[] = []
+    let material = existingText
     for (const file of files) {
-      const dataUrl = await readChatImage(file)
+      const dataUrl = await readChatImageCompact(file)
       if (!current(scope, operation)) return ''
       const result = LOCAL_MODE
         ? await localAiApi.parseImageText(dataUrl, controller.signal)
@@ -181,12 +180,12 @@ export default function QuickImportWidget() {
       if (!current(scope, operation)) return ''
       const recognized = result.text.trim()
       if (!recognized) throw new Error(`图片中未识别到文字：${file.name}`)
-      parts.push(files.length > 1 ? `【${file.name}】\n${recognized}` : recognized)
-      if (parts.join('\n\n').length > MAX_IMPORT_TEXT_CHARS) {
-        throw new Error(`识别文字超过 ${MAX_IMPORT_TEXT_CHARS} 字上限，请拆分后重试`)
-      }
+      const placed = replaceImportImageText(material, file.name, recognized)
+      material = placed === null
+        ? mergeImportText(material, files.length > 1 ? `【${file.name}】\n${recognized}` : recognized)
+        : mergeImportText('', placed)
     }
-    return parts.join('\n\n').trim()
+    return material
   }
 
   const transcribeAttachments = async () => {
@@ -201,9 +200,8 @@ export default function QuickImportWidget() {
     setBusy(true)
     setError('')
     try {
-      const recognized = await recognizeAttachments(selected, scope, operation, controller)
+      const merged = await recognizeAttachments(selected, existingText, scope, operation, controller)
       if (!current(scope, operation)) return
-      const merged = mergeImportText(existingText, recognized)
       setText(merged)
       setSourceName(
         selected.length > 1 ? `扫描件 ${selected.length} 页（AI 识别）` : `${selected[0].name}（AI 识别）`,
@@ -234,36 +232,24 @@ export default function QuickImportWidget() {
     setError('')
     try {
       let material = existingText
-      let attachments: Array<{ dataUrl: string; name: string }> = []
+      const attachments: Array<{ dataUrl: string; name: string }> = []
       if (selected.length) {
         if (LOCAL_MODE) {
           // Attach the pages directly so the AI reads the image instead of a lossy OCR pass.
-          attachments = await Promise.all(
-            selected.map(async (file) => ({
-              dataUrl: await readChatImageCompact(file),
-              name: file.name,
-            })),
-          )
-          if (!current(scope, operation)) return
+          for (const file of selected) {
+            const dataUrl = await readChatImageCompact(file)
+            if (!current(scope, operation)) return
+            attachments.push({ dataUrl, name: file.name })
+          }
         } else {
-          const recognized = await recognizeAttachments(selected, scope, operation, controller)
+          material = await recognizeAttachments(selected, material, scope, operation, controller)
           if (!current(scope, operation)) return
-          material = mergeImportText(material, recognized)
-          setText(material)
-          setSourceName(
-            selected.length > 1
-              ? `扫描件 ${selected.length} 页（AI 识别）`
-              : `${selected[0].name}（AI 识别）`,
-          )
-          setImageFiles([])
         }
       }
-      const prompt = material
-        ? importPrompt(material, sourceName)
-        : importPrompt(
-            `请直接阅读随消息附上的 ${attachments.length} 张图片，识别其中的课程、考试或待办安排。`,
-            sourceName,
-          )
+      const imageInstruction = attachments.length
+        ? `请直接阅读附上的 ${attachments.length} 张图片。遇到扫描页待识别标记时，按文件名对应图片并按原始页码顺序阅读。`
+        : ''
+      const prompt = importPrompt([material, imageInstruction].filter(Boolean).join('\n\n'), sourceName)
       const conversation = await aiApi.createConversation(scope)
       if (!current(scope, operation)) return
       navigate('/ai', {

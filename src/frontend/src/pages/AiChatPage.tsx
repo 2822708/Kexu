@@ -802,6 +802,7 @@ export default function AiChatPage() {
           intent,
           images,
           webSearch,
+          attachments.map(({ name }) => name),
         )
       else await aiApi.sendMessageStream(cid, content, activeScheduleId, handlers, controller.signal)
       if (controller.signal.aborted) {

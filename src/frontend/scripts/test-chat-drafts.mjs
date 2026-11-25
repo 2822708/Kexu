@@ -110,7 +110,8 @@ const conversation = (id, scheduleId = 1, publicId = `conversation-${id}`) => ({
 })
 
 async function mountChat({ local = true, conversations = [], create, recognize, honorAbort = true,
-  quickImport, withoutSchedule = false, prepareFile = async (file) => ({ text: null, images: [file] }) } = {}) {
+  quickImport, withoutSchedule = false, prepareFile = async (file) => ({ text: null, images: [file] }),
+  prepareParts = async () => ['data:image/png;base64,AA=='], replaceImageText = () => null } = {}) {
   const page = hookHost()
   const composer = hookHost()
   const schedules = withoutSchedule ? [] : [{ id: 1, name: '测试课表' }, { id: 2, name: '另一课表' }]
@@ -146,9 +147,9 @@ async function mountChat({ local = true, conversations = [], create, recognize, 
   ant.Typography = Object.fromEntries(['Title', 'Text', 'Paragraph'].map((name) => [name, marker(name)]))
   ant.message = Object.fromEntries(['error', 'warning', 'info', 'success'].map((kind) =>
     [kind, (text) => notices.push({ kind, text })]))
-  const stream = (id, content, schedule, handlers, signal, intent, images = []) => {
+  const stream = (id, content, schedule, handlers, signal, intent, images = [], _webSearch, imageNames = []) => {
     const response = deferred()
-    const request = { id, content, schedule, signal, intent, images: [...images], response }
+    const request = { id, content, schedule, signal, intent, images: [...images], imageNames: [...imageNames], response }
     requests.push(request)
     if (honorAbort) signal.addEventListener('abort', () => response.reject(new DOMException('取消', 'AbortError')), { once: true })
     return response.promise.then(() => {
@@ -179,7 +180,7 @@ async function mountChat({ local = true, conversations = [], create, recognize, 
     '@ant-design/icons': new Proxy({}, { get: (_, name) => marker(String(name)) }),
     '../api': { aiApi },
     '../local/mode': { LOCAL_MODE: local },
-    '../utils/chatImport': { ...material, readChatImageCompact: async () => 'data:image/png;base64,AA==' },
+    '../utils/chatImport': { ...material, readChatImageParts: prepareParts },
     '../hooks/useSpeechInput': { useSpeechConsent: () => [false, () => {}], useSpeechInput: () => ({
       recording: false, supported: false, abort() {}, stop() {}, start() {},
     }) },
@@ -188,7 +189,7 @@ async function mountChat({ local = true, conversations = [], create, recognize, 
   }
   composer.init(load(code.composer, { ...shared, react: composer.hooks,
     '../utils/importFiles': { MAX_IMAGE_BYTES: 4 * 1024 * 1024,
-      prepareImportFile: prepareFile },
+      prepareImportFile: prepareFile, replaceImportImageText: replaceImageText },
   }).default)
   const eventTarget = { addEventListener() {}, removeEventListener() {} }
   page.init(load(code.page, { ...shared, react: page.hooks,
@@ -352,6 +353,31 @@ test('an existing dialogue failure retains attachments and successful resend cle
   assert.equal(h.images(), 0)
   assert.equal(h.props().sending, false)
   h.dispose()
+})
+
+test('long screenshot parts keep their order and reserve a slot for the other attachment', async (t) => {
+  const calls = []
+  const urls = ['AA==', 'AQ==', 'Ag==', 'Aw=='].map((payload) => `data:image/png;base64,${payload}`)
+  const h = await mountChat({
+    conversations: [conversation(1)],
+    prepareParts: async (file, slots) => {
+      calls.push([file.name, slots])
+      return file.name === 'long.png' ? urls.slice(0, slots) : [urls[3]]
+    },
+  })
+  t.after(() => h.dispose())
+  await h.attach(new File(['long'], 'long.png', { type: 'image/png' }))
+  await h.attach(new File(['page'], 'page.png', { type: 'image/png' }))
+  await h.send()
+  assert.deepEqual(calls, [['long.png', 3], ['page.png', 1]])
+  assert.deepEqual(h.requests[0].images, urls)
+  assert.deepEqual(h.requests[0].imageNames, [
+    'long.png（第 1/3 段）', 'long.png（第 2/3 段）', 'long.png（第 3/3 段）', 'page.png',
+  ])
+  assert.equal(h.images(), 2)
+  h.requests[0].response.resolve()
+  await h.settle()
+  assert.equal(h.images(), 0)
 })
 
 test('a failed initial dialogue creation preserves its complete draft and returns to an idle composer', async () => {
